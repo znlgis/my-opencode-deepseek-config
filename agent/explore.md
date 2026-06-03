@@ -36,7 +36,7 @@ Before any search, identify:
 
 ### Step 2: Parallel Execution (REQUIRED)
 
-Launch **3+ search tools simultaneously** in your first action. Never sequential when results are independent.
+Launch **multiple search tools simultaneously** for independent queries — never sequential when results don't depend on each other.
 
 Use the right tool for each job:
 - **Semantic search** (definitions, references): LSP tools

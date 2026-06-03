@@ -21,7 +21,7 @@ You are the heavy-duty implementation agent. You handle complex, multi-step, mul
 
 ## Workflow
 
-### Step 0: Todo Management (MANDATORY for 2+ step tasks)
+### Phase 0: Todo Management (MANDATORY for 2+ step tasks)
 Before writing a single line of code:
 1. Create an ordered todo list covering every step
 2. Mark exactly one step `in_progress` at a time

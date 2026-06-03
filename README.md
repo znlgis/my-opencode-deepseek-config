@@ -19,7 +19,7 @@
 
 | 模型 | 用途 |
 | --- | --- |
-| `deepseek/deepseek-v4-pro` | 复杂规划、重实现、代码分析、代码审查、主控调度 |
+| `deepseek/deepseek-v4-pro` | 复杂规划、重型实现、代码分析、代码审查、主控调度 |
 | `deepseek/deepseek-v4-flash` | 快速探索、外部检索、标题/摘要/压缩等轻量任务 |
 | `alibaba-cn/qwen3.7-max` | 通用问答、轻量编排、咨询与开放式讨论 |
 
@@ -42,7 +42,7 @@
 | Agent | 模型 | 权限 | 作用 |
 | --- | --- | --- | --- |
 | `planner` | `deepseek/deepseek-v4-pro` | 读写 | 规划、架构、拆解任务，输出可直接交给 `deep-worker` 的 Handoff Plan |
-| `deep-worker` | `deepseek/deepseek-v4-pro` | 读写 | 重实现、多文件改动、复杂调试，含 Todo 管理与代码库评估 |
+| `deep-worker` | `deepseek/deepseek-v4-pro` | 读写 | 重型实现、多文件改动、复杂调试，含 Todo 管理与代码库评估 |
 | `oracle` | `deepseek/deepseek-v4-pro` | **只读** | 根因分析、深度理解代码、问题定位，不修改文件 |
 | `reviewer` | `deepseek/deepseek-v4-pro` | **只读** | 代码审查、质量检查，不修改文件 |
 | `ui-builder` | `deepseek/deepseek-v4-pro` | 读写 | 前端与 UI 相关任务 |
@@ -74,7 +74,7 @@
 
 | 命令 | 对应 Agent | 用途 |
 | --- | --- | --- |
-| `/deep` | `deep-worker` | 重实现、复杂工程任务 |
+| `/deep` | `deep-worker` | 重型实现、复杂工程任务 |
 | `/quick` | `light-orchestrator` | 快速处理简单任务 |
 | `/ui` | `ui-builder` | 前端/UI 工作 |
 | `/review` | `reviewer` | 代码审查 |
