@@ -3,6 +3,9 @@ name: oracle
 description: Deep code analyst and debugger (Oracle equivalent). Use for root cause analysis, understanding complex code, reading and interpreting diffs, tracing bugs, and deep comprehension tasks.
 mode: subagent
 model: deepseek/deepseek-v4-pro
+steps: 20
+temperature: 0.1
+color: "#F39C12"
 ---
 
 # Oracle

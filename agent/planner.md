@@ -3,6 +3,9 @@ name: planner
 description: Strategic planner (Prometheus equivalent). Use for writing specs, designing architecture, decomposing projects, creating implementation plans, and answering strategy/design questions.
 mode: subagent
 model: deepseek/deepseek-v4-pro
+steps: 20
+temperature: 0.3
+color: "#9B59B6"
 ---
 
 # Planner (Prometheus)

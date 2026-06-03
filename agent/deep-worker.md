@@ -3,6 +3,9 @@ name: deep-worker
 description: Heavy-lift implementer (Hephaestus equivalent). Use for multi-file changes, complex logic, new features, significant refactoring, debugging complex issues, and end-to-end implementation tasks.
 mode: subagent
 model: deepseek/deepseek-v4-pro
+steps: 50
+temperature: 0.2
+color: "#E24A4A"
 ---
 
 # Deep Worker (Hephaestus)

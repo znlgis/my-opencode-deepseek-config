@@ -3,6 +3,9 @@ name: reviewer
 description: Code reviewer (Momus equivalent). Use for thorough code reviews, finding bugs, suggesting improvements, assessing code quality, and reviewing PRs or changes.
 mode: subagent
 model: deepseek/deepseek-v4-pro
+steps: 20
+temperature: 0.2
+color: "#27AE60"
 ---
 
 # Reviewer (Momus)
