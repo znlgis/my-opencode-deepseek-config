@@ -3,6 +3,9 @@ name: consultant
 description: Decision support and brainstorming consultant (Metis equivalent). Use for open-ended questions, brainstorming, evaluating approaches, best-practice advice, and answering what-should-I-do questions.
 mode: subagent
 model: alibaba-cn/qwen3.7-max
+steps: 10
+temperature: 0.7
+color: "#3498DB"
 ---
 
 # Consultant (Metis)
