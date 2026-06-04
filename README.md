@@ -1,13 +1,12 @@
 # my-opencode-config
 
-一个面向 OpenCode 的多 Agent 配置仓库，目标是在 **不新增模型、仅使用现有 3 个模型** 的前提下，提升日常使用时的可用性、易用性和稳定性。
+一个面向 OpenCode 的多 Agent 配置仓库，目标是在 **不新增模型、仅使用现有 2 个模型** 的前提下，提升日常使用时的可用性、易用性和稳定性。
 
 ## 当前配置概览
 
 - 默认主 Agent：`orchestrator`
 - 主模型：`deepseek/deepseek-v4-pro`
 - 轻量模型：`deepseek/deepseek-v4-flash`
-- 第三模型：`alibaba-cn/qwen3.7-max`
 - 自动更新策略：`notify`
 - 快照：已开启（`snapshot: true`）
 - 上下文压缩：已开启自动压缩与历史裁剪
@@ -15,13 +14,12 @@
 
 ## 模型分工
 
-本仓库严格限制在以下 3 个模型内进行分工，不引入其他模型：
+本仓库严格限制在以下 2 个模型内进行分工，不引入其他模型：
 
 | 模型 | 用途 |
 | --- | --- |
-| `deepseek/deepseek-v4-pro` | 复杂规划、重型实现、代码分析、代码审查、主控调度 |
-| `deepseek/deepseek-v4-flash` | 快速探索、外部检索、标题/摘要/压缩等轻量任务 |
-| `alibaba-cn/qwen3.7-max` | 通用问答、轻量编排、咨询与开放式讨论 |
+| `deepseek/deepseek-v4-pro` | 复杂规划、重型实现、代码分析、代码审查、主控调度、咨询与开放式讨论 |
+| `deepseek/deepseek-v4-flash` | 快速探索、外部检索、标题/摘要/压缩等轻量任务、通用问答、轻量编排 |
 
 这样的分层兼顾了：
 
@@ -48,9 +46,9 @@
 | `ui-builder` | `deepseek/deepseek-v4-pro` | 读写 | 前端与 UI 相关任务 |
 | `explore` | `deepseek/deepseek-v4-flash` | **只读（隐藏）** | 代码库搜索、并行探索、结构化返回结果 |
 | `librarian` | `deepseek/deepseek-v4-flash` | **只读（隐藏）** | 文档检索、Web 搜索、资料查询 |
-| `light-orchestrator` | `alibaba-cn/qwen3.7-max` | 读写 | 轻量任务、简单配置、单文件小改动 |
-| `consultant` | `alibaba-cn/qwen3.7-max` | 读写 | 方案讨论、最佳实践建议、权衡分析 |
-| `generalist` | `alibaba-cn/qwen3.7-max` | 读写 | 通用型兜底处理 |
+| `light-orchestrator` | `deepseek/deepseek-v4-flash` | 读写 | 轻量任务、简单配置、单文件小改动 |
+| `consultant` | `deepseek/deepseek-v4-pro` | 读写 | 方案讨论、最佳实践建议、权衡分析 |
+| `generalist` | `deepseek/deepseek-v4-flash` | 读写 | 通用型兜底处理 |
 
 > `explore` 和 `librarian` 标记为 `hidden: true`，不出现在 `@` 自动补全菜单中，仅通过 orchestrator 调度或命令别名访问。
 
@@ -62,7 +60,7 @@
 | --- | --- |
 | `build` | `deepseek/deepseek-v4-pro` |
 | `plan` | `deepseek/deepseek-v4-pro` |
-| `general` | `alibaba-cn/qwen3.7-max` |
+| `general` | `deepseek/deepseek-v4-flash` |
 | `explore` | `deepseek/deepseek-v4-flash` |
 | `title` | `deepseek/deepseek-v4-flash` |
 | `summary` | `deepseek/deepseek-v4-flash` |

@@ -24,7 +24,7 @@
             "model": "deepseek/deepseek-v4-pro"
         },
         "general": {
-            "model": "alibaba-cn/qwen3.7-max"
+            "model": "deepseek/deepseek-v4-flash"
         },
         "title": {
             "model": "deepseek/deepseek-v4-flash"
