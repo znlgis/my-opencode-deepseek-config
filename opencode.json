@@ -1,81 +1,86 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "default_agent": "orchestrator",
-  "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-v4-flash",
-  "autoupdate": "notify",
-  "snapshot": true,
-  "plugin": ["superpowers@git+https://github.com/obra/superpowers.git"],
-  "agent": {
-    "explore": {
-      "model": "deepseek/deepseek-v4-flash",
-      "mode": "subagent"
-    },
-    "build": {
-      "model": "deepseek/deepseek-v4-pro",
-      "mode": "subagent"
-    },
-    "plan": {
-      "model": "deepseek/deepseek-v4-pro"
-    },
-    "general": {
-      "model": "alibaba-cn/qwen3.7-max"
-    },
-    "title": {
-      "model": "deepseek/deepseek-v4-flash"
-    },
-    "summary": {
-      "model": "deepseek/deepseek-v4-flash"
+    "$schema": "https://opencode.ai/config.json",
+    "default_agent": "orchestrator",
+    "model": "deepseek/deepseek-v4-pro",
+    "small_model": "deepseek/deepseek-v4-flash",
+    "autoupdate": "notify",
+    "snapshot": true,
+    "lsp": true,
+    "formatter": true,
+    "plugin": [
+        "superpowers@git+https://github.com/obra/superpowers.git",
+        "@tarquinen/opencode-dcp@latest"
+    ],
+    "agent": {
+        "explore": {
+            "model": "deepseek/deepseek-v4-flash",
+            "mode": "subagent"
+        },
+        "build": {
+            "model": "deepseek/deepseek-v4-pro",
+            "mode": "subagent"
+        },
+        "plan": {
+            "model": "deepseek/deepseek-v4-pro"
+        },
+        "general": {
+            "model": "alibaba-cn/qwen3.7-max"
+        },
+        "title": {
+            "model": "deepseek/deepseek-v4-flash"
+        },
+        "summary": {
+            "model": "deepseek/deepseek-v4-flash"
+        },
+        "compaction": {
+            "model": "deepseek/deepseek-v4-flash"
+        }
     },
     "compaction": {
-      "model": "deepseek/deepseek-v4-flash"
+        "auto": true,
+        "prune": true,
+        "tail_turns": 9
+    },
+    "command": {
+        "deep": {
+            "description": "Route to deep-worker for heavy implementation",
+            "agent": "deep-worker",
+            "template": "Handle this task with thoroughness and precision."
+        },
+        "quick": {
+            "description": "Route to light-orchestrator for simple tasks",
+            "agent": "light-orchestrator",
+            "template": "Handle this task quickly and efficiently."
+        },
+        "ui": {
+            "description": "Route to ui-builder for frontend work",
+            "agent": "ui-builder",
+            "template": "Build or modify the UI as requested."
+        },
+        "review": {
+            "description": "Route to reviewer for code review",
+            "agent": "reviewer",
+            "template": "Review the following code thoroughly."
+        },
+        "plan": {
+            "description": "Route to planner for strategic planning",
+            "agent": "planner",
+            "template": "Create a detailed plan for the following."
+        },
+        "search": {
+            "description": "Route to librarian for external research",
+            "agent": "librarian",
+            "template": "Research and find information about the following."
+        },
+        "oracle": {
+            "description": "Route to oracle for deep code analysis and root cause debugging",
+            "agent": "oracle",
+            "template": "Analyze and find the root cause of the following."
+        },
+        "consult": {
+            "description": "Route to consultant for brainstorming and best-practice advice",
+            "agent": "consultant",
+            "template": "Provide options and advice for the following."
+        }
     }
-  },
-  "compaction": {
-    "auto": true,
-    "prune": true,
-    "tail_turns": 3
-  },
-  "command": {
-    "deep": {
-      "description": "Route to deep-worker for heavy implementation",
-      "agent": "deep-worker",
-      "template": "Handle this task with thoroughness and precision."
-    },
-    "quick": {
-      "description": "Route to light-orchestrator for simple tasks",
-      "agent": "light-orchestrator",
-      "template": "Handle this task quickly and efficiently."
-    },
-    "ui": {
-      "description": "Route to ui-builder for frontend work",
-      "agent": "ui-builder",
-      "template": "Build or modify the UI as requested."
-    },
-    "review": {
-      "description": "Route to reviewer for code review",
-      "agent": "reviewer",
-      "template": "Review the following code thoroughly."
-    },
-    "plan": {
-      "description": "Route to planner for strategic planning",
-      "agent": "planner",
-      "template": "Create a detailed plan for the following."
-    },
-    "search": {
-      "description": "Route to librarian for external research",
-      "agent": "librarian",
-      "template": "Research and find information about the following."
-    },
-    "oracle": {
-      "description": "Route to oracle for deep code analysis and root cause debugging",
-      "agent": "oracle",
-      "template": "Analyze and find the root cause of the following."
-    },
-    "consult": {
-      "description": "Route to consultant for brainstorming and best-practice advice",
-      "agent": "consultant",
-      "template": "Provide options and advice for the following."
-    }
-  }
 }
