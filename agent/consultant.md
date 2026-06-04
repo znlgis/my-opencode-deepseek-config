@@ -2,7 +2,7 @@
 name: consultant
 description: Decision support and brainstorming consultant (Metis equivalent). Use for open-ended questions, brainstorming, evaluating approaches, best-practice advice, and answering what-should-I-do questions.
 mode: subagent
-model: alibaba-cn/qwen3.7-max
+model: deepseek/deepseek-v4-pro
 steps: 10
 temperature: 0.7
 color: "#3498DB"
