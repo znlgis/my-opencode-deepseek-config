@@ -10,7 +10,9 @@
 - 自动更新策略：`notify`
 - 快照：已开启（`snapshot: true`）
 - 上下文压缩：已开启自动压缩与历史裁剪
-- 插件：`superpowers`
+- 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
+- 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
+- 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
 
@@ -105,6 +107,15 @@
 15. **结构化输出格式** — `explore` 返回统一 `<results>` 格式，`planner` 输出统一 Handoff Plan 格式
 16. **Oracle 响应结构** — 分层输出（底线/行动方案/扩展/边界条件）+ 决策框架
 
+### 第三轮：全局规则 + 对齐 OpenCode 推荐配置
+
+借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 大量使用 `AGENTS.md` 沉淀共享规则的做法，并参考 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法，做了如下完善（依然是纯配置、不新增模型/依赖）：
+
+17. **新增全局规则文件 `AGENTS.md`** — OpenCode 会自动加载它作为所有 Agent 的共享上下文，把"意图识别、最小改动、先读后写、并行执行、只读隔离、Todo 纪律、澄清与挑战协议、模型/依赖约束"等公共规则集中沉淀，各 `agent/*.md` 只保留各自独有的职责，减少重复与漂移。
+18. **`instructions` 显式声明 `AGENTS.md`** — 既保证在配置目录（`~/.config/opencode`）作为全局规则自动加载，也保证作为项目级配置使用时同样生效；OpenCode 内部以绝对路径去重，不会重复加载。
+19. **启用 `experimental.batch_tool`** — 对应多个 Agent 反复强调的"并行发起工具调用"，让批量读取/搜索真正落地，提升探索与实现的稳定性与速度。
+20. **修正 `orchestrator` 中过期的模型表** — 原 Agent Directory 中 `consultant`/`generalist`/`light-orchestrator` 仍写着已不再使用的 `qwen3.7-max`，现已与实际配置（`deepseek-v4-pro` / `deepseek-v4-flash`）及成本列对齐。
+
 ## 仓库结构
 
 ```text
@@ -112,7 +123,7 @@
 ├── agent/
 │   ├── consultant.md
 │   ├── deep-worker.md
-│   ├── explore.md          ← 新增，提供结构化探索提示词
+│   ├── explore.md          ← 提供结构化探索提示词
 │   ├── generalist.md
 │   ├── librarian.md
 │   ├── light-orchestrator.md
@@ -121,6 +132,7 @@
 │   ├── planner.md
 │   ├── reviewer.md
 │   └── ui-builder.md
+├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
 ```
@@ -137,5 +149,5 @@
 
 ## 说明
 
-这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出），但通过纯配置/提示词实现，无需引入额外依赖。
+这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则），并参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。
 
