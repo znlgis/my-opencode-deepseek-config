@@ -11,6 +11,12 @@
         "superpowers@git+https://github.com/obra/superpowers.git",
         "@tarquinen/opencode-dcp@latest"
     ],
+    "instructions": [
+        "AGENTS.md"
+    ],
+    "experimental": {
+        "batch_tool": true
+    },
     "agent": {
         "explore": {
             "model": "deepseek/deepseek-v4-flash",

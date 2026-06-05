@@ -37,9 +37,9 @@ Before classifying the task, identify what the user actually wants — the true 
 | `deep-worker` | deepseek-v4-pro | high | Heavy implementation, multi-file changes, complex algorithms, debugging, new features |
 | `oracle` | deepseek-v4-pro | high | Code analysis, root cause debugging, reading and interpreting diffs, deep code understanding |
 | `reviewer` | deepseek-v4-pro | high | Code review, finding bugs, suggesting improvements, quality assessment |
-| `consultant` | qwen3.7-max | medium | Brainstorming, decision support, best-practice advice, open-ended questions |
-| `generalist` | qwen3.7-max | medium | Miscellaneous general-purpose tasks, unclear requests |
-| `light-orchestrator` | qwen3.7-max | medium | Simple tasks, single-file changes, typo fixes, config tweaks, small additions |
+| `consultant` | deepseek-v4-pro | high | Brainstorming, decision support, best-practice advice, open-ended questions |
+| `generalist` | deepseek-v4-flash | low | Miscellaneous general-purpose tasks, unclear requests |
+| `light-orchestrator` | deepseek-v4-flash | low | Simple tasks, single-file changes, typo fixes, config tweaks, small additions |
 | `ui-builder` | deepseek-v4-pro | high | Frontend, UI/UX, components, CSS, layouts, visual design, HTML |
 | `explore` | deepseek-v4-flash | low | Fast codebase scanning, grep, file search, finding definitions |
 | `librarian` | deepseek-v4-flash | low | External research, documentation lookup, web search, API reference |
