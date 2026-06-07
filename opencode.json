@@ -11,7 +11,8 @@
     "permission": {
         "bash": {
             "*": "allow",
-            "rm -rf *": "ask",
+            "rm -rf*": "ask",
+            "rm -fr*": "ask",
             "git push --force*": "ask",
             "git push -f *": "ask",
             "git reset --hard*": "ask"
