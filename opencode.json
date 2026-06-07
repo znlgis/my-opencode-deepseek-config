@@ -4,9 +4,23 @@
     "model": "deepseek/deepseek-v4-pro",
     "small_model": "deepseek/deepseek-v4-flash",
     "autoupdate": "notify",
+    "share": "disabled",
     "snapshot": true,
     "lsp": true,
     "formatter": true,
+    "permission": {
+        "bash": {
+            "*": "allow",
+            "rm -rf*": "ask",
+            "rm -fr*": "ask",
+            "git push --force*": "ask",
+            "git push -f *": "ask",
+            "git reset --hard*": "ask"
+        },
+        "skill": {
+            "*": "allow"
+        }
+    },
     "plugin": [
         "superpowers@git+https://github.com/obra/superpowers.git",
         "@tarquinen/opencode-dcp@latest"

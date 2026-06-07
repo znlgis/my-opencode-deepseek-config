@@ -68,3 +68,17 @@ patterns, say so before executing:
 - No filler comments or AI boilerplate — comment only where the codebase already does.
 - Verify changes build/pass available checks and don't break callers.
 - Cite concrete locations (`file:line`) when reporting findings.
+
+## Skills
+
+Reusable, on-demand instructions live under `skills/<name>/SKILL.md` and are
+surfaced to every agent through the native `skill` tool. Before reinventing a
+workflow, check whether a skill already covers it and load it:
+
+- `gh-cli` — drive GitHub from the terminal (PRs, issues, CI/Actions, releases).
+- `conventional-commits` — format commit messages and PR titles.
+- `security-review` — audit a diff for vulnerabilities before merging.
+
+Prefer loading the relevant skill over guessing. The `superpowers` plugin also
+contributes its own skills (planning, TDD, debugging, code review, etc.); skill
+names must stay unique across all sources.

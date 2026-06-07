@@ -8,10 +8,13 @@
 - 主模型：`deepseek/deepseek-v4-pro`
 - 轻量模型：`deepseek/deepseek-v4-flash`
 - 自动更新策略：`notify`
+- 会话分享：已关闭（`share: "disabled"`，避免误分享，提升隐私）
 - 快照：已开启（`snapshot: true`）
+- 权限基线：默认放行，仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`
 - 上下文压缩：已开启自动压缩与历史裁剪
 - 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
+- 技能（Skills）：`skills/` 目录下的 `SKILL.md`，通过原生 `skill` 工具按需加载
 - 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
@@ -83,6 +86,29 @@
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 | `/consult` | `consultant` | 咨询、对比、建议 |
 
+## 技能（Skills）
+
+除 Agent 外，本仓库在 `skills/` 目录下提供可复用的 `SKILL.md` 技能。OpenCode 通过
+原生 `skill` 工具把这些技能按需暴露给所有 Agent——Agent 只在需要时才加载完整内容，
+不会一直占用上下文。
+
+| Skill | 作用 |
+| --- | --- |
+| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、搜索、`gh api` 等，参考 [cli/cli](https://github.com/cli/cli) |
+| `conventional-commits` | 按 Conventional Commits 规范写提交信息与 PR 标题 |
+| `security-review` | 合并前对 diff 做安全审查（注入、XSS、SSRF、鉴权、密钥等清单） |
+
+### 加载与发现机制
+
+- 当本仓库作为全局配置目录（`~/.config/opencode`）部署时，`skills/<name>/SKILL.md`
+  会被**自动发现**，无需在 `opencode.json` 中显式注册 `skills.paths`。
+- 每个技能一个文件夹，文件名必须是全大写的 `SKILL.md`，且 frontmatter 必须包含
+  `name` 与 `description`；`name` 需与所在文件夹同名（小写、连字符分隔）。
+- `description` 应同时说明「做什么」和「何时触发」，并前置关键触发词，便于模型正确选用。
+- 通过 `opencode.json` 的 `permission.skill`（默认 `"*": "allow"`）控制技能可见性。
+- `superpowers` 插件也会贡献自己的技能（规划、TDD、调试、代码审查等），因此本仓库
+  新增技能均采用不冲突的命名（技能名在所有来源中必须唯一）。
+
 ## 稳定性与易用性优化点
 
 ### 第一轮：基础配置优化
@@ -116,6 +142,17 @@
 19. **启用 `experimental.batch_tool`** — 对应多个 Agent 反复强调的"并行发起工具调用"，让批量读取/搜索真正落地，提升探索与实现的稳定性与速度。
 20. **修正 `orchestrator` 中过期的模型表** — 原 Agent Directory 中 `consultant`/`generalist`/`light-orchestrator` 仍写着已不再使用的 `qwen3.7-max`，现已与实际配置（`deepseek-v4-pro` / `deepseek-v4-flash`）及成本列对齐。
 
+### 第四轮：引入 Skills + 安全/隐私基线
+
+继续借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)「用技能沉淀可复用工作流」的思路，并对照 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本对 Skills、`permission`、`share` 的官方推荐，做了如下完善（仍是纯配置/提示词，不新增模型/依赖）：
+
+21. **引入 `skills/` 目录与原生 Skill 机制** — 把可复用的操作型知识从 Agent 提示词中解耦出来，按需加载，避免常驻上下文膨胀。
+22. **新增 `gh-cli` 技能** — 参考 [cli/cli](https://github.com/cli/cli)，覆盖 PR、Issue、CI/Actions、Release、搜索与 `gh api` 等常用操作，给出可直接复制的命令，解决官方/默认提示对 `gh` 描述过于简单的问题。
+23. **新增 `conventional-commits`、`security-review` 两个推荐技能** — 与 `superpowers` 插件已有技能不重名、互补，分别覆盖提交规范与合并前安全审查。
+24. **新增 `permission` 安全基线** — 默认放行，仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`，借鉴 oh-my-openagent 的安全护栏但不牺牲日常可用性。
+25. **关闭会话分享 `share: "disabled"`** — 对齐 OpenCode 推荐的隐私默认值，避免误把会话分享出去。
+26. **在 `AGENTS.md` 中补充 Skills 使用约定** — 提示所有 Agent 优先加载相关技能，并强调技能名在所有来源中必须唯一。
+
 ## 仓库结构
 
 ```text
@@ -132,6 +169,10 @@
 │   ├── planner.md
 │   ├── reviewer.md
 │   └── ui-builder.md
+├── skills/                 ← 可复用技能，作为全局配置目录时自动发现
+│   ├── gh-cli/SKILL.md
+│   ├── conventional-commits/SKILL.md
+│   └── security-review/SKILL.md
 ├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
@@ -149,5 +190,5 @@
 
 ## 说明
 
-这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则），并参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。
+这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用工作流），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share` 等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
 
