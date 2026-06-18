@@ -10,11 +10,12 @@
 - 自动更新策略：`notify`
 - 会话分享：已关闭（`share: "disabled"`，避免误分享，提升隐私）
 - 快照：已开启（`snapshot: true`）
-- 权限基线：默认放行，仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`
+- 权限基线：默认放行；仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`，对读取 `.env` 类敏感文件设为 `deny`，对工作目录外路径（`external_directory`）设为 `ask`
 - 上下文压缩：已开启自动压缩与历史裁剪
 - 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
 - 技能（Skills）：`skills/` 目录下的 `SKILL.md`，通过原生 `skill` 工具按需加载
+- 本地 MCP：`sequential-thinking`、`memory` 两个本地、无 Key、不依赖在线服务的 MCP，按需经 `npx` 启动
 - 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
@@ -85,6 +86,7 @@
 | `/search` | `librarian` | 外部搜索、查文档 |
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 | `/consult` | `consultant` | 咨询、对比、建议 |
+| `/release` | `deep-worker`（加载 `git-release` 技能） | 准备打 Tag 的发布：发布说明、版本号、`gh release` 命令 |
 
 ## 技能（Skills）
 
@@ -94,9 +96,10 @@
 
 | Skill | 作用 |
 | --- | --- |
-| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、搜索、`gh api` 等，参考 [cli/cli](https://github.com/cli/cli) |
+| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、Projects、Label、Secret/Variable、扩展、别名、`gh api` 等，参考 [cli/cli](https://github.com/cli/cli) |
 | `conventional-commits` | 按 Conventional Commits 规范写提交信息与 PR 标题 |
 | `security-review` | 合并前对 diff 做安全审查（注入、XSS、SSRF、鉴权、密钥等清单） |
+| `git-release` | 准备打 Tag 的发布：依据 Conventional Commits 推断 SemVer、生成发布说明、给出 `git tag` 与 `gh release create` 命令（借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 文档中的 `git-release` 示例技能） |
 
 ### 加载与发现机制
 
@@ -108,6 +111,25 @@
 - 通过 `opencode.json` 的 `permission.skill`（默认 `"*": "allow"`）控制技能可见性。
 - `superpowers` 插件也会贡献自己的技能（规划、TDD、调试、代码审查等），因此本仓库
   新增技能均采用不冲突的命名（技能名在所有来源中必须唯一）。
+
+## 本地 MCP（开盒即用、无 Key、不依赖在线服务）
+
+按照 [anomalyco/opencode](https://github.com/anomalyco/opencode) 文档中 `type: "local"` 的
+MCP 配置范式，本仓库只挑选**纯本地、无需申请 Key、不依赖任何在线服务**、经 `npx` 即可
+拉起的 MCP，做到「开盒即用」：
+
+| MCP | 类型 | 作用 | 是否需 Key | 是否依赖在线服务 |
+| --- | --- | --- | --- | --- |
+| `sequential-thinking` | `local`（`npx @modelcontextprotocol/server-sequential-thinking`） | 结构化、分步推理，适合复杂的多步问题 | 否 | 否 |
+| `memory` | `local`（`npx @modelcontextprotocol/server-memory`） | 本地知识图谱，跨轮次/会话保存值得记住的事实 | 否 | 否 |
+
+设计取舍：
+
+- **刻意不引入 `context7`、`grep.app` 等远程 MCP** —— 虽然 anomalyco/opencode 文档对它们有推荐，
+  但它们属于「在线服务」，与本项目「不依赖在线服务、开盒即用」的要求冲突，因此排除。
+- **刻意保持 MCP 数量精简** —— OpenCode 官方文档明确提示「每个启用的 MCP 都会占用上下文 token」，
+  因此只保留确有价值的本地 MCP，并在 `AGENTS.md` 中提示「按需使用、简单任务不要硬塞」。
+- 两者都通过 `npx -y` 按需启动，无需预装、无需密钥、无需联网授权。
 
 ## 稳定性与易用性优化点
 
@@ -153,6 +175,24 @@
 25. **关闭会话分享 `share: "disabled"`** — 对齐 OpenCode 推荐的隐私默认值，避免误把会话分享出去。
 26. **在 `AGENTS.md` 中补充 Skills 使用约定** — 提示所有 Agent 优先加载相关技能，并强调技能名在所有来源中必须唯一。
 
+### 第五轮：本地 MCP + 配置硬化 + gh 技能增强
+
+继续对照 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新文档（`mcp-servers.mdx`、
+`config.mdx`、`skills.mdx`）与 [cli/cli](https://github.com/cli/cli)，并参考
+[oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)「用本地 MCP/技能沉淀能力」的思路，做了如下完善（仍是纯配置/提示词，不新增模型、不依赖在线服务）：
+
+27. **引入本地、无 Key、不依赖在线服务的 MCP** — 新增 `sequential-thinking`（结构化推理）与
+    `memory`（本地知识图谱）两个 `type: "local"` 的 MCP，经 `npx` 按需启动，做到「开盒即用」；
+    刻意排除 `context7`、`grep.app` 等远程在线 MCP。
+28. **配置硬化，对齐 anomalyco 推荐默认值** — `permission.read` 对 `.env` 类敏感文件设为 `deny`
+    （保留 `.env.example`），并对工作目录外路径 `external_directory` 设为 `ask`，在不牺牲日常可用性的前提下提升安全/隐私基线。
+29. **新增 `git-release` 技能** — 借鉴 anomalyco/opencode 文档中的 `git-release` 示例技能，覆盖
+    「依据 Conventional Commits 推断 SemVer → 生成发布说明 → `gh release create`」的发布流程，并与 `gh-cli`、`conventional-commits` 互补。
+30. **增强 `gh-cli` 技能** — 参考 cli/cli，补充 Projects（Projects v2）、Label、Secret/Variable、
+    Codespaces、扩展（`gh extension`）、别名（`gh alias`）、`gh repo sync`、`gh pr update-branch/--admin`
+    以及 `GH_REPO`/`GH_HOST`/`NO_COLOR` 等环境变量，让 `gh` 各类操作都有可直接复制的命令。
+31. **新增 `/release` 命令别名** — 直达 `deep-worker` 并加载 `git-release` 技能，方便一键准备发布。
+
 ## 仓库结构
 
 ```text
@@ -172,7 +212,8 @@
 ├── skills/                 ← 可复用技能，作为全局配置目录时自动发现
 │   ├── gh-cli/SKILL.md
 │   ├── conventional-commits/SKILL.md
-│   └── security-review/SKILL.md
+│   ├── security-review/SKILL.md
+│   └── git-release/SKILL.md
 ├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
@@ -190,5 +231,5 @@
 
 ## 说明
 
-这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用工作流），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share` 等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
+这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 与本地 MCP 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、本地 `mcp`、`permission`、`share` 等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。新增的 MCP 也严格限定为**本地、无 Key、不依赖在线服务、开盒即用**。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
 

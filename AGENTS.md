@@ -78,7 +78,22 @@ workflow, check whether a skill already covers it and load it:
 - `gh-cli` — drive GitHub from the terminal (PRs, issues, CI/Actions, releases).
 - `conventional-commits` — format commit messages and PR titles.
 - `security-review` — audit a diff for vulnerabilities before merging.
+- `git-release` — cut a tagged release: notes, SemVer bump, `gh release` command.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill
 names must stay unique across all sources.
+
+## MCP servers
+
+A few **local, no-API-key, offline** MCP servers are enabled in `opencode.json`
+(`type: "local"`, launched on demand via `npx`). Use them when they fit; don't
+force them:
+
+- `sequential-thinking` — structured step-by-step reasoning for genuinely hard,
+  multi-step problems. Skip it for simple tasks.
+- `memory` — a local knowledge-graph store for facts worth carrying across
+  turns/sessions. Don't put secrets in it.
+
+Keep the MCP set small: every enabled server adds tools and tokens to context.
+Only add servers that run locally and need no credentials or online service.
