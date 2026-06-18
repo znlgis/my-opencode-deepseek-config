@@ -9,6 +9,12 @@
     "lsp": true,
     "formatter": true,
     "permission": {
+        "read": {
+            "*": "allow",
+            "*.env": "deny",
+            "*.env.*": "deny",
+            "*.env.example": "allow"
+        },
         "bash": {
             "*": "allow",
             "rm -rf*": "ask",
@@ -19,6 +25,27 @@
         },
         "skill": {
             "*": "allow"
+        },
+        "external_directory": "ask"
+    },
+    "mcp": {
+        "sequential-thinking": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-sequential-thinking"
+            ],
+            "enabled": true
+        },
+        "memory": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-memory"
+            ],
+            "enabled": true
         }
     },
     "plugin": [
@@ -101,6 +128,11 @@
             "description": "Route to consultant for brainstorming and best-practice advice",
             "agent": "consultant",
             "template": "Provide options and advice for the following."
+        },
+        "release": {
+            "description": "Prepare a tagged release using the git-release skill",
+            "agent": "deep-worker",
+            "template": "Load the git-release skill and prepare a tagged release: draft release notes from merged PRs, propose a SemVer bump, and produce the gh release command."
         }
     }
 }

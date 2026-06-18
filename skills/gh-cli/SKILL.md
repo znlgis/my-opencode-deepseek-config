@@ -79,6 +79,8 @@ gh pr comment 42 --body "Thanks!"
 # Land it
 gh pr merge 42 --squash --delete-branch   # also --merge or --rebase
 gh pr merge 42 --auto --squash            # enable auto-merge when checks pass
+gh pr merge 42 --admin                    # bypass required checks (use sparingly)
+gh pr update-branch 42                    # update the PR branch with its base
 gh pr ready 42                            # mark draft as ready
 gh pr close 42 / gh pr reopen 42
 ```
@@ -138,6 +140,71 @@ gh search issues "memory leak" --repo OWNER/REPO --state open
 gh search code "func main" --language go --owner OWNER
 gh search repos "cli tool" --language rust --sort stars --limit 10
 ```
+
+## Projects, labels, and repo metadata
+
+```bash
+# Projects (Projects v2) — plan/track work
+gh project list --owner OWNER
+gh project view 5 --owner OWNER --web
+gh project item-list 5 --owner OWNER
+gh project item-add 5 --owner OWNER --url https://github.com/OWNER/REPO/issues/7
+
+# Labels
+gh label list
+gh label create bug --color B60205 --description "Something is broken"
+gh label edit bug --name defect
+gh label clone OWNER/REPO            # copy labels from another repo
+
+# Variables & secrets (Actions / Dependabot / Codespaces)
+gh secret set TOKEN < token.txt      # never echo secrets on the CLI
+gh secret list
+gh variable set REGION --body us-east-1
+gh variable list
+
+# Sync a fork with upstream
+gh repo sync OWNER/fork --source OWNER/upstream
+```
+
+## Codespaces
+
+```bash
+gh codespace list
+gh codespace create -R OWNER/REPO -b main
+gh codespace code            # open current/selected codespace in VS Code
+gh codespace ssh
+gh codespace delete
+```
+
+## Aliases, extensions, and config
+
+```bash
+# Aliases — shorten common invocations
+gh alias set prc 'pr create --fill'
+gh alias set bugs 'issue list --label bug'
+gh alias list
+
+# Extensions — community subcommands
+gh extension list
+gh extension install dlvhdr/gh-dash
+gh extension upgrade --all
+
+# Config & status
+gh config set editor "code --wait"
+gh config set git_protocol ssh
+gh status                    # cross-repo summary of your assigned work
+```
+
+## Environment variables
+
+| Variable                  | Effect                                              |
+| ------------------------- | --------------------------------------------------- |
+| `GH_TOKEN` / `GITHUB_TOKEN` | auth token for non-interactive / CI use           |
+| `GH_REPO`                 | default `OWNER/REPO` so you can omit `-R`            |
+| `GH_HOST`                 | target a GitHub Enterprise host                     |
+| `GH_PAGER` / `PAGER`      | pager for long output (`cat` to disable)            |
+| `NO_COLOR`                | disable ANSI color (stable output for scripts)      |
+| `GH_PROMPT_DISABLED`      | never prompt — fail instead (good for automation)   |
 
 ## Raw API (escape hatch)
 
