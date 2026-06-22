@@ -45,7 +45,10 @@
                 "-y",
                 "@modelcontextprotocol/server-memory"
             ],
-            "enabled": true
+            "enabled": true,
+            "env": {
+                "MEMORY_FILE_PATH": "C:\\Users\\Administrator\\.config\\opencode\\data\\memory.jsonl"
+            }
         }
     },
     "plugin": [
