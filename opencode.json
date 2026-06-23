@@ -41,14 +41,12 @@
         "memory": {
             "type": "local",
             "command": [
-                "npx",
-                "-y",
-                "@modelcontextprotocol/server-memory"
+                "powershell",
+                "-NoProfile",
+                "-File",
+                "C:/Users/Administrator/.config/opencode/scripts/launch-memory-server.ps1"
             ],
-            "enabled": true,
-            "env": {
-                "MEMORY_FILE_PATH": "C:\\Users\\Administrator\\.config\\opencode\\data\\memory.jsonl"
-            }
+            "enabled": true
         }
     },
     "plugin": [
