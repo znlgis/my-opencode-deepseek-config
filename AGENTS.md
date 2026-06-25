@@ -19,6 +19,51 @@ overlap, follow the stricter instruction.
 5. **Respect role boundaries.** Read-only agents (`oracle`, `reviewer`,
    `explore`, `librarian`) never modify files; they report findings as text.
 
+## Memory Priority
+
+The `memory` MCP server provides a local knowledge graph that persists facts,
+decisions, and patterns across turns and sessions. Memory is the **most
+authoritative source of project-specific knowledge**. Every agent MUST consult
+it before acting on any non-trivial task.
+
+### Before Any Action
+
+1. **Search memory first.** Before writing code, making decisions, or
+   answering project questions, query memory with `memory_search_nodes` using
+   keywords from the current task. This is not optional — it is part of the
+   standard workflow.
+2. **Run memory searches in parallel** with file reads and code exploration.
+   Fire them in the same batch — never serialize.
+3. **Memory overrides model defaults.** When memory contains a fact about
+   this project (conventions, decisions, preferences, architecture), that
+   fact takes priority over the model's own assumptions, training data, and
+   any other source except the user's explicit current instruction.
+
+### When Memory Has Data
+
+4. **Cite memory explicitly.** When using stored knowledge, state it: "From
+   memory: [fact]." This confirms the memory system is working and builds
+   user trust.
+5. **Follow prior decisions.** If memory records a settled decision (e.g.,
+   "chose library X over Y because Z"), follow it. Do not re-litigate unless
+   the user explicitly asks you to reconsider.
+
+### After Significant Work
+
+6. **Store what persists.** After completing a task, write key facts to
+   memory:
+   - Architectural decisions and their rationale
+   - Project conventions and patterns discovered
+   - User preferences and explicit feedback
+   - Relationships between modules / components
+   - Pitfalls, gotchas, and workarounds
+7. **Quality over quantity.** Skip session-local trivia. Ask: "Would a
+   future agent benefit from knowing this?"
+
+Use `memory_create_entities` / `memory_add_observations` to write facts,
+`memory_create_relations` to link entities, and `memory_search_nodes` /
+`memory_open_nodes` to retrieve them.
+
 ## Constraints (this repository)
 
 - **No new models.** Only `deepseek/deepseek-v4-pro` and
@@ -84,16 +129,23 @@ Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill
 names must stay unique across all sources.
 
+**Skills before raw tools.** When tackling a problem, match it to a superpowers
+skill first (brainstorming, systematic-debugging, TDD, planning, etc.). Only
+use the `sequential-thinking` MCP tool for genuinely hard sub-steps within a
+skill's workflow, or for problems where no skill applies.
+
 ## MCP servers
 
 A few **local, no-API-key, offline** MCP servers are enabled in `opencode.json`
 (`type: "local"`, launched on demand via `npx`). Use them when they fit; don't
 force them:
 
-- `sequential-thinking` — structured step-by-step reasoning for genuinely hard,
-  multi-step problems. Skip it for simple tasks.
-- `memory` — a local knowledge-graph store for facts worth carrying across
-  turns/sessions. Don't put secrets in it.
+- `sequential-thinking` — fallback for problems that don't match any
+  superpowers skill, or for genuinely hard sub-steps within a skill's
+  workflow. Skip it for simple tasks.
+- `memory` — **must be consulted before any task** (see
+  [Memory Priority](#memory-priority)). A local knowledge-graph store for
+  facts worth carrying across turns/sessions. Don't put secrets in it.
 
 Keep the MCP set small: every enabled server adds tools and tokens to context.
 Only add servers that run locally and need no credentials or online service.
