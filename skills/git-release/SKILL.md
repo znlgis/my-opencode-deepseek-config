@@ -84,10 +84,30 @@ gh release create v1.4.0 --generate-notes --draft
 # Annotated tag on the release commit
 git tag -a v1.4.0 -m "v1.4.0"
 
+# Push the tag to the remote
+git push origin v1.4.0
+
 # Create the GitHub release (the tag is created if it does not exist yet)
 gh release create v1.4.0 --title "v1.4.0" --notes-file RELEASE_NOTES.md
 # or attach build artifacts:
 gh release create v1.4.0 ./dist/*.tar.gz --title "v1.4.0" --generate-notes
+```
+
+### Pre-releases
+
+For alpha/beta/rc releases, use `--prerelease` and SemVer pre-release labels:
+
+```bash
+gh release create v2.0.0-beta.1 --prerelease --title "v2.0.0-beta.1" --generate-notes
+```
+
+### Pre-flight (dry run)
+
+Before publishing, verify the release will look right:
+
+```bash
+gh release create v1.4.0 --generate-notes --draft   # draft first, review in browser
+gh release view v1.4.0 --json tagName,name,body      # inspect before publishing
 ```
 
 Note: some sandboxed environments cannot run `git push`. In that case push the

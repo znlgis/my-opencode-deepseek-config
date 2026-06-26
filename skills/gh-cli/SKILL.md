@@ -50,6 +50,29 @@ gh repo create my-proj --private --source=. --remote=origin --push
 gh repo fork OWNER/REPO --clone          # fork + clone + add upstream
 gh repo list OWNER --limit 50            # list repos for a user/org
 gh repo edit --default-branch main --enable-issues
+gh repo rename NEW-NAME --repo OWNER/REPO
+gh repo archive --repo OWNER/REPO --yes
+gh repo unarchive --repo OWNER/REPO --yes
+
+# Read files/dirs from a repo (no local clone needed)
+gh repo read-dir path/to/dir --repo OWNER/REPO
+gh repo read-file path/to/file --repo OWNER/REPO
+
+# Autolink references (e.g. JIRA tickets)
+gh repo autolink create --key-prefix JIRA- --url-template "https://jira.example.com/browse/JIRA-<num>"
+gh repo autolink list
+gh repo autolink delete <id>
+
+# Deploy keys
+gh repo deploy-key add key.pub --title "CI deploy" --allow-write
+gh repo deploy-key list
+gh repo deploy-key delete <id>
+
+# Generate .gitignore / LICENSE from templates
+gh repo gitignore list
+gh repo gitignore view Go
+gh repo license list
+gh repo license view MIT
 ```
 
 ## Pull requests
@@ -83,6 +106,10 @@ gh pr merge 42 --admin                    # bypass required checks (use sparingl
 gh pr update-branch 42                    # update the PR branch with its base
 gh pr ready 42                            # mark draft as ready
 gh pr close 42 / gh pr reopen 42
+gh pr edit 42 --title "New title" --body "Updated body" --add-label triaged
+gh pr lock 42 --reason resolved           # prevent further comments
+gh pr unlock 42
+gh pr revert 42 --yes                     # revert a merged PR
 ```
 
 Useful JSON fields for `--json`: `number,title,state,isDraft,mergeable,
@@ -99,6 +126,13 @@ gh issue comment 7 --body "Reproduced on main"
 gh issue close 7 --reason completed       # or "not planned"
 gh issue edit 7 --add-label triaged --add-assignee @me
 gh issue develop 7 --checkout             # create+checkout a branch for the issue
+gh issue delete 7                         # permanently delete (use with caution)
+gh issue lock 7 --reason resolved         # prevent further comments
+gh issue unlock 7
+gh issue pin 7                            # pin to top of issue list
+gh issue unpin 7
+gh issue transfer 7 https://github.com/OTHER/REPO   # move to another repo
+gh issue status                           # dashboard of your open issues
 ```
 
 ## GitHub Actions / CI
@@ -124,12 +158,23 @@ To debug a red PR: `gh pr checks <n>` → grab the failing run → `gh run view
 ## Releases, gists, and more
 
 ```bash
+# Releases
 gh release create v1.2.0 --generate-notes
 gh release create v1.2.0 ./dist/*.tar.gz --title "v1.2.0" --notes-file CHANGELOG.md
 gh release list / gh release view v1.2.0 / gh release download v1.2.0
+gh release edit v1.2.0 --title "v1.2.0 (hotfix)" --notes-file CHANGELOG.md
+gh release upload v1.2.0 ./extra/*.zip    # add assets to an existing release
+gh release delete-asset v1.2.0 asset.zip  # remove an asset
+gh release verify v1.2.0                  # verify release assets against checksums
+gh release verify-asset asset.zip --repo OWNER/REPO
 
+# Gists
 gh gist create file.txt --public --desc "snippet"
 gh gist list
+gh gist view <id> --files                 # list files in a gist
+gh gist edit <id> --add extra.txt --desc "updated"
+gh gist clone <id>                        # clone a gist locally
+gh gist rename <id>                       # rename a gist file
 ```
 
 ## Search
@@ -139,6 +184,7 @@ gh search prs --author @me --state open --label bug
 gh search issues "memory leak" --repo OWNER/REPO --state open
 gh search code "func main" --language go --owner OWNER
 gh search repos "cli tool" --language rust --sort stars --limit 10
+gh search commits "fix memory leak" --repo OWNER/REPO --author @me
 ```
 
 ## Projects, labels, and repo metadata
@@ -176,6 +222,73 @@ gh codespace ssh
 gh codespace delete
 ```
 
+## Discussions
+
+```bash
+gh discussion create --title "RFC: ..." --body "Proposal details..." --repo OWNER/REPO --category Announcements
+gh discussion list --repo OWNER/REPO
+gh discussion view 3 --repo OWNER/REPO --comments
+gh discussion comment 3 --body "+1" --repo OWNER/REPO
+gh discussion edit 3 --title "Better title" --repo OWNER/REPO
+```
+
+## Organizations
+
+```bash
+gh org list                                # list orgs you belong to
+```
+
+## Rulesets
+
+```bash
+gh ruleset list --repo OWNER/REPO          # list repository-level rulesets
+gh ruleset view 1 --repo OWNER/REPO        # inspect a ruleset
+gh ruleset check main --repo OWNER/REPO    # check if a branch satisfies a ruleset
+```
+
+## Attestation (supply-chain security)
+
+```bash
+gh attestation download OWNER/REPO         # download build attestations
+gh attestation verify <artifact> --repo OWNER/REPO --digest-alg sha256
+gh attestation trusted-root                # inspect trusted root metadata
+```
+
+## Copilot
+
+```bash
+gh copilot suggest "How do I..."           # get a command suggestion
+gh copilot explain "git rebase --onto"     # explain a shell command
+gh copilot alias                           # set up shell aliases for ghcs/ghce
+gh copilot config                          # configure Copilot settings
+```
+
+## Agent tasks
+
+```bash
+gh agent-task create --title "Add tests" --body "Write unit tests..." --repo OWNER/REPO
+gh agent-task list --repo OWNER/REPO
+gh agent-task view 1 --repo OWNER/REPO
+```
+
+## Skills
+
+```bash
+gh skill install OWNER/repo                # install an agent skill
+gh skill list                              # list installed skills
+gh skill preview OWNER/repo                # preview a skill before installing
+gh skill publish                           # publish your own skill
+gh skill search "code review"              # search the skill marketplace
+gh skill update OWNER/repo                 # update an installed skill
+```
+
+## Preview features
+
+```bash
+gh preview                                 # list available previews
+gh preview issue transfer                  # enable a preview feature
+```
+
 ## Aliases, extensions, and config
 
 ```bash
@@ -192,6 +305,8 @@ gh extension upgrade --all
 # Config & status
 gh config set editor "code --wait"
 gh config set git_protocol ssh
+gh config get editor                        # read a config value
+gh config clear-cache                       # clear the API cache
 gh status                    # cross-repo summary of your assigned work
 ```
 
@@ -200,6 +315,7 @@ gh status                    # cross-repo summary of your assigned work
 | Variable                  | Effect                                              |
 | ------------------------- | --------------------------------------------------- |
 | `GH_TOKEN` / `GITHUB_TOKEN` | auth token for non-interactive / CI use           |
+| `GH_ENTERPRISE_TOKEN`     | auth token for a GitHub Enterprise Server instance |
 | `GH_REPO`                 | default `OWNER/REPO` so you can omit `-R`            |
 | `GH_HOST`                 | target a GitHub Enterprise host                     |
 | `GH_PAGER` / `PAGER`      | pager for long output (`cat` to disable)            |

@@ -70,3 +70,14 @@ use the deepseek-v4 tiers instead.
 For a tiny one-file tweak, a single-line `type: subject` is enough — a body is
 only needed when the *why* isn't obvious from the diff. Match the repository's
 existing commit style if it already follows a different but consistent convention.
+
+## Checking existing conventions
+
+Before proposing a format, check the repo's recent history:
+
+```bash
+git log --oneline -20   # see actual commit style in use
+```
+
+If the repo uses a different convention (e.g., `[fix] subject` or module prefixes
+like `auth: subject`), follow the existing style — not the spec.

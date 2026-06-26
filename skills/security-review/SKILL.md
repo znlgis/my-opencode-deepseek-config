@@ -39,7 +39,8 @@ code unless explicitly asked.
 - **Sensitive data exposure** — PII/secrets in logs, error messages, or API
   responses; verbose stack traces leaked to clients.
 - **Dependencies** — newly added packages: are they reputable, pinned, and free
-  of known CVEs? Avoid typosquats.
+  of known CVEs? Avoid typosquats. For supply-chain verification, use
+  `gh attestation` (see the `gh-cli` skill).
 - **Resource & DoS** — unbounded loops, unbounded request/body sizes, missing
   timeouts, regex catastrophic backtracking (ReDoS).
 - **Race conditions / TOCTOU** — check-then-act on files, balances, or auth

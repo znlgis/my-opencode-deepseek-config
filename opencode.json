@@ -19,6 +19,12 @@
             "*": "allow",
             "rm -rf*": "ask",
             "rm -fr*": "ask",
+            "rm -rf *": "ask",
+            "rm -fr *": "ask",
+            "Remove-Item -Recurse -Force*": "ask",
+            "rd /s /q*": "ask",
+            "del /f /s*": "ask",
+            "format *": "ask",
             "git push --force*": "ask",
             "git push -f *": "ask",
             "git reset --hard*": "ask"
@@ -63,10 +69,15 @@
             "model": "deepseek/deepseek-v4-flash"
         }
     },
+    "tool_output": {
+        "max_lines": 2000,
+        "max_bytes": 51200
+    },
     "compaction": {
         "auto": true,
         "prune": true,
-        "tail_turns": 9
+        "tail_turns": 12,
+        "preserve_recent_tokens": 16000
     },
     "command": {
         "deep": {

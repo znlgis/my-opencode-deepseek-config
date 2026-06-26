@@ -18,6 +18,25 @@ overlap, follow the stricter instruction.
    searches, and fetches in a single batch instead of sequentially.
 5. **Respect role boundaries.** Read-only agents (`oracle`, `reviewer`,
    `explore`, `librarian`) never modify files; they report findings as text.
+6. **Don't create files unless asked.** Never proactively create README files,
+   documentation, or any new file without explicit user request. The user asked
+   for code changes, not project scaffolding.
+7. **Right-size the model to the task.** v4-flash agents (explore, librarian,
+   light-orchestrator) handle search, lookup, simple edits, and documentation.
+   v4-pro agents (planner, deep-worker, oracle, reviewer) handle reasoning,
+   complex decisions, multi-step analysis, and implementation. When a task
+   borderlines between the two, prefer the flash agent; escalate to pro only
+   when flash is genuinely out of its depth.
+
+## Language
+
+Reply to the user in the operating system's current locale language. All
+agents should detect the OS language from the environment and use it for
+all user-facing output — explanations, summaries, questions, and findings.
+On a zh-CN Windows system, reply in Chinese. On an en-US system, reply in
+English. Never force English unless the user explicitly requests it.
+Subagents that return text to the orchestrator should also use the OS
+language so the orchestrator can pass it through unchanged.
 
 ## Constraints (this repository)
 
@@ -37,6 +56,17 @@ For any task with 2 or more steps:
 
 Skipping todos on multi-step work means invisible progress and risks leaving the
 task half-done.
+
+## Context Management
+
+- **Delegate, don't accumulate.** Large files should be read by subagents, not
+  loaded into the orchestrator's context. Use explore agents for broad searches.
+- **Parallelize independent reads.** When you need to read 3+ files that don't
+  depend on each other, fire all reads simultaneously.
+- **Compress aggressively.** When a line of inquiry has run its course and its
+  findings are clear, compress it. Don't let stale context accumulate.
+- **One topic per subagent.** Don't ask a single subagent to do research AND
+  implementation — split them.
 
 ## When to Ask vs. Proceed
 
@@ -68,6 +98,17 @@ patterns, say so before executing:
 - No filler comments or AI boilerplate — comment only where the codebase already does.
 - Verify changes build/pass available checks and don't break callers.
 - Cite concrete locations (`file:line`) when reporting findings.
+- Every public function/method must have at least one caller before being
+  committed. No dead code.
+- Verify your changes by reading every modified file end-to-end before
+  claiming completion.
+
+## Comment Discipline
+
+- No AI boilerplate comments. Never write comments like "Initialize the service", "Set up the handler", "Create a new instance" — the code should speak for itself.
+- Comments explain WHY, not WHAT. If reading the code already tells you what it does, delete the comment.
+- No commented-out code. Remove dead code; git history preserves it.
+- No filler docstrings. Match the project's existing docstring convention; if the project doesn't use docstrings, don't add them.
 
 ## Skills
 
@@ -89,4 +130,12 @@ skill first (brainstorming, systematic-debugging, TDD, planning, etc.). Only
 fall back to step-by-step reasoning for genuinely hard sub-steps within a
 skill's workflow, or for problems where no skill applies.
 
+## Self-Verification
 
+Before claiming any task is complete:
+1. Re-read every modified file from top to bottom — look for leftover debug
+   prints, TODO comments, incomplete logic
+2. Verify the change doesn't break callers — grep for usages of modified
+   functions/types
+3. If the project has tests, run them; if not, state that tests were not available
+4. Check that you haven't introduced unused imports, variables, or parameters

@@ -11,7 +11,8 @@
 - 会话分享：已关闭（`share: "disabled"`，避免误分享，提升隐私）
 - 快照：已开启（`snapshot: true`）
 - 权限基线：默认放行；仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`，对读取 `.env` 类敏感文件设为 `deny`，对工作目录外路径（`external_directory`）设为 `ask`
-- 上下文压缩：已开启自动压缩与历史裁剪
+- 上下文压缩：已开启自动压缩与历史裁剪（`preserve_recent_tokens: 16000`）
+- 工具输出控制：`tool_output` 限制单次输出（max_lines: 2000, max_bytes: 51200）
 - 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
 - 技能（Skills）：`skills/` 目录下的 `SKILL.md`，通过原生 `skill` 工具按需加载
@@ -28,6 +29,14 @@
 
 这样的分层兼顾了：
 
+### 路由策略
+
+通过 orchestrator 的模型感知路由，实现 cost-aware 分发：
+- **Flash 优先**：搜索、查找、简单编辑、文档生成等明确定义的任务，优先走 flash agent
+- **Pro 升级路径**：flash agent 无法胜任时，自动升级到 pro（带完整上下文）
+- **Pro 专注推理**：规划、架构、根因分析、代码审查、复杂实现——只用 pro
+- **边界右移**：模糊任务默认走 flash 尝试，失败了才升级，不浪费 pro 资源
+
 - **稳定性**：重任务和轻任务分流，避免所有任务都堆到高成本模型
 - **可用性**：常见任务都有明确归属，减少路由不清导致的体验波动
 - **易用性**：通过命令和角色划分，让使用者更容易选择正确 Agent
@@ -38,16 +47,16 @@
 
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
-| `orchestrator` | `deepseek/deepseek-v4-pro` | 默认入口，负责分类、分发、兜底 |
+| `orchestrator` | `deepseek/deepseek-v4-pro` | 默认入口，负责分类（含 6 类 Task Categories）、分发、兜底；含增强意图门控（12 种模式）、纪律规则（5 条）、8 条降级链 |
 
 ### Subagents
 
 | Agent | 模型 | 权限 | 作用 |
 | --- | --- | --- | --- |
 | `planner` | `deepseek/deepseek-v4-pro` | 读写 | 规划、架构、拆解任务，输出可直接交给 `deep-worker` 的 Handoff Plan |
-| `deep-worker` | `deepseek/deepseek-v4-pro` | 读写 | 重型实现、多文件改动、复杂调试，含 Todo 管理与代码库评估 |
-| `oracle` | `deepseek/deepseek-v4-pro` | **只读** | 根因分析、深度理解代码、问题定位，不修改文件 |
-| `reviewer` | `deepseek/deepseek-v4-pro` | **只读** | 代码审查、质量检查，不修改文件 |
+| `deep-worker` | `deepseek/deepseek-v4-pro` | 读写 | 重型实现、多文件改动、复杂调试，含 Todo 管理、代码库评估、增强自检清单、注释纪律、无死代码规则 |
+| `oracle` | `deepseek/deepseek-v4-pro` | **只读** | 根因分析、深度理解代码、问题定位；含增强上下文纪律与置信度评分 |
+| `reviewer` | `deepseek/deepseek-v4-pro` | **只读** | 代码审查、质量检查；含审查前检查清单、注释质量准则、security-review 技能推荐 |
 | `ui-builder` | `deepseek/deepseek-v4-pro` | 读写 | 前端与 UI 相关任务 |
 | `explore` | `deepseek/deepseek-v4-flash` | **只读（隐藏）** | 代码库搜索、并行探索、结构化返回结果 |
 | `librarian` | `deepseek/deepseek-v4-flash` | **只读（隐藏）** | 文档检索、Web 搜索、资料查询 |
@@ -95,7 +104,7 @@
 
 | Skill | 作用 |
 | --- | --- |
-| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、Projects、Label、Secret/Variable、扩展、别名、`gh api` 等，参考 [cli/cli](https://github.com/cli/cli) |
+| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、Projects、Label、Secret/Variable、扩展、别名、`gh api`，以及 Discussions、Organizations、Rulesets、Attestation（供应链安全）、Copilot、Agent Tasks、Skills（`gh skill`）、Preview 等现代命令（360 行覆盖） |
 | `conventional-commits` | 按 Conventional Commits 规范写提交信息与 PR 标题 |
 | `security-review` | 合并前对 diff 做安全审查（注入、XSS、SSRF、鉴权、密钥等清单） |
 | `git-release` | 准备打 Tag 的发布：依据 Conventional Commits 推断 SemVer、生成发布说明、给出 `git tag` 与 `gh release create` 命令（借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 文档中的 `git-release` 示例技能） |
@@ -126,9 +135,19 @@
 | 7 | 技能 | 引入 `skills/` 目录（`gh-cli`、`conventional-commits`、`security-review`、`git-release`），通过原生 `skill` 工具按需加载 |
 | 8 | 安全 | `.env` 文件读取设为 `deny`，破坏性 bash 命令（`rm -rf`、`git push -f`、`git reset --hard`）设为 `ask`，`external_directory` 设为 `ask` |
 | 9 | 隐私 | `share: "disabled"`，`snapshot: true` |
-| 10 | 压缩 | 自动 compaction + 历史裁剪（`tail_turns: 9`） |
+| 10 | 压缩 | 自动 compaction + 历史裁剪（`tail_turns: 12`） |
 | 11 | 命令 | 9 个快捷命令（`/deep` `/quick` `/ui` `/review` `/plan` `/search` `/oracle` `/consult` `/release`） |
 | 12 | 净化 | 移除不稳定的 `sequential-thinking` 与 `memory` MCP，依靠 superpowers 技能替代
+| 13 | 上下文 | orchestrator 增加 Task Categories（6 类）和 Discipline Rules（5 条），强化"意图优先、保守分类、规划先行、并行委派、保持精简"
+| 14 | 降级 | 扩展 Fallback Chains 从 4 条到 8 条（consultant→planner、reviewer→oracle、ui-builder→deep-worker、planner→consultant）
+| 15 | 规范 | AGENTS.md 新增 Context Management、Comment Discipline（禁止 AI 套话注释）、Self-Verification（修改后自检清单）、File Creation Discipline（禁止主动创建文件）
+| 16 | 质量 | AGENTS.md 新增"无死代码"和"端到端自读修改文件"两条质量要求
+| 17 | 工具 | opencode.json 新增 `tool_output`（max_lines: 2000, max_bytes: 51200）和 `compaction.preserve_recent_tokens: 16000`
+| 18 | 技能 | gh-cli 技能扩展至 360 行，新增 Discussions、Organizations、Rulesets、Attestation、Copilot、Agent Tasks、Skills、Preview 等命令；git-release 新增预发布和预检；conventional-commits 新增惯例检查；security-review 新增供应链验证引用
+| 19 | Agent | deep-worker/oracle/reviewer/explore 均增强，增加 AGENTS.md 规则引用、自检流程、上下文纪律和注释质量标准
+| 20 | 模型 | orchestrator 增加 Model-Aware Routing（5 条选择原则），所有 agent 增加 Model Leverage/Awareness 章节，明确 v4-pro 的推理深度利用和 v4-flash 的指令式执行
+| 21 | 审计 | 全面审查一致性：为 planner/consultant/ui-builder/oracle/reviewer 补齐 Model Leverage，为 librarian 补齐 Model Awareness，6 个 agent 补齐 AGENTS.md 引用
+| 22 | 审计 | 第二轮全面审查：修正 README tail_turns 文档不同步（9→12）；补齐 light-orchestrator 的 AGENTS.md 引用；explore 路径规则适配 Windows；加固 bash 权限（PowerShell/cmd 命令 + 空格变体 + format）；orchestrator 开放式改动明确路由、新增 explore fallback、统一模型名格式；git-release 补 git push 步骤；ui-builder 补升级提示；planner steps 20→30
 
 ## 仓库结构
 
@@ -169,4 +188,6 @@
 ## 说明
 
 这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share` 等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
+
+当前迭代重点深化了两个方向：(1) 模型效能最大化——通过 Model-Aware Routing 和 Model Leverage/Awareness 章节，让 v4-pro 专攻推理、v4-flash 聚焦执行；(2) 配置一致性审计——全面补齐所有 agent 的模型认知章节和 AGENTS.md 规则引用。全程未引入新模型或新依赖。
 
