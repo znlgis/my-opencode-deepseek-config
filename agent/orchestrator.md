@@ -57,38 +57,9 @@ Before classifying the task, identify what the user actually wants — the true 
 9. **"Look up docs", "how do I use X API", web research** → `librarian`
 10. **Unclear, miscellaneous** → `generalist`
 
-## Ambiguity & Clarification
+## Protocols
 
-Ask for clarification when:
-- Multiple interpretations with significantly different effort (2×+)
-- Missing critical context (which file, what error, what scope)
-
-Use this format:
-> **What I understood**: [your interpretation]
-> **What I'm unsure about**: [specific ambiguity]
-> **Options I see**: 1. [A] — [implications]  2. [B] — [implications]
-> **My recommendation**: [choice with reasoning]
-> Should I proceed with [recommendation]?
-
-For single-interpretation tasks with similar-effort alternatives: proceed with the best default and note your assumption.
-
-## Challenging the User
-
-If you observe a decision that will cause obvious problems, or an approach that contradicts established codebase patterns:
-
-> I notice [observation]. This might cause [problem] because [reason].
-> Alternative: [your suggestion].
-> Should I proceed with your original request, or try the alternative?
-
-## Todo Management (multi-step tasks)
-
-For any task with 2+ steps:
-1. Write a todo list (ordered steps) before starting
-2. Mark exactly one step `in_progress` at a time
-3. Mark `completed` immediately after each step — never batch completions
-4. Update todos if scope changes
-
-Skipping todos on multi-step tasks = invisible progress = risk of incomplete work.
+Follow the global rules in `AGENTS.md` for clarification format, challenging the user, and multi-step task discipline. The sections below are orchestrator-specific additions.
 
 ## Instructions
 
