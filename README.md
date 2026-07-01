@@ -15,7 +15,7 @@
 - 工具输出控制：`tool_output` 限制单次输出（max_lines: 2000, max_bytes: 51200）
 - 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
-- 技能（Skills）：`skills/` 目录下的 `SKILL.md`，通过原生 `skill` 工具按需加载
+- 技能（Skills）：`skills/` 目录下的 `SKILL.md`（6 个：`gh-cli`、`conventional-commits`、`security-review`、`git-release`、`remove-deadcode`、`opencode-config`），通过原生 `skill` 工具按需加载
 - 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
@@ -95,6 +95,9 @@
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 | `/consult` | `consultant` | 咨询、对比、建议 |
 | `/release` | `deep-worker`（加载 `git-release` 技能） | 准备打 Tag 的发布：发布说明、版本号、`gh release` 命令 |
+| `/commit` | `light-orchestrator`（加载 `conventional-commits` 技能） | 用 `!` 注入 `git status`/`git diff`，暂存改动并写符合 Conventional Commits 的提交信息（不推送） |
+| `/learn` | `light-orchestrator` | 把本次会话中「持久、非显而易见」的项目事实沉淀进 `AGENTS.md`，节省后续 token |
+| `/rmslop` | `deep-worker`（加载 `remove-deadcode` 技能） | 清理本次改动引入的 AI slop：无意义注释、注释掉的代码、死代码（不改变行为，验证后报告） |
 
 ## 技能（Skills）
 
@@ -104,10 +107,12 @@
 
 | Skill | 作用 |
 | --- | --- |
-| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、Projects、Label、Secret/Variable、扩展、别名、`gh api`，以及 Discussions、Organizations、Rulesets、Attestation（供应链安全）、Copilot、Agent Tasks、Skills（`gh skill`）、Preview 等现代命令（360 行覆盖） |
+| `gh-cli` | 用官方 `gh` CLI 操作 GitHub：PR、Issue、CI/Actions、Release、Projects、Label、Secret/Variable、扩展、别名、`gh api`，以及 Discussions、Organizations、Rulesets、Attestation（供应链安全）、Copilot（现为内置 Copilot CLI）、Agent Tasks、Skills（`gh skill`）、Cache、Preview 等现代命令，已对齐 [cli/cli](https://github.com/cli/cli) 最新版 |
 | `conventional-commits` | 按 Conventional Commits 规范写提交信息与 PR 标题 |
 | `security-review` | 合并前对 diff 做安全审查（注入、XSS、SSRF、鉴权、密钥等清单） |
 | `git-release` | 准备打 Tag 的发布：依据 Conventional Commits 推断 SemVer、生成发布说明、给出 `git tag` 与 `gh release create` 命令（借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 文档中的 `git-release` 示例技能） |
+| `remove-deadcode` | 查找并安全删除死代码（未引用的文件/导出/函数/变量/导入），删除前用工具链/LSP 验证，分批无冲突提交（借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 的 `remove-deadcode` 工作流，去掉插件/team-mode 依赖） |
+| `opencode-config` | 编写本仓库的 OpenCode 配置：`opencode.json` 键、`agent/*.md` frontmatter、`SKILL.md` 格式、命令与权限约定（借鉴 anomalyco `effect` 技能「锚定权威来源」的思路，为本仓库领域提供编写指南，节省重复推导 token） |
 
 ### 加载与发现机制
 
@@ -136,7 +141,7 @@
 | 8 | 安全 | `.env` 文件读取设为 `deny`，破坏性 bash 命令（`rm -rf`、`git push -f`、`git reset --hard`）设为 `ask`，`external_directory` 设为 `ask` |
 | 9 | 隐私 | `share: "disabled"`，`snapshot: true` |
 | 10 | 压缩 | 自动 compaction + 历史裁剪（`tail_turns: 12`） |
-| 11 | 命令 | 9 个快捷命令（`/deep` `/quick` `/ui` `/review` `/plan` `/search` `/oracle` `/consult` `/release`） |
+| 11 | 命令 | 12 个快捷命令（`/deep` `/quick` `/ui` `/review` `/plan` `/search` `/oracle` `/consult` `/release` `/commit` `/learn` `/rmslop`）|
 | 12 | 净化 | 移除不稳定的 `sequential-thinking` 与 `memory` MCP，依靠 superpowers 技能替代
 | 13 | 上下文 | orchestrator 增加 Task Categories（6 类）和 Discipline Rules（5 条），强化"意图优先、保守分类、规划先行、并行委派、保持精简"
 | 14 | 降级 | 扩展 Fallback Chains 从 4 条到 8 条（consultant→planner、reviewer→oracle、ui-builder→deep-worker、planner→consultant）
@@ -148,6 +153,9 @@
 | 20 | 模型 | orchestrator 增加 Model-Aware Routing（5 条选择原则），所有 agent 增加 Model Leverage/Awareness 章节，明确 v4-pro 的推理深度利用和 v4-flash 的指令式执行
 | 21 | 审计 | 全面审查一致性：为 planner/consultant/ui-builder/oracle/reviewer 补齐 Model Leverage，为 librarian 补齐 Model Awareness，6 个 agent 补齐 AGENTS.md 引用
 | 22 | 审计 | 第二轮全面审查：修正 README tail_turns 文档不同步（9→12）；补齐 light-orchestrator 的 AGENTS.md 引用；explore 路径规则适配 Windows；加固 bash 权限（PowerShell/cmd 命令 + 空格变体 + format）；orchestrator 开放式改动明确路由、新增 explore fallback、统一模型名格式；git-release 补 git push 步骤；ui-builder 补升级提示；planner steps 20→30
+| 23 | 技能 | 对齐 [cli/cli](https://github.com/cli/cli) 最新版修正 `gh-cli`：`gh copilot` 改为内置 Copilot CLI 用法（不再是 `suggest`/`explain` 扩展）、`gh skill install/preview` 补齐「repo + 技能名」两参数、新增 `gh cache` 与 `gh actions` 帮助入口
+| 24 | 技能 | 新增两个技能：`remove-deadcode`（借鉴 oh-my-openagent，去插件/team-mode 依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路，为本仓库配置编写提供指南、节省重复推导 token）
+| 25 | 命令 | 借鉴 anomalyco/opencode 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个纯配置命令（节省 token、沉淀上下文、清理 AI slop），命令数 9→12
 
 ## 仓库结构
 
@@ -169,7 +177,9 @@
 │   ├── gh-cli/SKILL.md
 │   ├── conventional-commits/SKILL.md
 │   ├── security-review/SKILL.md
-│   └── git-release/SKILL.md
+│   ├── git-release/SKILL.md
+│   ├── remove-deadcode/SKILL.md
+│   └── opencode-config/SKILL.md
 ├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
@@ -184,10 +194,13 @@
 - 查资料优先 `/search`
 - 定位根因优先 `/oracle`
 - 需要建议或权衡时优先 `/consult`
+- 提交前用 `/commit` 生成规范提交信息，用 `/rmslop` 清理 AI slop
+- 收尾时用 `/learn` 把可复用的项目事实沉淀进 `AGENTS.md`
 
 ## 说明
 
-这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share` 等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
+这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share`、命令的 `!` 内联 shell 注入等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
 
-当前迭代重点深化了两个方向：(1) 模型效能最大化——通过 Model-Aware Routing 和 Model Leverage/Awareness 章节，让 v4-pro 专攻推理、v4-flash 聚焦执行；(2) 配置一致性审计——全面补齐所有 agent 的模型认知章节和 AGENTS.md 规则引用。全程未引入新模型或新依赖。
+本轮迭代聚焦「借鉴外部最佳实践、纯配置落地」：(1) 对齐 cli/cli 最新版修正 `gh-cli` 技能中过时/不准确的命令（尤其 `gh copilot` 已变为内置 Copilot CLI）；(2) 新增 `remove-deadcode`（借鉴 oh-my-openagent、去插件依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路）两个技能；(3) 借鉴 anomalyco 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个命令，围绕「节省 token、沉淀上下文、清理 AI slop」提升开发效果。全程未引入新模型或新依赖。
+
 

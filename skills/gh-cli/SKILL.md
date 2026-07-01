@@ -150,6 +150,13 @@ gh workflow list
 gh workflow view ci.yml
 gh workflow run deploy.yml -f environment=staging   # dispatch with inputs
 gh workflow enable ci.yml / gh workflow disable ci.yml
+
+# Actions cache
+gh cache list                             # caches saved for the repo
+gh cache delete <id>                      # or --all to clear every cache
+
+# `gh actions` is a help hub that points at run/workflow/cache subcommands:
+gh help actions
 ```
 
 To debug a red PR: `gh pr checks <n>` → grab the failing run → `gh run view
@@ -256,37 +263,48 @@ gh attestation trusted-root                # inspect trusted root metadata
 
 ## Copilot
 
+`gh copilot` is now a **built-in** command (preview) that launches the standalone
+GitHub Copilot CLI — it downloads the Copilot CLI on first run, then execs it.
+This replaced the old `github/gh-copilot` extension, so `gh copilot suggest` /
+`gh copilot explain` no longer apply.
+
 ```bash
-gh copilot suggest "How do I..."           # get a command suggestion
-gh copilot explain "git rebase --onto"     # explain a shell command
-gh copilot alias                           # set up shell aliases for ghcs/ghce
-gh copilot config                          # configure Copilot settings
+gh copilot                                 # launch the interactive Copilot CLI
+gh copilot -p "Summarize this week's commits" --allow-tool 'shell(git)'
+gh copilot --remove                        # remove the gh-managed Copilot CLI
+gh copilot -- --help                       # pass flags straight through to Copilot CLI
 ```
 
 ## Agent tasks
 
+`gh agent-task` (preview) drives Copilot coding-agent tasks. `create` takes the
+task prompt as a positional argument; requires an OAuth login (`gh auth login`).
+
 ```bash
-gh agent-task create --title "Add tests" --body "Write unit tests..." --repo OWNER/REPO
-gh agent-task list --repo OWNER/REPO
-gh agent-task view 1 --repo OWNER/REPO
+gh agent-task create "Add unit tests for the auth module"   # start a task on the current repo
+gh agent-task list                                          # your most recent tasks
+gh agent-task view 123                                      # by PR number, or by session ID
 ```
 
 ## Skills
 
+`gh skill` (alias `gh skills`, preview) installs and manages agent skills from
+GitHub repos. `install`/`preview` take `OWNER/REPO` plus the skill name.
+
 ```bash
-gh skill install OWNER/repo                # install an agent skill
-gh skill list                              # list installed skills
-gh skill preview OWNER/repo                # preview a skill before installing
-gh skill publish                           # publish your own skill
-gh skill search "code review"              # search the skill marketplace
-gh skill update OWNER/repo                 # update an installed skill
+gh skill search terraform                          # search the skill marketplace
+gh skill install github/awesome-copilot documentation-writer
+gh skill preview github/awesome-copilot documentation-writer
+gh skill list                                      # list installed skills
+gh skill update --all                              # update all installed skills
+gh skill publish --dry-run                         # validate skills for publishing
 ```
 
 ## Preview features
 
 ```bash
-gh preview                                 # list available previews
-gh preview issue transfer                  # enable a preview feature
+gh preview                                 # unstable, testing/demo-only feature previews
+gh preview prompter                        # try the experimental prompter
 ```
 
 ## Aliases, extensions, and config

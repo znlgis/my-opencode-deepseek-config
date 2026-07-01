@@ -124,6 +124,21 @@
             "description": "Prepare a tagged release using the git-release skill",
             "agent": "deep-worker",
             "template": "Load the git-release skill and prepare a tagged release: draft release notes from merged PRs, propose a SemVer bump, and produce the gh release command."
+        },
+        "commit": {
+            "description": "Stage changes and write a Conventional Commits message",
+            "agent": "light-orchestrator",
+            "template": "Load the conventional-commits skill. Here is the current state:\n\nStatus:\n!`git status --short`\n\nDiff (staged + unstaged):\n!`git diff HEAD`\n\nStage the relevant changes and write a single Conventional Commits message whose subject explains WHY the change was made from the user's perspective. Do not push."
+        },
+        "learn": {
+            "description": "Persist durable, non-obvious project facts into AGENTS.md",
+            "agent": "light-orchestrator",
+            "template": "Review this session for durable, non-obvious facts about this codebase — conventions, gotchas, build/test commands, structural relationships — that would help future sessions. Append only genuinely reusable, long-lived facts (no task-specific or ephemeral notes, no secrets) to the appropriate section of AGENTS.md. Keep entries concise. If nothing qualifies, say so and change nothing."
+        },
+        "rmslop": {
+            "description": "Remove AI slop and dead code from the current changes",
+            "agent": "deep-worker",
+            "template": "Load the remove-deadcode skill. Review the current diff:\n\n!`git diff HEAD`\n\nRemove AI slop introduced by the changes: filler/boilerplate comments that restate the code, commented-out code, needless defensive wrappers, and any dead code that verification proves is unreferenced. Follow AGENTS.md Comment Discipline. Do not change behavior; verify build/tests still pass and report what you removed."
         }
     }
 }
