@@ -265,8 +265,9 @@ gh attestation trusted-root                # inspect trusted root metadata
 
 `gh copilot` is now a **built-in** command (preview) that launches the standalone
 GitHub Copilot CLI — it downloads the Copilot CLI on first run, then execs it.
-This replaced the old `github/gh-copilot` extension, so `gh copilot suggest` /
-`gh copilot explain` no longer apply.
+Because a built-in command takes precedence over the old `github/gh-copilot`
+extension, the former `gh copilot suggest` / `gh copilot explain` subcommands are
+no longer available this way; `gh copilot` now launches the full Copilot CLI.
 
 ```bash
 gh copilot                                 # launch the interactive Copilot CLI

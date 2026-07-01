@@ -202,5 +202,3 @@
 这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share`、命令的 `!` 内联 shell 注入等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
 
 本轮迭代聚焦「借鉴外部最佳实践、纯配置落地」：(1) 对齐 cli/cli 最新版修正 `gh-cli` 技能中过时/不准确的命令（尤其 `gh copilot` 已变为内置 Copilot CLI）；(2) 新增 `remove-deadcode`（借鉴 oh-my-openagent、去插件依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路）两个技能；(3) 借鉴 anomalyco 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个命令，围绕「节省 token、沉淀上下文、清理 AI slop」提升开发效果。全程未引入新模型或新依赖。
-
-

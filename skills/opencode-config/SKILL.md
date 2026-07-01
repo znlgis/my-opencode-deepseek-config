@@ -89,10 +89,15 @@ prompt:
 }
 ```
 
-- `template` can inline live shell output with the `!` prefix, e.g.
-  `` !`git status --short` `` — OpenCode runs the command at invocation time and
-  injects the output into the prompt. Use this to gather context (git status,
-  diffs, tags) without a manual step.
+- `template` can inline live shell output with the `!` prefix. OpenCode runs the
+  command at invocation time and injects the output into the prompt. For example,
+  a template containing an inline `!` command wrapping `git status --short`:
+
+  ```jsonc
+  "template": "Current status:\n!`git status --short`\nNow stage and commit."
+  ```
+
+  Use this to gather context (git status, diffs, tags) without a manual step.
 - Route commands to the cheapest capable agent: flash for mechanical tasks
   (commit, docs), pro for judgement-heavy tasks (slop removal, refactors).
 
