@@ -1,6 +1,6 @@
-# my-opencode-config
+# my-opencode-deepseek-config
 
-一个面向 OpenCode 的多 Agent 配置仓库，目标是在 **不新增模型、仅使用现有 2 个模型** 的前提下，提升日常使用时的可用性、易用性和稳定性。
+**OpenCode × DeepSeek 最优配置** —— 在 OpenCode 多 Agent 框架下，将 DeepSeek V4 双模型（Pro + Flash）的能力发挥到极致的配置方案。通过精心设计的 Agent 分工、模型感知路由、技能系统和全局规则，在不新增任何模型与依赖的前提下，最大化日常开发的可用性、易用性和稳定性。
 
 ## 当前配置概览
 
@@ -197,8 +197,12 @@
 - 提交前用 `/commit` 生成规范提交信息，用 `/rmslop` 清理 AI slop
 - 收尾时用 `/learn` 把可复用的项目事实沉淀进 `AGENTS.md`
 
-## 说明
+## 设计哲学
 
-这是一个偏重 **角色分工清晰、成本可控、行为稳定** 的 OpenCode 配置，而不是追求 Agent 数量或模型数量的堆叠。设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 中的核心思路（意图门控、只读隔离、并行探索、结构化输出、用 `AGENTS.md` 沉淀全局规则、用 Skills 沉淀可复用能力），参考了 [anomalyco/opencode](https://github.com/anomalyco/opencode) 最新版本的配置 Schema 与推荐用法（Skills、`permission`、`share`、命令的 `!` 内联 shell 注入等），并参考 [cli/cli](https://github.com/cli/cli) 完善了 `gh` 技能，但全部通过纯配置/提示词实现，无需引入额外依赖，也不引入新模型。之所以**只借鉴而不直接引入 oh-my-openagent**，是因为其体量大、变动频繁；这里只把"纯改 OpenCode 配置就能模仿实现"的优点吸收进来。
+这是一个 **纯配置驱动** 的 OpenCode + DeepSeek 方案，核心理念：
 
-本轮迭代聚焦「借鉴外部最佳实践、纯配置落地」：(1) 对齐 cli/cli 最新版修正 `gh-cli` 技能中过时/不准确的命令（尤其 `gh copilot` 已变为内置 Copilot CLI）；(2) 新增 `remove-deadcode`（借鉴 oh-my-openagent、去插件依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路）两个技能；(3) 借鉴 anomalyco 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个命令，围绕「节省 token、沉淀上下文、清理 AI slop」提升开发效果。全程未引入新模型或新依赖。
+- **角色分工清晰、成本可控、行为稳定** —— 追求配置质量而非 Agent/模型数量的堆叠。
+- **DeepSeek V4 双模型极致利用** —— Pro 做推理与决策，Flash 做查询与轻量执行，通过模型感知路由实现 cost-aware 分发。
+- **纯配置落地，零额外依赖** —— 所有能力由 `opencode.json` + `agent/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现，不引入新模型、新工具、新运行时。
+
+设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)（意图门控、只读隔离、并行探索、结构化输出）、[anomalyco/opencode](https://github.com/anomalyco/opencode)（配置 Schema、Skills、命令 `!` 内联 shell 注入）和 [cli/cli](https://github.com/cli/cli)（gh 技能），但只吸收"纯改配置就能实现"的优点，不引入任何外部依赖。
