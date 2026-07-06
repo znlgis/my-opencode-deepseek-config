@@ -178,6 +178,11 @@
             "description": "Simplify code without changing behavior — reduce nesting, remove unnecessary abstraction, cut dead variables",
             "agent": "oracle",
             "template": "Load the simplify skill. The user wants behavior-preserving simplification of specified code. Read the target file(s), apply the simplification patterns (early returns, inline single-use variables, remove single-caller functions, simplify conditionals), verify each change preserves behavior, and report what was simplified with before/after. Do not change public API signatures or remove error handling."
+        },
+        "skill": {
+            "description": "Manage agent skills — search, preview, install, update, or publish",
+            "agent": "light-orchestrator",
+            "template": "Load the gh-skill skill. The user wants to manage agent skills. Use `gh skill` commands to search, preview, install, update, list, or publish skills. For installs targeting opencode, always pass `--agent opencode`. For local development, prefer `--scope project`. Pin to a ref for reproducibility."
         }
     }
 }

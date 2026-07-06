@@ -171,6 +171,7 @@ workflow, check whether a skill already covers it and load it:
 - `spec-workflow` — run a lightweight spec-driven change loop (propose → specs/design → tasks → apply → archive) via durable git-tracked artifacts.
 - `verify-with-docs` — retrieval-first discipline: verify a specific/fast-moving library or API against current docs (or a mounted `references` source) before coding, instead of relying on memory.
 - `git-master` — advanced Git operations: rebase, squash, fixup, blame, bisect, reflog, code archaeology, worktrees.
+- `gh-skill` — discover, install, update, and publish Agent Skills with `gh skill`.
 - `codemap` — generate a structured annotated directory tree for quick codebase orientation.
 - `simplify` — behavior-preserving code simplification: reduce nesting, eliminate unnecessary abstraction, cut dead variables.
 
