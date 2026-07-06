@@ -36,7 +36,8 @@
     },
     "plugin": [
         "superpowers@git+https://github.com/obra/superpowers.git",
-        "@tarquinen/opencode-dcp@latest"
+        "@tarquinen/opencode-dcp@latest",
+		"opencode-agent-memory"
     ],
     "instructions": [
         "AGENTS.md"
