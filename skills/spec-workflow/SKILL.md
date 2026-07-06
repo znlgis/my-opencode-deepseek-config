@@ -99,7 +99,9 @@ test case.
 - Requirement header: `### Requirement: <name>` followed by a description using
   **SHALL/MUST** (avoid "should"/"may" for normative behavior).
 - Scenario header: `#### Scenario: <name>` — **exactly 4 hashtags**, then
-  WHEN/THEN bullets. Three hashtags or bullets are ignored silently.
+  WHEN/THEN bullets. A scenario written with 3 hashtags (`###`) or as a plain
+  bullet instead of a `####` header is silently ignored (not tracked as a
+  scenario).
 - Every requirement MUST have at least one scenario.
 
 Delta specs (files under a change's `specs/`) group edits by operation header:
