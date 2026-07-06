@@ -64,7 +64,9 @@ task half-done.
 - **Parallelize independent reads.** When you need to read 3+ files that don't
   depend on each other, fire all reads simultaneously.
 - **Compress aggressively.** When a line of inquiry has run its course and its
-  findings are clear, compress it. Don't let stale context accumulate.
+  findings are clear, compress it. Don't let stale context accumulate. Start
+  implementation from a clean context — carry forward the plan and findings, not
+  the raw exploration transcript.
 - **One topic per subagent.** Don't ask a single subagent to do research AND
   implementation — split them.
 
@@ -87,8 +89,6 @@ quality — this is the whole point of the two-tier DeepSeek design.
 - **Lazy-load skills and docs.** Load a skill only when its trigger fires; keep
   reference material on disk (via `references` / files) and pull it in on demand
   rather than carrying it in context.
-- **Compress finished threads.** When a line of inquiry is resolved, summarize
-  and drop the raw exploration — don't let stale context accumulate.
 - **Reuse specialist sessions.** Prefer reusing an existing subagent session
   over spawning a fresh one — carried context saves tokens. Track `task_id` to
   resume sessions when returning to the same specialist.
