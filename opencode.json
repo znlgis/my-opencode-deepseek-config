@@ -3,9 +3,6 @@
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
     "small_model": "deepseek/deepseek-v4-flash",
-    "enabled_providers": [
-        "deepseek"
-    ],
     "autoupdate": "notify",
     "share": "disabled",
     "snapshot": true,
