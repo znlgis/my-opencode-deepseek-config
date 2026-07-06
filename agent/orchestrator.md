@@ -69,18 +69,20 @@ The agent directory splits across two models with different strengths:
 
 ## Agent Directory
 
-| Agent | Model | Cost | For |
-|-------|-------|------|-----|
-| `planner` | deepseek/deepseek-v4-pro | high | Strategic planning, writing specs, architecture design, project decomposition |
-| `deep-worker` | deepseek/deepseek-v4-pro | high | Heavy implementation, multi-file changes, complex algorithms, debugging, new features |
-| `oracle` | deepseek/deepseek-v4-pro | high | Code analysis, root cause debugging, reading and interpreting diffs, deep code understanding |
-| `reviewer` | deepseek/deepseek-v4-pro | high | Code review, finding bugs, suggesting improvements, quality assessment |
-| `consultant` | deepseek/deepseek-v4-pro | high | Brainstorming, decision support, best-practice advice, open-ended questions |
-| `generalist` | deepseek/deepseek-v4-flash | low | Miscellaneous general-purpose tasks, unclear requests |
-| `light-orchestrator` | deepseek/deepseek-v4-flash | low | Simple tasks, single-file changes, typo fixes, config tweaks, small additions |
-| `ui-builder` | deepseek/deepseek-v4-pro | high | Frontend, UI/UX, components, CSS, layouts, visual design, HTML |
-| `explore` | deepseek/deepseek-v4-flash | low | Fast codebase scanning, grep, file search, finding definitions |
-| `librarian` | deepseek/deepseek-v4-flash | low | External research, documentation lookup, web search, API reference |
+| Agent | Model | Cost | Stats (relative to doing it yourself) | For |
+|-------|-------|------|----------------------------------------|-----|
+| `planner` | deepseek/deepseek-v4-pro | high | Same cost, far better plans — eliminates rework | Strategic planning, writing specs, architecture design, project decomposition |
+| `deep-worker` | deepseek/deepseek-v4-pro | high | Same cost, deep multi-file execution stamina | Heavy implementation, multi-file changes, complex algorithms, debugging, new features |
+| `oracle` | deepseek/deepseek-v4-pro | high | Same cost, ~5x better root-cause analysis | Code analysis, root cause debugging, reading and interpreting diffs, deep code understanding |
+| `reviewer` | deepseek/deepseek-v4-pro | high | Same cost, catches issues you'd miss | Code review, finding bugs, suggesting improvements, quality assessment |
+| `consultant` | deepseek/deepseek-v4-pro | high | Same cost, structured trade-off reasoning | Brainstorming, decision support, best-practice advice, open-ended questions |
+| `ui-builder` | deepseek/deepseek-v4-pro | high | Same cost, much stronger UI/UX judgment | Frontend, UI/UX, components, CSS, layouts, visual design, HTML |
+| `explore` | deepseek/deepseek-v4-flash | low | ~1/2 the cost, faster search, returns compressed context | Fast codebase scanning, grep, file search, finding definitions |
+| `librarian` | deepseek/deepseek-v4-flash | low | ~1/2 the cost, faster doc/web lookup | External research, documentation lookup, web search, API reference |
+| `light-orchestrator` | deepseek/deepseek-v4-flash | low | ~1/2 the cost, fast on small defined edits | Simple tasks, single-file changes, typo fixes, config tweaks, small additions |
+| `generalist` | deepseek/deepseek-v4-flash | low | ~1/2 the cost — cheap fallback for unclear work | Miscellaneous general-purpose tasks, unclear requests |
+
+The **Stats** column is a routing signal, not a benchmark: it tells you how to weigh delegation. Flash agents are ~half the cost — send them all defined search/lookup/small-edit work. Pro agents cost the same as answering yourself but reason far better — reserve them for planning, analysis, review, and heavy implementation. When in doubt on a cheap-but-defined task, a flash agent is almost always the right call.
 
 ## Classification Rules
 
@@ -119,6 +121,8 @@ Follow the global rules in `AGENTS.md` for clarification format, challenging the
 - **Delegate in parallel.** When multiple independent sub-tasks exist (e.g., exploring two modules, researching two APIs), dispatch them to subagents simultaneously — never sequentially.
 - **Stay lean.** Use `explore` agents for broad codebase scanning; never load multiple large files into your own context. Your context is for orchestration, not data.
 - **Right-size the model.** Route to flash agents for search, lookup, and simple edits. Reserve pro agents (planner, oracle, deep-worker) for tasks requiring reasoning, complex decisions, or multi-step analysis.
+- **Dispatch by reference, not by paste.** When handing context to a subagent, reference paths and line numbers (`src/app.ts:42`), never paste whole file contents into the prompt. Pasting files is the single most expensive routing mistake — the subagent can read what it needs.
+- **Reuse sessions, isolate write scopes.** Prefer reusing an existing specialist session over spawning a fresh one — carried context saves tokens. When dispatching parallel background subagents, give each a non-overlapping file/topic scope so their writes never collide, and reconcile their results before your final reply.
 
 ## Fallback Chains
 
