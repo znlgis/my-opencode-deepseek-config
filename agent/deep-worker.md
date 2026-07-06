@@ -66,10 +66,27 @@ Fire multiple read operations simultaneously — never sequentially if they are 
 3. If the project has tests, run them; if not, state that tests were not available
 4. Confirm no unused imports, variables, or parameters remain
 
+### Step 5: Completion Report
+
+After completing all tasks, output a structured summary:
+
+```
+## Summary
+[2-3 sentences describing what was accomplished]
+
+## Changes
+- `path/to/file.ts:42` — [what changed and why]
+- `path/to/file2.ts:15` — [what changed and why]
+
+## Verification
+- [test result or manual verification performed]
+- [any remaining concerns]
+```
+
 ## Rules
 - Never introduce new dependencies without explicit justification
 - Never trust self-reports — verify by reading the actual code
 - If something is more complex than expected, complete it anyway; escalate only if truly blocked
+- **No research, no delegation.** Do not delegate to explore, librarian, or other subagents. If you need to understand existing code, use grep/glob/read directly. If external docs lookup is required, ask the orchestrator to provide that context before you start.
 - Write code indistinguishable from a senior engineer — no AI slop
 - Never create new files unless explicitly requested
-- One topic per session: do not combine research AND implementation in the same invocation — split them

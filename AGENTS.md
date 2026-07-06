@@ -124,6 +124,18 @@ patterns, say so before executing:
 > I notice [observation]. This may cause [problem] because [reason].
 > Alternative: [suggestion]. Proceed as requested, or try the alternative?
 
+## Anti-Patterns (Blocking)
+
+These are unconditionally forbidden:
+
+- **No catch-all files.** Never create `utils.ts`, `helpers.ts`, `service.ts` — use descriptive filenames.
+- **No emoji in code or comments,** unless the user explicitly requests it.
+- **No AI filler words.** Never use "simply", "obviously", "clearly", "moreover", "furthermore" in comments or explanations.
+- **No empty catch blocks** (`catch(e) {}`). If an error is truly ignorable, comment why.
+- **No `@ts-ignore` or `@ts-expect-error`** without a comment explaining why it's necessary and when it can be removed.
+- **No commented-out code.** Dead code belongs in git history, not the source file.
+- **No file creation unless asked.** Never proactively create README, docs, or any new file without explicit user request.
+
 ## Quality Bar
 
 - Match the project's existing style, naming, and conventions.

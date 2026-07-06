@@ -3,6 +3,8 @@
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
     "small_model": "deepseek/deepseek-v4-flash",
+    "enabled_providers": ["deepseek"],
+    "disabled_providers": ["openai", "anthropic", "google", "openrouter"],
     "autoupdate": "notify",
     "share": "disabled",
     "snapshot": true,
@@ -31,7 +33,10 @@
             "git push -f *": "ask",
             "git reset --hard*": "ask",
             "git branch -D*": "ask",
-            "git stash clear*": "ask"
+            "git stash clear*": "ask",
+            "git stash drop*": "ask",
+            "gh repo delete*": "ask",
+            "gh pr close*": "ask"
         },
         "skill": {
             "*": "allow"
@@ -82,7 +87,7 @@
         "prune": true,
         "tail_turns": 12,
         "preserve_recent_tokens": 16000,
-        "reserved": 4096
+        "reserved": 8192
     },
     "command": {
         "deep": {
