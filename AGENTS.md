@@ -89,6 +89,16 @@ quality — this is the whole point of the two-tier DeepSeek design.
   rather than carrying it in context.
 - **Compress finished threads.** When a line of inquiry is resolved, summarize
   and drop the raw exploration — don't let stale context accumulate.
+- **Reuse specialist sessions.** Prefer reusing an existing subagent session
+  over spawning a fresh one — carried context saves tokens. Track `task_id` to
+  resume sessions when returning to the same specialist.
+- **Dispatch writes to background, serialize collisions.** Long-running writer
+  agents (deep-worker, light-orchestrator, ui-builder) should run as background
+  tasks. Never dispatch two writers to overlapping file sets simultaneously —
+  serialize them to avoid corrupted output.
+- **Use codemap to skip blind exploration.** Before scattering `glob` calls across
+  an unfamiliar repo, load the `codemap` skill to generate a structured overview.
+  One codemap can replace a dozen exploratory searches.
 
 ## When to Ask vs. Proceed
 
@@ -132,6 +142,20 @@ patterns, say so before executing:
 - No commented-out code. Remove dead code; git history preserves it.
 - No filler docstrings. Match the project's existing docstring convention; if the project doesn't use docstrings, don't add them.
 
+## Code Style (when implementing)
+
+These rules apply when writing or modifying code in any language:
+
+- **Prefer `const` over `let`.** Use ternary expressions or early returns instead of reassignment.
+- **Avoid `else` when possible.** Use early returns — they flatten the code and reduce cognitive load.
+- **Avoid `try`/`catch` where feasible.** Use explicit error handling or result types over blanket exception wrapping.
+- **Prefer functional array methods** (`flatMap`, `filter`, `map`) over imperative `for` loops for data transformation.
+- **Reduce variable count.** If a value is used only once, inline it at the use site instead of creating a named variable.
+- **Avoid unnecessary destructuring.** Use dot notation (`obj.prop`) when the destructured name doesn't clarify intent.
+- **No import aliases** (`import { foo as bar }`) unless disambiguating a genuine collision.
+- **No wildcard imports** (`import * as Foo`) — prefer named imports.
+- **Keep functions together.** Don't prematurely extract single-use helper functions — they scatter logic without adding clarity.
+
 ## Skills
 
 Reusable, on-demand instructions live under `skills/<name>/SKILL.md` and are
@@ -146,6 +170,9 @@ workflow, check whether a skill already covers it and load it:
 - `opencode-config` — author this repo's OpenCode config (agents, skills, commands, permissions).
 - `spec-workflow` — run a lightweight spec-driven change loop (propose → specs/design → tasks → apply → archive) via durable git-tracked artifacts.
 - `verify-with-docs` — retrieval-first discipline: verify a specific/fast-moving library or API against current docs (or a mounted `references` source) before coding, instead of relying on memory.
+- `git-master` — advanced Git operations: rebase, squash, fixup, blame, bisect, reflog, code archaeology, worktrees.
+- `codemap` — generate a structured annotated directory tree for quick codebase orientation.
+- `simplify` — behavior-preserving code simplification: reduce nesting, eliminate unnecessary abstraction, cut dead variables.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill

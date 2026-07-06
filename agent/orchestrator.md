@@ -29,6 +29,11 @@ Before classifying the task, identify what the user actually wants — the true 
 | "deploy X", "release Y" | Release workflow | `planner` → `deep-worker` execute |
 | "add tests for X" | Test implementation | `deep-worker` → implement tests |
 | "write docs for X" | Documentation | `light-orchestrator` → generate docs |
+| "review X", "audit security of Y" | Review / audit | `reviewer` → report findings |
+| "trace X", "debug Y from logs" | Root cause debugging | `oracle` → trace full call chain |
+| "simplify X", "clean up Y code" | Simplification | `oracle` (via `simplify` skill) → report → `light-orchestrator` or `deep-worker` apply |
+| "map out X", "show structure of Y" | Codebase orientation | `explore` (or `codemap` skill) → structured overview |
+| "research X", "what library for Y" | External research | `librarian` → findings with citations |
 
 **Verbalize your intent detection before acting:**
 > "I detect [intent per table above]. My approach: [...]."
@@ -123,6 +128,8 @@ Follow the global rules in `AGENTS.md` for clarification format, challenging the
 - **Right-size the model.** Route to flash agents for search, lookup, and simple edits. Reserve pro agents (planner, oracle, deep-worker) for tasks requiring reasoning, complex decisions, or multi-step analysis.
 - **Dispatch by reference, not by paste.** When handing context to a subagent, reference paths and line numbers (`src/app.ts:42`), never paste whole file contents into the prompt. Pasting files is the single most expensive routing mistake — the subagent can read what it needs.
 - **Reuse sessions, isolate write scopes.** Prefer reusing an existing specialist session over spawning a fresh one — carried context saves tokens. When dispatching parallel background subagents, give each a non-overlapping file/topic scope so their writes never collide, and reconcile their results before your final reply.
+- **Write-scope conflict detection.** Two writer agents (deep-worker, light-orchestrator, ui-builder) must never operate on overlapping file sets simultaneously. Before dispatching a writer, check whether another writer is active on the same file. If they collide, serialize them: wait for the first writer to finish before starting the second. Write collisions produce corrupted output that neither agent can detect.
+- **Background dispatch discipline.** Default to background (`background: true`) for all subagent work that takes more than a few seconds. Track task IDs, collect results via notifications, and synthesize only after all results are in. Do not poll — use the completion signal.
 
 ## Fallback Chains
 

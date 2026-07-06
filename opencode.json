@@ -26,11 +26,15 @@
             "rm -fr *": "ask",
             "Remove-Item -Recurse -Force*": "ask",
             "rd /s /q*": "ask",
+            "rd /s*": "ask",
             "del /f /s*": "ask",
+            "del /f /q*": "ask",
             "format *": "ask",
             "git push --force*": "ask",
             "git push -f *": "ask",
-            "git reset --hard*": "ask"
+            "git reset --hard*": "ask",
+            "git branch -D*": "ask",
+            "git stash clear*": "ask"
         },
         "skill": {
             "*": "allow"
@@ -164,6 +168,16 @@
             "description": "Archive a completed spec-driven change and fold its specs into the source of truth",
             "agent": "light-orchestrator",
             "template": "Load the spec-workflow skill and run its archive action for the requested completed change. Fold its delta specs into openspec/specs/<capability>/spec.md (apply ADDED/MODIFIED/REMOVED/RENAMED), then move openspec/changes/<change-id>/ to openspec/changes/archive/YYYY-MM-DD-<change-id>/. Confirm openspec/specs/ reflects reality before finishing."
+        },
+        "codemap": {
+            "description": "Generate a structured hierarchical map of the codebase for quick orientation",
+            "agent": "explore",
+            "template": "Load the codemap skill and generate an annotated directory tree for this project. Build the raw tree (depth 3, excluding node_modules/.git/dist/build/.next/coverage), annotate key directories with one-line purpose descriptions, and add quick-reference metadata (language, framework, runtime, build/test commands). Keep the whole map under 200 lines. If .opencode/codemap.md exists and appears fresh, update it rather than overwriting."
+        },
+        "simplify": {
+            "description": "Simplify code without changing behavior — reduce nesting, remove unnecessary abstraction, cut dead variables",
+            "agent": "oracle",
+            "template": "Load the simplify skill. The user wants behavior-preserving simplification of specified code. Read the target file(s), apply the simplification patterns (early returns, inline single-use variables, remove single-caller functions, simplify conditionals), verify each change preserves behavior, and report what was simplified with before/after. Do not change public API signatures or remove error handling."
         }
     }
 }

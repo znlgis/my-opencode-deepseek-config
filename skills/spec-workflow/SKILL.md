@@ -17,12 +17,19 @@ require the `@fission-ai/openspec` npm package, only the conventions below.
 
 ## Philosophy
 
+- **Enablers, not gates.** Artifact dependencies (proposal → specs → design → tasks)
+  show what's possible next, not what you MUST do. You can always jump back and
+  edit an earlier artifact — discovered the design is wrong mid-implementation?
+  Update `design.md` and keep going. The artifacts serve you, not the other way
+  around.
 - **Fluid, not rigid.** These are actions you take anytime — not locked phases.
   Implement, discover the design was wrong, update the spec, keep going.
 - **Artifacts are the source of truth.** Plans live as markdown files in the
   repo, not just in chat, so they survive the session and stay greppable.
 - **Brownfield-friendly.** Works on existing codebases; research current
-  behavior before proposing changes.
+  behavior before proposing changes. Delta specs (ADDED/MODIFIED/REMOVED/RENAMED)
+  mean you describe only what changes, not the entire system — ideal for
+  modifying an existing codebase without rewriting every spec.
 - **Scale down.** Skip the whole ceremony for a one-line fix. Use the ephemeral
   `planner` Handoff Plan when no durable artifact is needed. Reach for this
   workflow when a change spans multiple files/sessions or needs a shared spec.
@@ -135,11 +142,21 @@ Comment Discipline, Self-Verification, and run any available build/tests.
 
 When all tasks are done and merged:
 
-1. Fold the change's delta specs into the source of truth under
-   `openspec/specs/<capability>/spec.md` (apply ADDED/MODIFIED/REMOVED/RENAMED).
+1. **Merge delta specs into the source of truth.** For each delta spec file under
+   `changes/<change-id>/specs/<capability>/spec.md`:
+   - `## ADDED` → append new requirements to `openspec/specs/<capability>/spec.md`.
+   - `## MODIFIED` → replace the existing requirement block with the full updated
+     version (delta specs must contain the **entire** modified block, not fragments).
+   - `## REMOVED` → delete from the source of truth, but verify the **Reason** and
+     **Migration** are recorded before removal.
+   - `## RENAMED` → rename the requirement header (keep content, update `FROM:`/`TO:`).
 2. Move `openspec/changes/<change-id>/` to
    `openspec/changes/archive/YYYY-MM-DD-<change-id>/`.
 3. Verify `openspec/specs/` now reflects reality and the change dir is clean.
+4. Commit the archive with a message like `docs(openspec): archive <change-id>`.
+
+If a capability spec file doesn't exist yet under `openspec/specs/`, create it
+and seed it with the ADDED requirements from the delta.
 
 ## Anti-patterns
 

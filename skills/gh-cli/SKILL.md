@@ -35,6 +35,8 @@ gh auth status                 # who am I, which host, what scopes
 gh auth login                  # interactive login (browser or token)
 gh auth login --with-token < token.txt    # non-interactive
 gh auth refresh -s project,read:org       # add missing OAuth scopes
+gh auth switch --hostname GHES --user admin2  # switch between accounts/hosts
+gh auth token                              # print the current auth token (for scripts)
 gh repo set-default OWNER/REPO            # pin the repo for ambiguous commands
 ```
 
@@ -53,6 +55,8 @@ gh repo edit --default-branch main --enable-issues
 gh repo rename NEW-NAME --repo OWNER/REPO
 gh repo archive --repo OWNER/REPO --yes
 gh repo unarchive --repo OWNER/REPO --yes
+gh repo delete OWNER/REPO --yes           # permanently delete a repo
+gh repo browse                             # open the current repo in browser
 
 # Read files/dirs from a repo (no local clone needed)
 gh repo read-dir path/to/dir --repo OWNER/REPO
@@ -79,12 +83,16 @@ gh repo license view MIT
 
 ```bash
 # Create — fill from commits, or pass title/body explicitly
-gh pr create --fill
+gh pr create --fill                        # auto-fill title + body from last commit
+gh pr create --fill-verbose                # fill + show the generated content for review
+gh pr create --fill-first                  # use first commit only (skip stacked PRs)
 gh pr create --title "Fix X" --body "Closes #12" --base main --head feature
 gh pr create --draft --reviewer alice,bob --label bug --assignee @me
+gh pr create --recover                     # recover a previously abandoned creation
 
 # Inspect
 gh pr list --state open --label bug --author @me
+gh pr list --app dependabot                  # filter by the app that opened the PR
 gh pr status                              # PRs relevant to you
 gh pr view 42                             # summary
 gh pr view 42 --json state,mergeable,reviewDecision --jq '.'
@@ -102,7 +110,9 @@ gh pr comment 42 --body "Thanks!"
 # Land it
 gh pr merge 42 --squash --delete-branch   # also --merge or --rebase
 gh pr merge 42 --auto --squash            # enable auto-merge when checks pass
+gh pr merge 42 --disable-auto             # disable auto-merge for a PR
 gh pr merge 42 --admin                    # bypass required checks (use sparingly)
+gh pr merge 42 --match-head-commit <sha>  # only merge if HEAD matches (race-safe)
 gh pr update-branch 42                    # update the PR branch with its base
 gh pr ready 42                            # mark draft as ready
 gh pr close 42 / gh pr reopen 42
@@ -120,10 +130,14 @@ statusCheckRollup`. Combine with `--jq` to extract exactly what you need.
 
 ```bash
 gh issue create --title "Bug: crash on save" --body "Steps..." --label bug
+gh issue create --type "Bug" --parent 42 --blocked-by 35 --blocking 37   # sub-issues
+gh issue create --recover                     # recover a previously abandoned creation
 gh issue list --state open --assignee @me --label "good first issue"
+gh issue list --app dependabot                # filter by the app that created the issue
 gh issue view 7 --comments
 gh issue comment 7 --body "Reproduced on main"
-gh issue close 7 --reason completed       # or "not planned"
+gh issue close 7 --reason completed           # or "not planned", "duplicate"
+gh issue close 7 --reason duplicate --duplicate-of 12
 gh issue edit 7 --add-label triaged --add-assignee @me
 gh issue develop 7 --checkout             # create+checkout a branch for the issue
 gh issue delete 7                         # permanently delete (use with caution)
@@ -167,8 +181,12 @@ To debug a red PR: `gh pr checks <n>` → grab the failing run → `gh run view
 ```bash
 # Releases
 gh release create v1.2.0 --generate-notes
+gh release create v1.2.0 --generate-notes --latest            # mark as the latest release
+gh release create v1.2.0 --generate-notes --latest=false      # explicitly NOT latest
+gh release create v1.2.0 --generate-notes --fail-on-no-commits  # error if no new commits
 gh release create v1.2.0 ./dist/*.tar.gz --title "v1.2.0" --notes-file CHANGELOG.md
 gh release list / gh release view v1.2.0 / gh release download v1.2.0
+# ^ release download now works without auth on public repos (v2.96.0+)
 gh release edit v1.2.0 --title "v1.2.0 (hotfix)" --notes-file CHANGELOG.md
 gh release upload v1.2.0 ./extra/*.zip    # add assets to an existing release
 gh release delete-asset v1.2.0 asset.zip  # remove an asset
@@ -202,6 +220,10 @@ gh project list --owner OWNER
 gh project view 5 --owner OWNER --web
 gh project item-list 5 --owner OWNER
 gh project item-add 5 --owner OWNER --url https://github.com/OWNER/REPO/issues/7
+gh project item-create 5 --owner OWNER --title "Draft item" --body "Description"
+gh project item-edit --id <item-id> --field Status=Done
+gh project field-list 5 --owner OWNER
+gh project copy 5 --source-owner SRC --target-owner DST       # duplicate a project
 
 # Labels
 gh label list
@@ -212,9 +234,11 @@ gh label clone OWNER/REPO            # copy labels from another repo
 # Variables & secrets (Actions / Dependabot / Codespaces)
 gh secret set TOKEN < token.txt      # never echo secrets on the CLI
 gh secret list
+gh secret delete TOKEN               # remove a secret
 gh variable set REGION --body us-east-1
 gh variable get REGION               # read a single variable's value
 gh variable list
+gh variable delete REGION
 
 # Sync a fork with upstream
 gh repo sync OWNER/fork --source OWNER/upstream
@@ -327,6 +351,7 @@ gh extension upgrade --all
 gh config set editor "code --wait"
 gh config set git_protocol ssh
 gh config get editor                        # read a config value
+gh config list                              # list all config key-value pairs
 gh config clear-cache                       # clear the API cache
 gh status                    # cross-repo summary of your assigned work
 ```
@@ -365,7 +390,13 @@ gh completion -s bash                # or zsh | fish | powershell
 | `GH_HOST`                 | target a GitHub Enterprise host                     |
 | `GH_PAGER` / `PAGER`      | pager for long output (`cat` to disable)            |
 | `NO_COLOR`                | disable ANSI color (stable output for scripts)      |
+| `CLICOLOR_FORCE`          | force ANSI color even in non-TTY contexts           |
 | `GH_PROMPT_DISABLED`      | never prompt — fail instead (good for automation)   |
+| `GH_FORCE_TTY`            | force terminal-style output (even in pipes)         |
+| `GH_NO_UPDATE_NOTIFIER`   | silence the "new version available" banner          |
+| `GH_CONFIG_DIR`           | override the default config directory               |
+| `GH_SPINNER_DISABLED`     | disable animated progress spinners                  |
+| `GH_TELEMETRY`            | `opt-in` to send usage telemetry (off by default)   |
 
 ## Raw API (escape hatch)
 
@@ -376,6 +407,8 @@ pagination automatically.
 gh api repos/OWNER/REPO --jq '.default_branch'
 gh api repos/OWNER/REPO/pulls --jq '.[].title'        # array of PR titles
 gh api --paginate repos/OWNER/REPO/issues --jq '.[].number'
+gh api --paginate --slurp repos/OWNER/REPO/issues --jq 'map(.number)'  # collect all pages into array
+gh api --cache 30m repos/OWNER/REPO                    # cache response for 30 min
 gh api -X POST repos/OWNER/REPO/issues -f title="Bug" -f body="..."
 gh api graphql -f query='query{ viewer{ login } }' --jq '.data.viewer.login'
 ```
