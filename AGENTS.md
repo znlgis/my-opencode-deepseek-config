@@ -122,6 +122,7 @@ workflow, check whether a skill already covers it and load it:
 - `git-release` — cut a tagged release: notes, SemVer bump, `gh release` command.
 - `remove-deadcode` — find and safely delete unused code, verified before removal.
 - `opencode-config` — author this repo's OpenCode config (agents, skills, commands, permissions).
+- `spec-workflow` — run a lightweight spec-driven change loop (propose → specs/design → tasks → apply → archive) via durable git-tracked artifacts.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill

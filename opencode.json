@@ -139,6 +139,21 @@
             "description": "Remove AI slop and dead code from the current changes",
             "agent": "deep-worker",
             "template": "Load the remove-deadcode skill. Review the current diff:\n\n!`git diff HEAD`\n\nRemove AI slop introduced by the changes: filler/boilerplate comments that restate the code, commented-out code, needless defensive wrappers, and any dead code that verification proves is unreferenced. Follow AGENTS.md Comment Discipline. Do not change behavior; verify build/tests still pass and report what you removed."
+        },
+        "propose": {
+            "description": "Draft a spec-driven change proposal (proposal + specs + tasks) under openspec/changes/",
+            "agent": "planner",
+            "template": "Load the spec-workflow skill and run its propose action. Research the existing code and any openspec/specs/ first, then scaffold openspec/changes/<change-id>/ with proposal.md, tasks.md, delta specs, and design.md only if warranted. Focus the proposal on WHY and WHAT, not HOW. Do not start implementing — stop after the artifacts are ready for review."
+        },
+        "apply": {
+            "description": "Implement a spec-driven change by working through its tasks.md checklist",
+            "agent": "deep-worker",
+            "template": "Load the spec-workflow skill and run its apply action for the requested change under openspec/changes/. Read proposal.md, design.md, and the delta specs, then work tasks.md one unchecked item at a time, marking each `- [x]` as you finish. Pause and ask if a task is blocked or the design proves wrong (update the artifacts instead of diverging silently). Follow AGENTS.md and verify with any available build/tests."
+        },
+        "archive": {
+            "description": "Archive a completed spec-driven change and fold its specs into the source of truth",
+            "agent": "light-orchestrator",
+            "template": "Load the spec-workflow skill and run its archive action for the requested completed change. Fold its delta specs into openspec/specs/<capability>/spec.md (apply ADDED/MODIFIED/REMOVED/RENAMED), then move openspec/changes/<change-id>/ to openspec/changes/archive/YYYY-MM-DD-<change-id>/. Confirm openspec/specs/ reflects reality before finishing."
         }
     }
 }

@@ -15,7 +15,7 @@
 - 工具输出控制：`tool_output` 限制单次输出（max_lines: 2000, max_bytes: 51200）
 - 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
-- 技能（Skills）：`skills/` 目录下的 `SKILL.md`（6 个：`gh-cli`、`conventional-commits`、`security-review`、`git-release`、`remove-deadcode`、`opencode-config`），通过原生 `skill` 工具按需加载
+- 技能（Skills）：`skills/` 目录下的 `SKILL.md`（7 个：`gh-cli`、`conventional-commits`、`security-review`、`git-release`、`remove-deadcode`、`opencode-config`、`spec-workflow`），通过原生 `skill` 工具按需加载
 - 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
@@ -98,6 +98,9 @@
 | `/commit` | `light-orchestrator`（加载 `conventional-commits` 技能） | 用 `!` 注入 `git status`/`git diff`，暂存改动并写符合 Conventional Commits 的提交信息（不推送） |
 | `/learn` | `light-orchestrator` | 把本次会话中「持久、非显而易见」的项目事实沉淀进 `AGENTS.md`，节省后续 token |
 | `/rmslop` | `deep-worker`（加载 `remove-deadcode` 技能） | 清理本次改动引入的 AI slop：无意义注释、注释掉的代码、死代码（不改变行为，验证后报告） |
+| `/propose` | `planner`（加载 `spec-workflow` 技能） | 起草规约驱动的变更提案：在 `openspec/changes/<id>/` 生成 `proposal.md`、`tasks.md`、增量 spec，必要时含 `design.md`（只出工件不实现） |
+| `/apply` | `deep-worker`（加载 `spec-workflow` 技能） | 按变更的 `tasks.md` 清单逐项实现，完成即勾选 `- [x]`，遇阻或设计有误则暂停并更新工件 |
+| `/archive` | `light-orchestrator`（加载 `spec-workflow` 技能） | 归档已完成变更：把增量 spec 合入 `openspec/specs/` 真源，并将变更目录移入 `openspec/changes/archive/` |
 
 ## 技能（Skills）
 
@@ -113,6 +116,7 @@
 | `git-release` | 准备打 Tag 的发布：依据 Conventional Commits 推断 SemVer、生成发布说明、给出 `git tag` 与 `gh release create` 命令（借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 文档中的 `git-release` 示例技能） |
 | `remove-deadcode` | 查找并安全删除死代码（未引用的文件/导出/函数/变量/导入），删除前用工具链/LSP 验证，分批无冲突提交（借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 的 `remove-deadcode` 工作流，去掉插件/team-mode 依赖） |
 | `opencode-config` | 编写本仓库的 OpenCode 配置：`opencode.json` 键、`agent/*.md` frontmatter、`SKILL.md` 格式、命令与权限约定（借鉴 anomalyco `effect` 技能「锚定权威来源」的思路，为本仓库领域提供编写指南，节省重复推导 token） |
+| `spec-workflow` | 规约驱动的轻量变更工作流：以 `proposal.md`/`spec.md`/`design.md`/`tasks.md` 等 git 可追踪工件承载「为什么/是什么/怎么做/任务清单」，走 propose → apply → archive 三个可随时切换的动作（借鉴 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 的 OPSX「工件导向、流畅非瀑布」工作流，纯提示词实现，不依赖其 npm 工具） |
 
 ### 加载与发现机制
 
@@ -156,6 +160,7 @@
 | 23 | 技能 | 对齐 [cli/cli](https://github.com/cli/cli) 最新版修正 `gh-cli`：`gh copilot` 改为内置 Copilot CLI 用法（不再是 `suggest`/`explain` 扩展）、`gh skill install/preview` 补齐「repo + 技能名」两参数、新增 `gh cache` 与 `gh actions` 帮助入口
 | 24 | 技能 | 新增两个技能：`remove-deadcode`（借鉴 oh-my-openagent，去插件/team-mode 依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路，为本仓库配置编写提供指南、节省重复推导 token）
 | 25 | 命令 | 借鉴 anomalyco/opencode 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个纯配置命令（节省 token、沉淀上下文、清理 AI slop），命令数 9→12
+| 26 | 工作流 | 借鉴 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 最新版 OPSX「工件导向、流畅非瀑布」工作流：新增 `spec-workflow` 技能（propose → specs/design → tasks → apply → archive，以 git 可追踪工件为真源）与 `/propose` `/apply` `/archive` 三个命令，纯提示词实现，不依赖其 npm 工具，命令数 12→15、技能数 6→7 |
 
 ## 仓库结构
 
@@ -179,7 +184,8 @@
 │   ├── security-review/SKILL.md
 │   ├── git-release/SKILL.md
 │   ├── remove-deadcode/SKILL.md
-│   └── opencode-config/SKILL.md
+│   ├── opencode-config/SKILL.md
+│   └── spec-workflow/SKILL.md
 ├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
@@ -195,6 +201,7 @@
 - 定位根因优先 `/oracle`
 - 需要建议或权衡时优先 `/consult`
 - 提交前用 `/commit` 生成规范提交信息，用 `/rmslop` 清理 AI slop
+- 需要规约驱动地推进一个较大变更时，用 `/propose` 起草提案与任务清单、`/apply` 按清单实现、`/archive` 归档并沉淀真源
 - 收尾时用 `/learn` 把可复用的项目事实沉淀进 `AGENTS.md`
 
 ## 设计哲学
@@ -205,4 +212,4 @@
 - **DeepSeek V4 双模型极致利用** —— Pro 做推理与决策，Flash 做查询与轻量执行，通过模型感知路由实现 cost-aware 分发。
 - **纯配置落地，零额外依赖** —— 所有能力由 `opencode.json` + `agent/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现，不引入新模型、新工具、新运行时。
 
-设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)（意图门控、只读隔离、并行探索、结构化输出）、[anomalyco/opencode](https://github.com/anomalyco/opencode)（配置 Schema、Skills、命令 `!` 内联 shell 注入）和 [cli/cli](https://github.com/cli/cli)（gh 技能），但只吸收"纯改配置就能实现"的优点，不引入任何外部依赖。
+设计原则借鉴了 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)（意图门控、只读隔离、并行探索、结构化输出）、[anomalyco/opencode](https://github.com/anomalyco/opencode)（配置 Schema、Skills、命令 `!` 内联 shell 注入）、[cli/cli](https://github.com/cli/cli)（gh 技能）和 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec)（OPSX 工件导向、流畅非瀑布的规约驱动工作流），但只吸收"纯改配置就能实现"的优点，不引入任何外部依赖。
