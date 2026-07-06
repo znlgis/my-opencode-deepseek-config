@@ -47,7 +47,7 @@
 
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
-| `orchestrator` | `deepseek/deepseek-v4-pro` | 默认入口，负责分类（含 6 类 Task Categories）、分发、兜底；含增强意图门控（12 种模式）、纪律规则（5 条）、8 条降级链 |
+| `orchestrator` | `deepseek/deepseek-v4-pro` | 默认入口，负责分类（含 6 类 Task Categories）、分发、兜底；含增强意图门控（12 种模式）、纪律规则（6 条）、9 条降级链 |
 
 ### Subagents
 
@@ -161,6 +161,7 @@
 | 24 | 技能 | 新增两个技能：`remove-deadcode`（借鉴 oh-my-openagent，去插件/team-mode 依赖）与 `opencode-config`（借鉴 anomalyco `effect` 技能的领域锚定思路，为本仓库配置编写提供指南、节省重复推导 token）
 | 25 | 命令 | 借鉴 anomalyco/opencode 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个纯配置命令（节省 token、沉淀上下文、清理 AI slop），命令数 9→12
 | 26 | 工作流 | 借鉴 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 最新版 OPSX「工件导向、流畅非瀑布」工作流：新增 `spec-workflow` 技能（propose → specs/design → tasks → apply → archive，以 git 可追踪工件为真源）与 `/propose` `/apply` `/archive` 三个命令，纯提示词实现，不依赖其 npm 工具，命令数 12→15、技能数 6→7 |
+| 27 | 审计 | 第三轮全面审查：修正 README orchestrator 描述与 `agent/orchestrator.md` 实际不同步的计数（纪律规则 5→6、降级链 8→9） |
 
 ## 仓库结构
 
