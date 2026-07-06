@@ -20,6 +20,11 @@ referenced by `opencode.json`'s `$schema`) before adding a new key.
 - The live schema is `https://opencode.ai/config.json` (`$schema` in
   `opencode.json`). If unsure whether a key exists, check the schema or the
   official docs at https://opencode.ai/docs rather than assuming.
+- Validate keys against the **sst/opencode** schema, not forks. The
+  `anomalyco/opencode` fork uses different plural keys (`plugins`, `snapshots`);
+  this repo uses the singular sst keys (`plugin`, `snapshot`). Don't cross them.
+- This skill is the local equivalent of the upstream built-in `customize-opencode`
+  skill (anomalyco/opencode): load it whenever config is being edited.
 - The two-model constraint is absolute: only `deepseek/deepseek-v4-pro` and
   `deepseek/deepseek-v4-flash`. Never introduce a third model anywhere.
 - Prefer pure config/prompt changes over new plugins or dependencies.
@@ -73,6 +78,18 @@ Conventions:
   it should carry everything the agent needs without extra context.
 - Skill names must be unique across all sources (this repo + the `superpowers`
   plugin). Check for collisions before naming a new skill.
+
+## Skill discovery & precedence
+
+OpenCode auto-discovers skills; understanding the scan order prevents surprises:
+
+- Skills are found in `{skill,skills}/**/SKILL.md` under the config dir (this
+  repo), in project/global `.agents/skills/**/SKILL.md`, and via `superpowers`.
+- A user/project skill with the same `name` **overrides** a built-in of that name
+  (last registration wins) — this is how a local skill can shadow a built-in.
+- Skill visibility is **permission-filtered per agent**: an agent whose policy
+  denies a tool won't see skills that require it. Keep cheap flash agents from
+  triggering expensive skills by scoping their permissions, not by hoping.
 
 ## Commands (`opencode.json` → `command`)
 
