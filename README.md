@@ -13,7 +13,7 @@
 - 并行执行：`experimental.batch_tool`，支持批量工具调用
 - 全局规则：`AGENTS.md`（含 Token 效率、Code Style、Comment Discipline 等）
 - 技能：`skills/` 目录下 **12 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载
-- 插件：`superpowers`、`@tarquinen/opencode-dcp`、`opencode-agent-memory`
+- 插件：`superpowers`、`@tarquinen/opencode-dcp`
 
 ## 模型分工
 
