@@ -21,6 +21,14 @@ color, and errors fast instead of prompting (e.g. `must provide --title and --bo
 when not running interactively`). Do not defensively set `GH_PAGER` or
 `--no-pager` (no such flag exists).
 
+- Set `GH_PROMPT_DISABLED=1` to force `gh` to fail instead of prompting — the
+  safest default for automation.
+- A few commands still prompt in a TTY even when they could infer: `gh pr merge`
+  (pass `--squash`/`--merge`/`--rebase`), `gh release create` (pass `--notes` or
+  `--generate-notes`), `gh run watch`/`gh pr create` (pass the run id / `--fill`).
+- Exit codes: `0` success, `1` failure, `2` cancelled/interrupted, `4` auth
+  required. Check `gh auth status` first; missing auth returns `4`, not `1`.
+
 ## Parsing JSON
 
 Human output from `gh` is column-formatted. For structured data:
@@ -39,8 +47,9 @@ List commands cap results silently:
 - `gh issue list`, `gh pr list`, `gh search ...`: use `-L N` (`--limit N`). Default is 30.
 - `gh issue list` / `gh pr list` do not expose `totalCount` via `--json`. For a
   true total use `gh api graphql` to query `totalCount`; otherwise treat `-L` as cap.
-- For raw API calls: `gh api --paginate <path>`. Combine with `--jq` and
-  `--slurp` to assemble one array.
+- For raw API calls: `gh api --paginate <path>`. `--paginate` concatenates each
+  page's JSON — for `[...]` responses that yields multiple arrays, not one. Add
+  `--slurp` to wrap them into a single array, then `--jq` to shape it.
 
 ## Repo targeting
 
@@ -126,6 +135,16 @@ gh api --cache 30m repos/{owner}/{repo}           # cache response for 30 min
 - `GH_PROMPT_DISABLED` makes `gh` fail instead of prompting (good for automation).
 - Never paste tokens on the command line; use `--with-token < file` or env vars.
 
+## Recent commands worth knowing
+
+Stable additions an agent should reach for (all honor `-R`/`--json`):
+
+- `gh pr revert <n>` — open a revert PR for a merged PR (`--draft`, `--title`, `--body-file`).
+- `gh pr update-branch <n>` — sync a PR branch from its base (`--rebase` for rebase instead of merge).
+- `gh variable set|get|list|delete` — Actions **variables** (distinct from `gh secret`).
+- `gh attestation verify|inspect|download` and `gh release verify` — Sigstore supply-chain checks.
+- `gh run watch <id> --exit-status` — block until the run finishes and exit non-zero on failure (ideal for CI gates); `--compact` shows only failed/relevant steps. Note: fine-grained PATs lack `checks:read` and return 403 on annotations — use `GITHUB_TOKEN` in Actions or a classic PAT.
+
 ## Quick reference
 
 Most common commands agents need:
@@ -134,6 +153,7 @@ Most common commands agents need:
 # PRs
 gh pr list --state open --label bug -L 20 --json number,title,state,headRefName
 gh pr view <n> --json state,mergeable,reviewDecision,statusCheckRollup
+gh pr create --fill --base main          # title/body from commits, no prompt
 gh pr create --title "Fix X" --body "Closes #12" --base main
 gh pr merge <n> --squash --delete-branch
 
@@ -145,7 +165,8 @@ gh issue close <n> --reason completed
 # Actions
 gh run list --workflow ci.yml --branch main --limit 20
 gh run view <id> --log --log-failed
-gh pr checks <n>   # CI status for a PR
+gh run watch <id> --exit-status   # block on run, fail script if it fails
+gh pr checks <n>                  # CI status for a PR
 
 # Releases
 gh release create v1.2.0 --generate-notes
