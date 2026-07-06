@@ -94,4 +94,4 @@ reference is missing or stale, refresh it rather than falling back to memory.
 - Writing the call first and "checking later" — verify before you write.
 - Citing a doc version that doesn't match the installed version.
 - Pasting entire doc pages into context instead of the few relevant lines.
-- Trusting a blog/Q&A snippet over the official docs or the shipped type defs.
+- Trusting a blog/Q&A snippet over the official docs or the shipped type definitions.
