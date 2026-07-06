@@ -68,6 +68,28 @@ task half-done.
 - **One topic per subagent.** Don't ask a single subagent to do research AND
   implementation — split them.
 
+## Token Efficiency
+
+Every token spent is a cost. These rules keep the setup lean without sacrificing
+quality — this is the whole point of the two-tier DeepSeek design.
+
+- **Reference paths, don't paste files.** Point at `src/app.ts:42`, don't paste
+  whole files into a prompt. Subagents can read what they need; pasting is the
+  most expensive habit there is.
+- **Right-size before you route.** Defined search/lookup/small-edit work goes to
+  a flash agent (~half the cost). Reserve pro agents for reasoning, analysis,
+  review, and heavy implementation.
+- **Retrieval-first for fast-moving libraries.** For any specific or
+  fast-changing library/framework/API, do not code from memory — verify the
+  exact, current API against official docs or a mounted `references` source
+  first (see the `verify-with-docs` skill). A hallucinated signature costs far
+  more to debug than one lookup.
+- **Lazy-load skills and docs.** Load a skill only when its trigger fires; keep
+  reference material on disk (via `references` / files) and pull it in on demand
+  rather than carrying it in context.
+- **Compress finished threads.** When a line of inquiry is resolved, summarize
+  and drop the raw exploration — don't let stale context accumulate.
+
 ## When to Ask vs. Proceed
 
 Ask for clarification only when:
@@ -123,6 +145,7 @@ workflow, check whether a skill already covers it and load it:
 - `remove-deadcode` — find and safely delete unused code, verified before removal.
 - `opencode-config` — author this repo's OpenCode config (agents, skills, commands, permissions).
 - `spec-workflow` — run a lightweight spec-driven change loop (propose → specs/design → tasks → apply → archive) via durable git-tracked artifacts.
+- `verify-with-docs` — retrieval-first discipline: verify a specific/fast-moving library or API against current docs (or a mounted `references` source) before coding, instead of relying on memory.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill

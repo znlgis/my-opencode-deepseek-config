@@ -3,6 +3,9 @@
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
     "small_model": "deepseek/deepseek-v4-flash",
+    "enabled_providers": [
+        "deepseek"
+    ],
     "autoupdate": "notify",
     "share": "disabled",
     "snapshot": true,
@@ -78,7 +81,8 @@
         "auto": true,
         "prune": true,
         "tail_turns": 12,
-        "preserve_recent_tokens": 16000
+        "preserve_recent_tokens": 16000,
+        "reserved": 4096
     },
     "command": {
         "deep": {
@@ -120,6 +124,11 @@
             "description": "Route to consultant for brainstorming and best-practice advice",
             "agent": "consultant",
             "template": "Provide options and advice for the following."
+        },
+        "docs": {
+            "description": "Verify a library/API against current docs before coding (retrieval-first)",
+            "agent": "librarian",
+            "template": "Load the verify-with-docs skill. The task targets a specific or fast-moving library/framework/API. Do NOT answer from memory: identify the exact package + version in use, fetch or consult the current official docs (or a mounted `references` source), and report the exact, verified API signatures and usage the implementing agent should rely on. Cite source URLs/paths."
         },
         "release": {
             "description": "Prepare a tagged release using the git-release skill",

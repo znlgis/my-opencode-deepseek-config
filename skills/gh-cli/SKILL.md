@@ -213,6 +213,7 @@ gh label clone OWNER/REPO            # copy labels from another repo
 gh secret set TOKEN < token.txt      # never echo secrets on the CLI
 gh secret list
 gh variable set REGION --body us-east-1
+gh variable get REGION               # read a single variable's value
 gh variable list
 
 # Sync a fork with upstream
@@ -315,6 +316,7 @@ gh preview prompter                        # try the experimental prompter
 gh alias set prc 'pr create --fill'
 gh alias set bugs 'issue list --label bug'
 gh alias list
+gh alias import aliases.yml --clobber        # bulk-import aliases from a YAML file
 
 # Extensions — community subcommands
 gh extension list
@@ -328,6 +330,30 @@ gh config get editor                        # read a config value
 gh config clear-cache                       # clear the API cache
 gh status                    # cross-repo summary of your assigned work
 ```
+
+## Account keys, templates & shell
+
+```bash
+# SSH keys (authentication + commit signing)
+gh ssh-key list --type signing
+gh ssh-key add ~/.ssh/id_ed25519.pub --title "laptop" --type authentication
+gh ssh-key delete <id> --yes
+
+# GPG keys (commit/tag signing)
+gh gpg-key list
+gh gpg-key add key.gpg --title "signing key"
+gh gpg-key delete <id> --yes
+
+# License & .gitignore templates (standalone `gh licenses`, plus repo-scoped forms)
+gh licenses list                     # list SPDX license templates
+gh licenses view mit                 # view a specific license's text
+gh repo gitignore list               # .gitignore templates
+gh repo license view MIT             # (repo-scoped alias of the license view)
+
+# Shell completion (add to your shell profile)
+gh completion -s bash                # or zsh | fish | powershell
+```
+
 
 ## Environment variables
 

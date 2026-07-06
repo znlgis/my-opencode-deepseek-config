@@ -11,12 +11,13 @@
 - 会话分享：已关闭（`share: "disabled"`，避免误分享，提升隐私）
 - 快照：已开启（`snapshot: true`）
 - 权限基线：默认放行；仅对破坏性 `bash` 命令（`rm -rf`、`git push --force/-f`、`git reset --hard`）设为 `ask`，对读取 `.env` 类敏感文件设为 `deny`，对工作目录外路径（`external_directory`）设为 `ask`
-- 上下文压缩：已开启自动压缩与历史裁剪（`preserve_recent_tokens: 16000`）
+- 模型隔离：`enabled_providers: ["deepseek"]`，从配置层强制只启用 DeepSeek，杜绝误入其他 provider/模型
+- 上下文压缩：已开启自动压缩与历史裁剪（`preserve_recent_tokens: 16000`、`reserved: 4096` 预留 token 缓冲避免压缩溢出）
 - 工具输出控制：`tool_output` 限制单次输出（max_lines: 2000, max_bytes: 51200）
-- 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）
+- 全局规则：`AGENTS.md`（被 OpenCode 自动加载，并在 `instructions` 中显式声明）；含专门的「Token 效率」章节
 - 并行执行：开启 `experimental.batch_tool`，支持一次发起多个工具调用
-- 技能（Skills）：`skills/` 目录下的 `SKILL.md`（7 个：`gh-cli`、`conventional-commits`、`security-review`、`git-release`、`remove-deadcode`、`opencode-config`、`spec-workflow`），通过原生 `skill` 工具按需加载
-- 插件：`superpowers`、`@tarquinen/opencode-dcp`
+- 技能（Skills）：`skills/` 目录下的 `SKILL.md`（8 个：`gh-cli`、`conventional-commits`、`security-review`、`git-release`、`remove-deadcode`、`opencode-config`、`spec-workflow`、`verify-with-docs`），通过原生 `skill` 工具按需加载
+- 插件：`superpowers`、`@tarquinen/opencode-dcp`、`opencode-agent-memory`
 
 ## 模型分工
 
@@ -36,6 +37,8 @@
 - **Pro 升级路径**：flash agent 无法胜任时，自动升级到 pro（带完整上下文）
 - **Pro 专注推理**：规划、架构、根因分析、代码审查、复杂实现——只用 pro
 - **边界右移**：模糊任务默认走 flash 尝试，失败了才升级，不浪费 pro 资源
+- **成本信号（Stats）**：orchestrator 的 Agent Directory 为每个 agent 标注相对成本/速度信号（借鉴 oh-my-opencode-slim 的「2x faster / 1/2 cost」提示法），让路由决策显式权衡「委派 vs 自己做」
+- **引用而非粘贴**：向子 agent 传递上下文时只给「路径:行号」，不粘贴整文件，避免最昂贵的 token 浪费
 
 - **稳定性**：重任务和轻任务分流，避免所有任务都堆到高成本模型
 - **可用性**：常见任务都有明确归属，减少路由不清导致的体验波动
@@ -94,6 +97,7 @@
 | `/search` | `librarian` | 外部搜索、查文档 |
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 | `/consult` | `consultant` | 咨询、对比、建议 |
+| `/docs` | `librarian`（加载 `verify-with-docs` 技能） | 编码前先按当前官方文档核对某个库/框架/API 的确切签名（检索优先，不凭记忆），避免幻觉签名与版本漂移 |
 | `/release` | `deep-worker`（加载 `git-release` 技能） | 准备打 Tag 的发布：发布说明、版本号、`gh release` 命令 |
 | `/commit` | `light-orchestrator`（加载 `conventional-commits` 技能） | 用 `!` 注入 `git status`/`git diff`，暂存改动并写符合 Conventional Commits 的提交信息（不推送） |
 | `/learn` | `light-orchestrator` | 把本次会话中「持久、非显而易见」的项目事实沉淀进 `AGENTS.md`，节省后续 token |
@@ -117,6 +121,7 @@
 | `remove-deadcode` | 查找并安全删除死代码（未引用的文件/导出/函数/变量/导入），删除前用工具链/LSP 验证，分批无冲突提交（借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) 的 `remove-deadcode` 工作流，去掉插件/team-mode 依赖） |
 | `opencode-config` | 编写本仓库的 OpenCode 配置：`opencode.json` 键、`agent/*.md` frontmatter、`SKILL.md` 格式、命令与权限约定（借鉴 anomalyco `effect` 技能「锚定权威来源」的思路，为本仓库领域提供编写指南，节省重复推导 token） |
 | `spec-workflow` | 规约驱动的轻量变更工作流：以 `proposal.md`/`spec.md`/`design.md`/`tasks.md` 等 git 可追踪工件承载「为什么/是什么/怎么做/任务清单」，走 propose → apply → archive 三个可随时切换的动作（借鉴 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 的 OPSX「工件导向、流畅非瀑布」工作流，纯提示词实现，不依赖其 npm 工具） |
+| `verify-with-docs` | 检索优先纪律：针对具体或快速迭代的库/框架/API，编码前先按「已安装版本」核对当前官方文档（或挂载的 `references` 源）的确切签名，而非凭记忆，避免幻觉签名与版本漂移（借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 的 `effect`/`agents-sdk` 技能「prefer retrieval over pre-training」思路，并给出 `references` 配置写法） |
 
 ### 加载与发现机制
 
@@ -162,6 +167,11 @@
 | 25 | 命令 | 借鉴 anomalyco/opencode 命令并结合 OpenCode 的 `!` 内联 shell 注入，新增 `/commit`、`/learn`、`/rmslop` 三个纯配置命令（节省 token、沉淀上下文、清理 AI slop），命令数 9→12
 | 26 | 工作流 | 借鉴 [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) 最新版 OPSX「工件导向、流畅非瀑布」工作流：新增 `spec-workflow` 技能（propose → specs/design → tasks → apply → archive，以 git 可追踪工件为真源）与 `/propose` `/apply` `/archive` 三个命令，纯提示词实现，不依赖其 npm 工具，命令数 12→15、技能数 6→7 |
 | 27 | 审计 | 第三轮全面审查：修正 README orchestrator 描述与 `agent/orchestrator.md` 实际不同步的计数（纪律规则 5→6、降级链 8→9） |
+| 28 | 模型 | 从配置层强制模型隔离：`opencode.json` 新增 `enabled_providers: ["deepseek"]`，确保仅 DeepSeek provider 可用，任何非 deepseek 模型都无法进入（校准过官方 sst/opencode Schema，确认 `snapshot`/`plugin`/`compaction.*`/`tool_output`/`experimental.batch_tool` 键名均合法） |
+| 29 | 路由 | 借鉴 [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) 的「成本/速度 Stats 提示法」：orchestrator 的 Agent Directory 为每个 agent 增加相对成本/速度信号列；新增两条纪律规则「引用而非粘贴（`path:line` 不贴整文件）」与「复用会话、隔离并行写作用域」 |
+| 30 | 规范 | AGENTS.md 新增「Token Efficiency」章节（引用而非粘贴、先定型再路由、快速迭代库检索优先、技能/文档惰性加载、收尾压缩线程），把「省 token」从隐性习惯升为显式规则 |
+| 31 | 技能 | 借鉴 [anomalyco/opencode](https://github.com/anomalyco/opencode) 的 `effect`/`agents-sdk` 技能「检索优先、不凭记忆」思路，新增 `verify-with-docs` 技能与 `/docs` 命令（含 `references` 挂载写法）；对齐 [cli/cli](https://github.com/cli/cli) v2.96 补齐 `gh-cli`：`ssh-key`、`gpg-key`、`licenses`、`variable get`、`alias import`、`completion`。命令数 15→16、技能数 7→8 |
+| 32 | 压缩 | `opencode.json` 的 `compaction` 新增 `reserved: 4096`（Schema 合法字段），为压缩预留 token 窗口，降低长会话压缩溢出风险 |
 
 ## 仓库结构
 
@@ -186,7 +196,8 @@
 │   ├── git-release/SKILL.md
 │   ├── remove-deadcode/SKILL.md
 │   ├── opencode-config/SKILL.md
-│   └── spec-workflow/SKILL.md
+│   ├── spec-workflow/SKILL.md
+│   └── verify-with-docs/SKILL.md
 ├── AGENTS.md               ← 全局规则，被 OpenCode 自动加载，所有 Agent 共享
 ├── opencode.json
 └── README.md
@@ -199,6 +210,7 @@
 - 复杂实现优先 `/deep`
 - 要方案不要代码时优先 `/plan`
 - 查资料优先 `/search`
+- 用具体库/框架/API 写代码前，先用 `/docs` 按当前文档核对签名，避免幻觉与版本漂移
 - 定位根因优先 `/oracle`
 - 需要建议或权衡时优先 `/consult`
 - 提交前用 `/commit` 生成规范提交信息，用 `/rmslop` 清理 AI slop
