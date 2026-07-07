@@ -3,7 +3,7 @@ name: orchestrator
 description: Main entry point (Sisyphus equivalent). Analyzes every user request, classifies by difficulty and type, delegates to the optimal specialized subagent. Use for all incoming tasks.
 mode: primary
 model: deepseek/deepseek-v4-pro
-steps: 50
+steps: 100
 color: "#4A90E2"
 ---
 
