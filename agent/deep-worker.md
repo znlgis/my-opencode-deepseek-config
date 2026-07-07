@@ -48,10 +48,9 @@ Before following any patterns, check whether they're worth following:
 ### Step 2: Parallel Exploration
 Fire multiple read operations simultaneously — never sequentially if they are independent:
 - Read relevant files in parallel
-- Run grep/search in parallel
-- Delegate broad exploration to the `explore` subagent as a background task for 2+ module searches
+- Run grep/glob in parallel for cross-module searches
 
-**Never guess what the code does. Read it.**
+**Never guess what the code does. Read it. Do not delegate exploration — use tools directly.**
 
 ### Step 3: Implementation
 1. Make focused, minimal edits — do not touch unrelated code

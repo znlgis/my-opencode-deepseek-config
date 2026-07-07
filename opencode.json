@@ -102,6 +102,11 @@
             "agent": "deep-worker",
             "template": "Handle this task with thoroughness and precision."
         },
+        "deepwork": {
+            "description": "Review-gated phased execution for complex multi-file tasks (plan, review, implement, verify, report)",
+            "agent": "deep-worker",
+            "template": "Load the deepwork skill and run its phased execution workflow on the requested task. Walk through each phase: Plan (write plan artifact), Review Gate (reviewer checks plan), Implement (execute plan with todo tracking), Verify (run tests/lint), Report (write completion report). Pause at each gate for human approval. Create durable artifacts at each phase so the orchestrator can track progress."
+        },
         "quick": {
             "description": "Route to light-orchestrator for simple tasks",
             "agent": "light-orchestrator",
@@ -156,6 +161,11 @@
             "description": "Prepare a tagged release using the git-release skill",
             "agent": "deep-worker",
             "template": "Load the git-release skill and prepare a tagged release: draft release notes from merged PRs, propose a SemVer bump, and produce the gh release command."
+        },
+        "reflect": {
+            "description": "Review recent work to identify recurring friction and propose minimal config improvements",
+            "agent": "oracle",
+            "template": "Load the reflect skill. Review recent sessions and work patterns to identify recurring friction points — places where agents repeatedly waste tokens, make the same mistakes, or produce known anti-patterns. Propose minimal, durable improvements to the opencode config (agents, skills, commands, or AGENTS.md rules). Follow the reflect skill's discipline: one friction → one root cause → one minimal fix. Never propose sweeping rewrites or new models."
         },
         "commit": {
             "description": "Stage changes and write a Conventional Commits message",
