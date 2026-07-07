@@ -3,7 +3,7 @@ name: light-orchestrator
 description: Lightweight orchestrator (Sisyphus-junior equivalent). Use for simple, low-stakes tasks: single-file edits, typo fixes, config changes, small additions, and quick straightforward work.
 mode: subagent
 model: deepseek/deepseek-v4-flash
-steps: 15
+steps: 30
 temperature: 0.3
 color: "#1ABC9C"
 ---

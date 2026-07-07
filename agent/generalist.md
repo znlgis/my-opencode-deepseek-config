@@ -3,7 +3,7 @@ name: generalist
 description: General-purpose agent (Atlas equivalent). Use for miscellaneous tasks that do not fit other specialists, unclear requests, and general software engineering work.
 mode: subagent
 model: deepseek/deepseek-v4-flash
-steps: 20
+steps: 40
 temperature: 0.3
 color: "#95A5A6"
 ---

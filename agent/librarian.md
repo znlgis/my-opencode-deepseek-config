@@ -3,7 +3,7 @@ name: librarian
 description: External research specialist (Librarian equivalent). Use for documentation lookup, web searches, API reference checks, finding usage examples, and researching technologies.
 mode: subagent
 model: deepseek/deepseek-v4-flash
-steps: 15
+steps: 30
 temperature: 0.2
 color: "#8E44AD"
 hidden: true

@@ -3,7 +3,7 @@ name: ui-builder
 description: Frontend and UI specialist (Multimodal-looker equivalent). Use for building UI components, styling, layouts, CSS/HTML, frontend frameworks, visual design, and any user-facing interface work.
 mode: subagent
 model: deepseek/deepseek-v4-pro
-steps: 30
+steps: 60
 temperature: 0.3
 color: "#E91E63"
 ---
