@@ -92,6 +92,8 @@ override. Set `GH_REPO=OWNER/REPO` for session-wide default.
   `blocking`. Objects are `{"nodes": [...], "totalCount": N}` — compare node count
   vs `totalCount` to detect truncation (subIssues capped at 100, blocked/blocking
   at 50).
+- GHES availability: issue **types** require GHES 3.17+, **blocked-by/blocking**
+  require GHES 3.19+. On older hosts these flags error — fall back to labels.
 
 ## Discussions (`gh discussion`)
 
@@ -289,6 +291,25 @@ gh alias list
 gh alias delete myprs
 ```
 
+## AI-integrated commands (`gh agent-task`, `gh copilot`)
+
+Newer command groups in `gh` v2.9x for agent workflows:
+
+```bash
+# Agent tasks — delegate a coding task to a GitHub coding agent (preview)
+gh agent-task create "Fix the login redirect bug" --base main
+gh agent-task list --json id,state,title
+gh agent-task view <id>
+
+# Copilot in the CLI — explain or suggest shell/git/gh commands
+gh copilot explain "git rebase -i HEAD~3"
+gh copilot suggest "compress a folder to tar.gz"     # -t shell|gh|git
+```
+
+`gh copilot` requires the `gh-copilot` extension and an active Copilot
+subscription; it is non-interactive-unfriendly (prompts for confirmation), so
+prefer it for human-in-the-loop use, not scripted agent flows.
+
 ## Recent commands worth knowing
 
 - `gh pr revert <n>` — open a revert PR (`--draft`, `--title`, `--body-file`).
@@ -301,7 +322,6 @@ gh alias delete myprs
   `checks:read` — use `GITHUB_TOKEN` in Actions or a classic PAT.
 - `gh run rerun <id> --failed` — rerun only failed jobs.
 - `gh attestation verify|download file.bin -R owner/repo` — Sigstore supply-chain.
-- `gh agent-task create "Fix login bug" --base main` (preview).
 - `--json` with NO value: `gh pr list --json` prints all available JSON field names — use this to discover fields before querying. Works on all list/view commands.
 
 ## Quick reference

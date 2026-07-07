@@ -40,6 +40,8 @@ require the `@fission-ai/openspec` npm package, only the conventions below.
 openspec/
 ├── specs/                       ← source of truth: current, shipped behavior
 │   └── <capability>/spec.md
+├── explorations/                ← optional: pre-proposal thinking notes
+│   └── <topic>.md
 └── changes/
     ├── <change-id>/             ← one in-flight change (kebab-case id)
     │   ├── proposal.md          ← WHY + WHAT (required)
@@ -53,6 +55,16 @@ openspec/
 Project-wide context and rules (tech stack, conventions) live in `AGENTS.md` —
 treat it as this repo's equivalent of a project config, and honor it in every
 artifact.
+
+## Action: explore (optional, before propose)
+
+A no-stakes thinking pass **before** committing to a proposal — OpenSpec's
+`/opsx:explore` equivalent. Use it when the direction is still fuzzy: research the
+current behavior, sketch options and trade-offs, and surface open questions,
+*without* creating `changes/<change-id>/` yet. Keep it in chat (or a scratch note
+under `openspec/explorations/<topic>.md` if it needs to persist). The goal is to
+avoid locking a proposal onto a premature direction — jump to `propose` only once
+the shape is clear.
 
 ## Action: propose
 
