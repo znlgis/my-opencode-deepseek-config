@@ -293,7 +293,7 @@ gh alias delete myprs
 
 ## AI-integrated commands (`gh agent-task`, `gh copilot`)
 
-Newer command groups in `gh` v2.9x for agent workflows:
+Newer command groups in `gh` v2.90+ for agent workflows:
 
 ```bash
 # Agent tasks — delegate a coding task to a GitHub coding agent (preview)
@@ -307,8 +307,8 @@ gh copilot suggest "compress a folder to tar.gz"     # -t shell|gh|git
 ```
 
 `gh copilot` requires the `gh-copilot` extension and an active Copilot
-subscription; it is non-interactive-unfriendly (prompts for confirmation), so
-prefer it for human-in-the-loop use, not scripted agent flows.
+subscription; it prompts for interactive confirmation, so prefer it for
+human-in-the-loop use, not scripted agent flows.
 
 ## Recent commands worth knowing
 
