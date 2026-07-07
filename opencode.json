@@ -157,6 +157,11 @@
             "agent": "librarian",
             "template": "Load the verify-with-docs skill. The task targets a specific or fast-moving library/framework/API. Do NOT answer from memory: identify the exact package + version in use, fetch or consult the current official docs (or a mounted `references` source), and report the exact, verified API signatures and usage the implementing agent should rely on. Cite source URLs/paths."
         },
+        "generalist": {
+            "description": "Route to generalist for miscellaneous or unclear tasks",
+            "agent": "generalist",
+            "template": "Handle this miscellaneous or unclear request to the best of your ability. If the task is beyond your scope, escalate to a more capable agent with a clear explanation."
+        },
         "release": {
             "description": "Prepare a tagged release using the git-release skill",
             "agent": "deep-worker",

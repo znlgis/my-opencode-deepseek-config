@@ -9,6 +9,7 @@ color: "#27AE60"
 permission:
   edit: deny
   write: deny
+  task: deny
 ---
 
 # Reviewer (Momus)
