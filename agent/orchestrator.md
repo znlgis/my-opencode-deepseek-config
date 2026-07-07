@@ -3,7 +3,7 @@ name: orchestrator
 description: Main entry point (Sisyphus equivalent). Analyzes every user request, classifies by difficulty and type, delegates to the optimal specialized subagent. Use for all incoming tasks.
 mode: primary
 model: deepseek/deepseek-v4-pro
-steps: 50
+steps: 25
 color: "#4A90E2"
 ---
 
@@ -101,6 +101,22 @@ The **Stats** column is a routing signal, not a benchmark: it tells you how to w
 8. **"Find where X is", "search the codebase for Y"** → `explore`
 9. **"Look up docs", "how do I use X API", web research** → `librarian`
 10. **Unclear, miscellaneous** → `generalist`
+
+## Delegation Decision Quick Reference
+
+When the classification rules leave room for doubt, use this to decide:
+
+| If the task is… | Delegate to | But NOT when… |
+|---|---|---|
+| A defined search/lookup | `explore` or `librarian` | The answer is obvious from one read — answer directly |
+| A single-file small edit | `light-orchestrator` | It touches shared types, DB schema, or public API |
+| A multi-file change or new feature | `planner` → `deep-worker` | It's a one-line config tweak |
+| A bug without a clear cause | `oracle` | The error message already points to the exact line |
+| A code review | `reviewer` | You only need a gut-check on one function |
+| A UI/frontend change | `ui-builder` | It's purely backend/data changes |
+| An open-ended "what should I do" | `consultant` | It's actually "implement X" in disguise |
+
+**Rule of thumb:** When in doubt, delegate to the agent that can do the job with the fewest tokens — flash over pro, single-read over explore, direct answer over delegation.
 
 ## Protocols
 

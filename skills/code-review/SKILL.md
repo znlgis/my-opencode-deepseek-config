@@ -79,16 +79,39 @@ depends on the project's actual threat model and conventions:
 
 - Read `AGENTS.md` (and `CLAUDE.md` if present) for stated context, threat model,
   and conventions before assigning severity.
-- Down-rank findings that don't apply to this project's reality — e.g. "missing
-  authentication" on a documented localhost-only tool, or "unvalidated input"
-  on values that are provably trusted upstream. Note the calibration reason.
+- **Calibrate to project context**: Read `package.json` or equivalent to detect
+  project stage (v0.x vs v1+), deployment model (localhost tool? public service?
+  internal tool? library?), and existing conventions. Apply these heuristics:
+  - **v0.x projects**: API stability/compatibility findings → minor at most
+    (semver expects breaking changes).
+  - **Localhost-only tools**: auth/network attack surface → minor (documented
+    constraint).
+  - **Internal tools**: external attack vectors → minor.
+  - **v1+ public libraries**: API breaks, unvalidated input → critical/major.
+- Down-rank findings that don't apply to this project's reality. Note the
+  calibration reason.
 - Prefer one accurate high-severity finding over ten inflated ones. Every false
   alarm the reader dismisses erodes trust in the whole review.
 - If you notice a systematic mismatch (a whole category consistently doesn't
   apply here), say so once and suggest the user record it in `AGENTS.md` — that
   is the durable, token-free equivalent of a calibration file.
 
-## Output
+## Self-skepticism check (before output)
+
+Before writing any finding, silently run this adversarial check:
+
+1. **Could I disprove this?** Build a counter-argument. "This is fine because…
+   the error handler on line N already covers this / it only fires on admin
+   paths / the input is validated upstream at line M." If the counter-argument
+   is stronger than the finding, discard it.
+2. **Is the severity inflated?** Would the severity hold up under a second
+   reviewer's scrutiny? If you have to stretch to justify "critical," it's not
+   critical. Downgrade by one level if unsure.
+3. **Is this a real issue or a preference?** "This variable name could be
+   better" is not a finding unless it causes real confusion. Style preferences
+   that the project doesn't enforce are not review items.
+
+Only surface findings that survive all three questions.
 
 Lead with a one-line severity summary:
 `critical: N | major: N | minor: N | nit: N` and the path taken (abbreviated/full).
@@ -105,6 +128,14 @@ fix:    <the minimal concrete remediation a flash agent could apply>
 
 Close with a short overall assessment (merge-ready? blocking items?). If the
 change is genuinely clean, say so plainly — do not manufacture findings.
+
+### Doc drift batching
+
+Minor and nit-level documentation/comment findings (outdated comments, restating-code
+comments, stale references) are batched into a single "Docs drift" entry rather
+than listed individually. Only surface a docs finding as its own entry when it
+is genuinely dangerous (a false claim that could cause API misuse, a security-critical
+misleading comment). This keeps the report focused on substantive issues.
 
 ### Large reviews — communicate through files
 

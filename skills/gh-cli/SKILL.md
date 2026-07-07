@@ -27,6 +27,22 @@ when not running interactively`).
 - Exit codes: `0` success, `1` failure, `2` cancelled, `4` auth required. Check
   `gh auth status` first; missing auth returns `4`, not `1`.
 
+### CI / non-interactive mode
+
+Essential environment variables for agent-driven scripting:
+
+| Variable | Effect |
+|---|---|
+| `GH_PROMPT_DISABLED=1` | Fail instead of prompting interactively |
+| `GH_PAGER=cat` | Disable pager (already auto in non-TTY) |
+| `GH_NO_UPDATE_NOTIFIER=1` | Skip version check (saves a request) |
+| `GH_FORCE_TTY=1` | Force colored/formatted output even when piped |
+| `NO_COLOR=1` | Strip ANSI color from output |
+| `GH_DEBUG=api` | Log HTTP request/response for debugging |
+| `GH_TELEMETRY=0` | Disable telemetry logging |
+
+Token/auth: `GH_TOKEN` or `GITHUB_TOKEN` for non-interactive use. `@me` resolves to the authenticated user: `--assignee @me`, `--author @me`, `--owner @me`. Use `gh auth status --json` to verify the active session.
+
 ## Parsing JSON
 
 - `--json field1,field2,...` for structured output
@@ -189,17 +205,104 @@ gh api --cache 30m repos/{owner}/{repo}
 - `GH_ENTERPRISE_TOKEN` for GHES, `GH_HOST` for enterprise instances
 - Never paste tokens on the command line; use `--with-token < file` or env vars
 
+## Gists (`gh gist`)
+
+```bash
+gh gist create file.txt -d "description"               # public by default
+gh gist create file.txt -d "desc" --public              # explicit public
+gh gist create file.txt -d "desc" --secret              # unlisted
+gh gist create -f "name=content" -d "snippet"           # inline content (-f)
+gh gist list -L 20 --public                              # your public gists
+gh gist list -L 20 --secret                              # your secret gists
+gh gist view <id> --raw                                  # raw content
+gh gist view <id> --files                                # list files
+gh gist edit <id> -a "new content" -f file.txt           # append content
+gh gist edit <id> -f "file.txt=new content"               # replace content
+gh gist delete <id>                                       # delete (needs confirmation)
+gh gist clone <id> [dir]                                  # clone to local dir
+```
+
+## Secrets and Variables (`gh secret`, `gh variable`)
+
+Actions secrets and variables — distinct commands, both scoped to repo/org/env:
+
+```bash
+# Secrets (encrypted)
+gh secret set SECRET_NAME -b "value" -R owner/repo         # from string (-b body)
+gh secret set SECRET_NAME < secret.txt -R owner/repo       # from file
+gh secret set SECRET_NAME -b "$(cmd)" -R owner/repo        # from command output
+gh secret set SECRET_NAME -b "val" --org org                # org-level
+gh secret set SECRET_NAME -b "val" --env production -R owner/repo  # env-level
+gh secret list -R owner/repo                               # list names (not values)
+gh secret remove SECRET_NAME -R owner/repo
+
+# Variables (plaintext)
+gh variable set VAR_NAME -b "value" -R owner/repo
+gh variable set VAR_NAME -b "val" --org org
+gh variable set VAR_NAME -b "val" --env staging -R owner/repo
+gh variable list -R owner/repo
+gh variable remove VAR_NAME -R owner/repo
+```
+
+## Codespaces (`gh codespace`)
+
+```bash
+gh codespace list --json name,state,machine
+gh codespace create -R owner/repo -b main -m basicLinux32gb
+gh codespace create -R owner/repo -b main --devcontainer-path .devcontainer/dev.json
+gh codespace stop -c <name>
+gh codespace delete -c <name>
+gh codespace logs -c <name>
+gh codespace ssh -c <name>                                # SSH in
+gh codespace ports visibility 3000:public -c <name>       # port forwarding
+```
+
+## Config (`gh config`)
+
+```bash
+gh config set editor "code --wait"
+gh config set git_protocol ssh
+gh config set prompt disabled                             # disable interactivity
+gh config get git_protocol
+gh config list
+gh config set browser ""                                   # disable browser opening
+```
+
+## Extensions (`gh extension`)
+
+```bash
+gh extension install owner/repo                           # install from GitHub
+gh extension install /path/to/local                       # install from local dir
+gh extension list                                          # list installed
+gh extension upgrade owner/repo                           # upgrade one
+gh extension upgrade --all                                # upgrade all
+gh extension remove owner/repo                            # uninstall
+gh extension exec <name> [args]                           # run by name
+```
+
+## Aliases (`gh alias`)
+
+```bash
+gh alias set myprs 'pr list --author @me --state open -L 10'
+gh alias set --shell review 'gh pr diff $1 | code -'     # pipe to editor
+gh alias list
+gh alias delete myprs
+```
+
 ## Recent commands worth knowing
 
 - `gh pr revert <n>` — open a revert PR (`--draft`, `--title`, `--body-file`).
 - `gh pr update-branch <n>` — sync PR branch from base (`--rebase`).
-- `gh variable set|get|list|delete` — Actions **variables** (distinct from secrets).
-- `gh attestation verify|download file.bin -R owner/repo` — Sigstore supply-chain.
+- `gh pr create --fill-first` — use only the first commit's message as body (vs `--fill` which uses all commits, `--fill-verbose` which uses all commit msg+bodies).
+- `gh pr create --dry-run` — preview without creating.
+- `gh pr create --recover <token>` — recover from a crashed create session.
 - `gh run watch <id> --exit-status` — block until run finishes, exit non-zero on
   failure. `--compact` shows only failed/relevant steps. Fine-grained PATs lack
   `checks:read` — use `GITHUB_TOKEN` in Actions or a classic PAT.
 - `gh run rerun <id> --failed` — rerun only failed jobs.
+- `gh attestation verify|download file.bin -R owner/repo` — Sigstore supply-chain.
 - `gh agent-task create "Fix login bug" --base main` (preview).
+- `--json` with NO value: `gh pr list --json` prints all available JSON field names — use this to discover fields before querying. Works on all list/view commands.
 
 ## Quick reference
 
@@ -210,10 +313,14 @@ Most common commands agents need:
 gh pr list --state open --label bug -L 20 --json number,title,state,headRefName
 gh pr view <n> --json state,mergeable,reviewDecision,statusCheckRollup
 gh pr create --fill --base main
+gh pr create --fill-first --base main                      # first commit msg only
 gh pr create --title "Fix X" --body "Closes #12" --base main
-gh pr merge <n> --squash --delete-branch
 gh pr diff <n>
+gh pr merge <n> --squash --delete-branch
+gh pr merge <n> --auto --squash                             # auto-merge when CI passes
+gh pr revert <n>
 gh pr checks <n>
+gh pr ready <n>                                              # mark draft as ready
 
 # Issues
 gh issue list --state open --assignee @me -L 20 --json number,title,state,labels
@@ -224,7 +331,7 @@ gh issue close <n> --reason completed
 gh run list --workflow ci.yml --branch main --limit 20
 gh run view <id> --log --log-failed
 gh run watch <id> --exit-status
-gh pr checks <n>
+gh run rerun <id> --failed
 
 # Releases
 gh release create v1.2.0 --generate-notes
@@ -235,13 +342,20 @@ gh search prs --author @me --state open --label bug --repo OWNER/REPO
 gh search issues --repo OWNER/REPO --search "error in:title"
 gh search repos --language go --stars ">5000"
 
+# Gists
+gh gist create file.txt -d "description"
+gh gist list -L 20
+
+# Secrets / Variables
+gh secret set TOKEN -b "value" -R owner/repo
+gh variable set URL -b "https://..." -R owner/repo
+
 # Projects
 gh project item-add <number> --url <issue-url>
 gh project field-create <number> --name "Priority" --data-type SINGLE_SELECT \
   --single-select-options "High,Medium,Low"
 
-# Repo / Config
-gh repo set-default OWNER/REPO
-gh repo view OWNER/REPO --json description,stargazerCount
-gh auth status
+# Config
+gh config set git_protocol ssh
+gh auth status --json
 ```

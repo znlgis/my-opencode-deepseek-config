@@ -50,6 +50,13 @@
     "instructions": [
         "AGENTS.md"
     ],
+    "references": {
+        "opencode-docs": {
+            "repository": "anomalyco/opencode",
+            "branch": "dev",
+            "description": "Official opencode docs, schema, and configuration examples"
+        }
+    },
     "experimental": {
         "batch_tool": true
     },
@@ -85,9 +92,9 @@
     "compaction": {
         "auto": true,
         "prune": true,
-        "tail_turns": 12,
+        "tail_turns": 10,
         "preserve_recent_tokens": 16000,
-        "reserved": 8192
+        "reserved": 10240
     },
     "command": {
         "deep": {

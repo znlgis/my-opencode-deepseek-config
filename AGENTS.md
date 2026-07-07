@@ -146,6 +146,9 @@ These are unconditionally forbidden:
   committed. No dead code.
 - Verify your changes by reading every modified file end-to-end before
   claiming completion.
+- **Self-skepticism before output.** Before reporting a finding or claiming
+  completion, ask: "Could I disprove this? Is the severity proportionate? Would
+  I stake my own review on this?" Only surface what survives your own scrutiny.
 
 ## Comment Discipline
 
@@ -186,6 +189,9 @@ workflow, check whether a skill already covers it and load it:
 - `gh-skill` — discover, install, update, and publish Agent Skills with `gh skill`.
 - `codemap` — generate a structured annotated directory tree for quick codebase orientation.
 - `simplify` — behavior-preserving code simplification: reduce nesting, eliminate unnecessary abstraction, cut dead variables.
+- `code-review` — token-frugal multi-dimension code review with severity calibration, adversarial self-check, and review→fix loop.
+- `deepwork` — review-gated phased execution for complex multi-file tasks with durable artifacts.
+- `reflect` — continuous-improvement loop: surface recurring friction and propose minimal config fixes.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
 contributes its own skills (planning, TDD, debugging, code review, etc.); skill
