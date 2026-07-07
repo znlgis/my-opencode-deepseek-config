@@ -144,6 +144,11 @@ On the Full path, write the findings block to a file (e.g.
 file path to the caller. This keeps large review content out of the
 orchestrator's context — the single biggest review token cost.
 
+**Response contract for file-based reviews:** after writing the file, your reply
+is *only* the summary line + the absolute path — nothing else. Do not restate
+findings in the chat; the file is the artifact. (Borrowed from deepreview's
+file-IPC contract, minus its multi-agent pipeline.)
+
 ## Review → fix loop
 
 When asked to review *and fix* (e.g. `/review-loop`), run a bounded loop:
@@ -168,6 +173,17 @@ To publish findings on GitHub (e.g. `/review-pr`), use the `gh-cli` skill:
 draft a pending review with per-line comments (`gh pr review --comment`) or a
 review body summarizing the severity table. Never auto-approve; leave the
 verdict to a human.
+
+Place each finding at the tightest scope its location allows (3-tier placement):
+
+1. **Line comment** — the finding's `file:line` falls inside a changed hunk.
+2. **File-level comment** — the file is in the diff but the line is outside any
+   hunk (e.g. a caller you had to widen to).
+3. **Review body** — the finding is about a file not in the diff at all
+   (cross-cutting or blast-radius concerns).
+
+This keeps comments anchored to the diff and avoids GitHub rejecting line
+comments that fall outside the PR's changed ranges.
 
 ## Rules
 

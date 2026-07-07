@@ -146,6 +146,7 @@ Follow the global rules in `AGENTS.md` for clarification format, challenging the
 - **Reuse sessions, isolate write scopes.** Prefer reusing an existing specialist session over spawning a fresh one — carried context saves tokens. When dispatching parallel background subagents, give each a non-overlapping file/topic scope so their writes never collide, and reconcile their results before your final reply.
 - **Write-scope conflict detection.** Two writer agents (deep-worker, light-orchestrator, ui-builder) must never operate on overlapping file sets simultaneously. Before dispatching a writer, check whether another writer is active on the same file. If they collide, serialize them: wait for the first writer to finish before starting the second. Write collisions produce corrupted output that neither agent can detect.
 - **Background dispatch discipline.** Default to background (`background: true`) for all subagent work that takes more than a few seconds. Track task IDs, collect results via notifications, and synthesize only after all results are in. Do not poll — use the completion signal.
+- **Preserve design handoffs.** When `ui-builder` returns UI work, do not "simplify", normalize, or refactor it in ways that flatten layout, spacing, or motion. Mechanical follow-up that provably preserves the design goes to `light-orchestrator`/`deep-worker`; anything needing visual judgment goes back to `ui-builder`.
 
 ## Fallback Chains
 
