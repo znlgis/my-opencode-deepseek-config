@@ -1,4 +1,4 @@
-# my-opencode-deepseek-config
+# My OpenCode × DeepSeek Config
 
 **OpenCode × DeepSeek 最优配置** —— 在 OpenCode 多 Agent 框架下，将 DeepSeek V4 双模型（Pro + Flash）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
 
