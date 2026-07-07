@@ -108,7 +108,17 @@
         "review": {
             "description": "Route to reviewer for code review",
             "agent": "reviewer",
-            "template": "Review the following code thoroughly."
+            "template": "Load the code-review skill. Scope the diff (branch vs base, PR, or the files provided), scale depth to its size, review the dimensions it touches, and report findings by severity — calibrated to this project's threat model. Do not modify code."
+        },
+        "review-loop": {
+            "description": "Review then fix in a bounded loop until clean (deep-worker)",
+            "agent": "deep-worker",
+            "template": "Load the code-review skill and run its review→fix loop on the current diff (or the PR/files provided). Review, apply minimal surgical fixes for critical/major (and clear minor) findings following AGENTS.md, then verify with the project's format/lint/test commands and re-review the changed region. Stop when clean, after 5 iterations, or on a plateau (same finding twice — pause for a human). Report each iteration's severity summary and what you fixed."
+        },
+        "review-pr": {
+            "description": "Review a PR and post findings as a pending GitHub review",
+            "agent": "reviewer",
+            "template": "Load the code-review and gh-cli skills. Review the specified PR's diff, then post the findings as a pending GitHub review (per-line comments plus a body with the severity summary) using `gh pr review --comment`. Never auto-approve — leave the verdict to a human. Do not modify code."
         },
         "plan": {
             "description": "Route to planner for strategic planning",
