@@ -322,6 +322,8 @@ human-in-the-loop use, not scripted agent flows.
   `checks:read` — use `GITHUB_TOKEN` in Actions or a classic PAT.
 - `gh run rerun <id> --failed` — rerun only failed jobs.
 - `gh attestation verify|download file.bin -R owner/repo` — Sigstore supply-chain.
+- `gh release download <tag>` — no auth needed on public repos (v2.96+).
+- `gh skill` — first-class command group (v2.90+) for discovering/installing/publishing Agent Skills; see the `gh-skill` skill for the full workflow.
 - `--json` with NO value: `gh pr list --json` prints all available JSON field names — use this to discover fields before querying. Works on all list/view commands.
 
 ## Quick reference
