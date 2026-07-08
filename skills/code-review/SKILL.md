@@ -123,8 +123,8 @@ Before writing any finding, silently run this adversarial check. Default to
    better" is not a finding unless it causes real confusion. Style preferences
    that the project doesn't enforce are not review items.
 
-**Reject the finding outright if any of these hold** (borrowed from deepreview's
-validator rejection rules, condensed):
+**Reject a finding immediately if any of these conditions apply** (borrowed from
+deepreview's validator rejection rules, condensed):
 
 - The cited `file:line` is wrong or the code isn't actually in the diff's blast
   radius.
