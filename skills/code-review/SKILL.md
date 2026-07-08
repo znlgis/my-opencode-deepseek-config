@@ -96,9 +96,21 @@ depends on the project's actual threat model and conventions:
   apply here), say so once and suggest the user record it in `AGENTS.md` — that
   is the durable, token-free equivalent of a calibration file.
 
+### Suppress known-design noise
+
+If the caller supplies a decisions/context note — inline ("we chose X on
+purpose"), a path like `.opencode/decisions.md`, or documented constraints in
+`AGENTS.md`/`CLAUDE.md` — treat those choices as **intentional** and do not flag
+them as findings. Surface them only if the diff itself makes the documented
+choice concretely unsafe (e.g. a decision that assumed trusted input is now
+reachable from an untrusted path). This is the token-free equivalent of
+deepreview's `--context` suppression: it kills the biggest source of review
+noise — re-litigating settled design.
+
 ## Self-skepticism check (before output)
 
-Before writing any finding, silently run this adversarial check:
+Before writing any finding, silently run this adversarial check. Default to
+**rejection** — a finding earns its place only by surviving scrutiny:
 
 1. **Could I disprove this?** Build a counter-argument. "This is fine because…
    the error handler on line N already covers this / it only fires on admin
@@ -111,7 +123,21 @@ Before writing any finding, silently run this adversarial check:
    better" is not a finding unless it causes real confusion. Style preferences
    that the project doesn't enforce are not review items.
 
-Only surface findings that survive all three questions.
+**Reject a finding immediately if any of these conditions apply** (borrowed from
+deepreview's validator rejection rules, condensed):
+
+- The cited `file:line` is wrong or the code isn't actually in the diff's blast
+  radius.
+- It targets **pre-existing, unchanged** code this diff didn't touch (note it as
+  context at most — it is not a review item for this change).
+- The severity is inflated relative to the project's threat model (see
+  calibration above).
+- It is a pure design/style **opinion** the project doesn't enforce.
+- It **duplicates** another finding — merge, don't list twice.
+- It is a documented, intentional decision (see suppression above).
+
+Only surface findings that survive all three questions and none of the rejection
+rules.
 
 Lead with a one-line severity summary:
 `critical: N | major: N | minor: N | nit: N` and the path taken (abbreviated/full).
