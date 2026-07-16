@@ -310,7 +310,7 @@ gh copilot
 
 `gh agent-task` needs an OAuth token (from `gh auth login`, `gho_` prefix) — a
 plain PAT/`GH_TOKEN` is rejected. `gh copilot` is now a **built-in** binary
-passthrough (since ~v2.80); it is NOT the old `gh-copilot` extension, which was
+passthrough (since ~v2.80); it is **not** the old `gh-copilot` extension, which was
 deprecated Oct 2025 — do not rely on `gh copilot explain/suggest` in scripts.
 Both are interactive; prefer them for human-in-the-loop use, not scripted flows.
 
