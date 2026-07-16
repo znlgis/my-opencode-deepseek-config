@@ -27,6 +27,11 @@ overlap, follow the stricter instruction.
    complex decisions, multi-step analysis, and implementation. When a task
    borderlines between the two, prefer the flash agent; escalate to pro only
    when flash is genuinely out of its depth.
+8. **Know your stop condition.** Before starting, state (to yourself) the
+   observable condition that means "done" for the actual request. Once it holds
+   and the change is verified, answer and stop — no unrequested polish, bonus
+   refactor, or extra verification loop. Solving the user's real problem outranks
+   ceremony; over-delivering burns tokens and risks scope creep.
 
 ## Language
 

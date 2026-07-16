@@ -150,6 +150,16 @@ Pause and ask if you hit a blocker or the design proves wrong (update the
 artifacts rather than silently diverging). Follow AGENTS.md — minimal changes,
 Comment Discipline, Self-Verification, and run any available build/tests.
 
+## Action: update
+
+Revise the planning artifacts of an in-flight change **in place** — without
+touching implementation. Use it when scope shifts, a requirement is clarified, or
+review feedback lands: edit `proposal.md`/`design.md`/`tasks.md`/delta specs to
+match reality, keep task ids stable where possible, and note what moved. This is
+OpenSpec's `/opsx:update` equivalent and the disciplined form of the "jump back
+and edit an earlier artifact" philosophy above — prefer it over silently
+diverging from a stale plan. Re-run `apply` once the artifacts are current.
+
 ## Action: archive
 
 When all tasks are done and merged:

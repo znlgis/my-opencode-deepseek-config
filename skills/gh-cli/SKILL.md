@@ -88,6 +88,8 @@ override. Set `GH_REPO=OWNER/REPO` for session-wide default.
 - `gh issue edit`: `--type/--remove-type`, `--parent/--remove-parent`,
   `--add-sub-issue/--remove-sub-issue`, `--add-blocked-by/--remove-blocked-by`.
 - `gh issue list --type <name>`.
+- `gh issue close <n> --duplicate-of <number|url>` (v2.88+) — closes as a
+  duplicate (sets `--reason duplicate` and links the canonical issue).
 - JSON fields: `issueType`, `parent`, `subIssues`, `subIssuesSummary`, `blockedBy`,
   `blocking`. Objects are `{"nodes": [...], "totalCount": N}` — compare node count
   vs `totalCount` to detect truncation (subIssues capped at 100, blocked/blocking
@@ -293,7 +295,7 @@ gh alias delete myprs
 
 ## AI-integrated commands (`gh agent-task`, `gh copilot`)
 
-Newer command groups in `gh` v2.90+ for agent workflows:
+Newer command groups in `gh` v2.96+ for agent workflows:
 
 ```bash
 # Agent tasks — delegate a coding task to a GitHub coding agent (preview)
@@ -301,14 +303,23 @@ gh agent-task create "Fix the login redirect bug" --base main
 gh agent-task list --json id,state,title
 gh agent-task view <id>
 
-# Copilot in the CLI — explain or suggest shell/git/gh commands
-gh copilot explain "git rebase -i HEAD~3"
-gh copilot suggest "compress a folder to tar.gz"     # -t shell|gh|git
+# Copilot in the CLI — built-in passthrough that downloads and runs the
+# standalone Copilot CLI binary (~/.config/gh/copilot/); interactive, human-in-the-loop
+gh copilot
 ```
 
-`gh copilot` requires the `gh-copilot` extension and an active Copilot
-subscription; it prompts for interactive confirmation, so prefer it for
-human-in-the-loop use, not scripted agent flows.
+`gh agent-task` needs an OAuth token (from `gh auth login`, `gho_` prefix) — a
+plain PAT/`GH_TOKEN` is rejected. `gh copilot` is now a **built-in** binary
+passthrough (since ~v2.80); it is NOT the old `gh-copilot` extension, which was
+deprecated Oct 2025 — do not rely on `gh copilot explain/suggest` in scripts.
+Both are interactive; prefer them for human-in-the-loop use, not scripted flows.
+
+**Request a Copilot code review on a PR** (v2.88+, github.com + GHES 3.15+):
+
+```bash
+gh pr create --reviewer @copilot --fill      # request review on create
+gh pr edit <n> --add-reviewer @copilot       # or add it afterward
+```
 
 ## Recent commands worth knowing
 

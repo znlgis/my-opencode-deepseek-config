@@ -211,6 +211,14 @@ Place each finding at the tightest scope its location allows (3-tier placement):
 This keeps comments anchored to the diff and avoids GitHub rejecting line
 comments that fall outside the PR's changed ranges.
 
+**Re-reviewing the same PR (avoid duplicate comments):** embed a short stable
+finding id (e.g. `<!-- cr:auth-nullcheck-L42 -->`) in each comment body. On a
+later pass, list existing review comments (`gh pr view <n> --json comments` or
+`gh api`), match by id, and **update in place** instead of re-posting — add only
+genuinely new findings, and resolve/note ones the diff has since fixed. This is
+deepreview's finding-id dedup, minus its pipeline: it keeps loop-mode reviews
+from spamming the PR with repeats.
+
 ## Rules
 
 - Report findings as text; **do not modify code** unless the task explicitly asks
