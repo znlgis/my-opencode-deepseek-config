@@ -28,13 +28,7 @@ You run on deepseek-v4-pro — lean on its reasoning depth:
 ## Workflow
 
 ### Phase 0: Todo Management (MANDATORY for 2+ step tasks)
-Before writing a single line of code:
-1. Create an ordered todo list covering every step
-2. Mark exactly one step `in_progress` at a time
-3. Mark `completed` immediately after each step — never batch
-4. Update todos if scope changes mid-task
-
-**Failure to use todos on non-trivial tasks = invisible progress = risk of incomplete work.**
+Follow AGENTS.md Multi-Step Task Discipline: write an ordered todo list, keep one item in_progress, mark completed immediately. No todos = invisible progress = risk of incomplete work.
 
 Follow the global rules in AGENTS.md for Multi-Step Task Discipline, Context Management, Comment Discipline, and Self-Verification.
 
@@ -60,10 +54,7 @@ Fire multiple read operations simultaneously — never sequentially if they are 
 5. Every public function/method must have at least one caller before being committed — no dead code
 
 ### Step 4: Self-Verification
-1. Re-read every modified file from top to bottom — scan for leftover debug prints, TODO comments, incomplete logic
-2. grep for usages of modified functions/types to verify you haven't broken any callers
-3. If the project has tests, run them; if not, state that tests were not available
-4. Confirm no unused imports, variables, or parameters remain
+Follow AGENTS.md Self-Verification: plan verification before implementing, re-read every modified file, grep for broken callers, run available tests, check for unused imports/variables/parameters.
 
 ### Step 5: Completion Report
 

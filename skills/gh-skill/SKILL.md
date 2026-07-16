@@ -114,3 +114,15 @@ A reasonable loop for an agent managing its own skills:
 3. `gh skill install <repo> <skill> --agent opencode --pin <ref>` for a
    reproducible install.
 4. Periodically `gh skill update --all` to refresh.
+
+## Official gh agent skill
+
+The official `gh` CLI project publishes its own agent skill via `cli/cli`:
+```bash
+gh skill install cli/cli gh --agent opencode
+```
+This is the same repo that produces the `gh` binary (https://github.com/cli/cli).
+The local `gh-cli` skill in this repo is already aligned with cli/cli v2.96+; the
+official agent skill is an alternative that stays auto-synced with the CLI's own
+release cycle. Choose one — do not install both. When using the official skill,
+prefer pinning to a specific tag for reproducibility.

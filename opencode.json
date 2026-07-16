@@ -187,6 +187,11 @@
             "agent": "deep-worker",
             "template": "Load the remove-deadcode skill. Review the current diff:\n\n!`git diff HEAD`\n\nRemove AI slop introduced by the changes: filler/boilerplate comments that restate the code, commented-out code, needless defensive wrappers, and any dead code that verification proves is unreferenced. Follow AGENTS.md Comment Discipline. Do not change behavior; verify build/tests still pass and report what you removed."
         },
+        "explore": {
+            "description": "Pre-proposal research — explore current code and sketch options before committing to a spec (spec-workflow explore action)",
+            "agent": "explore",
+            "template": "Load the spec-workflow skill and run its explore action. Research the current codebase, sketch options and trade-offs, surface open questions. This is a no-stakes thinking pass before committing to a proposal — keep findings in chat (or write to openspec/explorations/<topic>.md for persistence). Do not create changes/<change-id>/ yet. The goal is to clarify direction before locking a proposal."
+        },
         "propose": {
             "description": "Draft a spec-driven change proposal (proposal + specs + tasks) under openspec/changes/",
             "agent": "planner",

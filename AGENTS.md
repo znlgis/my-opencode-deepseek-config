@@ -178,39 +178,25 @@ These rules apply when writing or modifying code in any language:
 
 ## Skills
 
-Reusable, on-demand instructions live under `skills/<name>/SKILL.md` and are
-surfaced to every agent through the native `skill` tool. Before reinventing a
-workflow, check whether a skill already covers it and load it:
+Skills live under `skills/<name>/SKILL.md` and load on demand via the `skill`
+tool. Before reinventing a workflow, check whether a skill covers it:
 
-- `gh-cli` — drive GitHub from the terminal (PRs, issues, CI/Actions, releases).
-- `conventional-commits` — format commit messages and PR titles.
-- `security-review` — audit a diff for vulnerabilities before merging.
-- `git-release` — cut a tagged release: notes, SemVer bump, `gh release` command.
-- `remove-deadcode` — find and safely delete unused code, verified before removal.
-- `opencode-config` — author this repo's OpenCode config (agents, skills, commands, permissions).
-- `spec-workflow` — run a lightweight spec-driven change loop (propose → specs/design → tasks → apply → archive) via durable git-tracked artifacts.
-- `verify-with-docs` — retrieval-first discipline: verify a specific/fast-moving library or API against current docs (or a mounted `references` source) before coding, instead of relying on memory.
-- `git-master` — advanced Git operations: rebase, squash, fixup, blame, bisect, reflog, code archaeology, worktrees.
-- `gh-skill` — discover, install, update, and publish Agent Skills with `gh skill`.
-- `codemap` — generate a structured annotated directory tree for quick codebase orientation.
-- `simplify` — behavior-preserving code simplification: reduce nesting, eliminate unnecessary abstraction, cut dead variables.
-- `code-review` — token-frugal multi-dimension code review with severity calibration, adversarial self-check, and review→fix loop.
-- `deepwork` — review-gated phased execution for complex multi-file tasks with durable artifacts.
-- `reflect` — continuous-improvement loop: surface recurring friction and propose minimal config fixes.
+- `gh-cli` — GitHub CLI (PRs, issues, releases, Actions). · `conventional-commits` — spec commit messages. · `security-review` — audit diff for vulns. · `git-release` — tagged releases with SemVer. · `remove-deadcode` — prune unused code with LSP verify. · `opencode-config` — author this repo's OpenCode config. · `spec-workflow` — spec-driven change loop (explore→propose→apply→archive). · `verify-with-docs` — verify library APIs against current docs before coding. · `git-master` — rebase, squash, fixup, blame, bisect, reflog, worktrees. · `gh-skill` — discover/install/update/publish agent skills. · `codemap` — annotated directory tree for orientation. · `simplify` — behavior-preserving code simplification. · `code-review` — token-frugal multi-dimension review with severity calibration. · `deepwork` — review-gated phased execution for complex tasks. · `reflect` — surface recurring friction, propose minimal config fixes.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
-contributes its own skills (planning, TDD, debugging, code review, etc.); skill
-names must stay unique across all sources.
-
-**Skills before raw tools.** When tackling a problem, match it to a superpowers
-skill first (brainstorming, systematic-debugging, TDD, planning, etc.). Only
-fall back to step-by-step reasoning for genuinely hard sub-steps within a
-skill's workflow, or for problems where no skill applies.
+provides skills (brainstorming, systematic-debugging, TDD, etc.); skill names
+must stay unique across all sources. Match a problem to a superpowers skill
+first, only fall back to raw reasoning when no skill applies.
 
 ## Self-Verification
 
+**Plan verification before implementing.** When you know what you'll change,
+pre-state the verification steps: which tests to run, which callers to check,
+which edge cases to validate. Write them down before writing code — then run
+them after. Verification without a plan is half-hearted.
+
 Before claiming any task is complete:
-1. Re-read every modified file from top to bottom — look for leftover debug
+1. Re-read every modified file from top to bottom — scan for leftover debug
    prints, TODO comments, incomplete logic
 2. Verify the change doesn't break callers — grep for usages of modified
    functions/types
