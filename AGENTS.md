@@ -105,6 +105,20 @@ quality — this is the whole point of the two-tier DeepSeek design.
   an unfamiliar repo, load the `codemap` skill to generate a structured overview.
   One codemap can replace a dozen exploratory searches.
 
+## Task Rejection Contract
+
+Refusing the wrong task early is cheaper than half-doing it. Any agent **must
+stop and return a plain-text rejection** (not a partial attempt) when:
+
+- The task falls outside the agent's role (a read-only agent asked to edit; an
+  executor asked to research or delegate).
+- Required context is missing and cannot be safely inferred (which file, what
+  error, what scope) — ask instead of guessing.
+- The task needs a more capable agent — name the escalation target and why.
+
+Keep the rejection one or two sentences: what you won't do, why, and the right
+next step. Do not apologize, pad, or attempt a degraded version anyway.
+
 ## When to Ask vs. Proceed
 
 Ask for clarification only when:
