@@ -21,12 +21,9 @@ overlap, follow the stricter instruction.
 6. **Don't create files unless asked.** Never proactively create README files,
    documentation, or any new file without explicit user request. The user asked
    for code changes, not project scaffolding.
-7. **Right-size the model to the task.** v4-flash agents (explore, librarian,
-   light-orchestrator) handle search, lookup, simple edits, and documentation.
-   v4-pro agents (planner, deep-worker, oracle, reviewer) handle reasoning,
-   complex decisions, multi-step analysis, and implementation. When a task
-   borderlines between the two, prefer the flash agent; escalate to pro only
-   when flash is genuinely out of its depth.
+7. **Right-size the model to the task.** Prefer flash for search, lookup, and
+   simple edits; reserve pro for reasoning and heavy implementation. When
+   borderline, prefer flash; escalate to pro only when flash is out of its depth.
 8. **Know your stop condition.** Before starting, state (to yourself) the
    observable condition that means "done" for the actual request. Once it holds
    and the change is verified, answer and stop — no unrequested polish, bonus
@@ -68,17 +65,14 @@ task half-done.
   loaded into the orchestrator's context. Use explore agents for broad searches.
 - **Parallelize independent reads.** When you need to read 3+ files that don't
   depend on each other, fire all reads simultaneously.
-- **Compress aggressively.** When a line of inquiry has run its course and its
-  findings are clear, compress it. Don't let stale context accumulate. Start
-  implementation from a clean context — carry forward the plan and findings, not
-  the raw exploration transcript.
+- **Compress aggressively.** When a line of inquiry has run its course, compress
+  it. Carry forward the plan and findings, not the raw exploration transcript.
 - **One topic per subagent.** Don't ask a single subagent to do research AND
   implementation — split them.
 
 ## Token Efficiency
 
-Every token spent is a cost. These rules keep the setup lean without sacrificing
-quality — this is the whole point of the two-tier DeepSeek design.
+Every token spent is a cost — the whole point of the two-tier DeepSeek design.
 
 - **Reference paths, don't paste files.** Point at `src/app.ts:42`, don't paste
   whole files into a prompt. Subagents can read what they need; pasting is the
@@ -104,6 +98,16 @@ quality — this is the whole point of the two-tier DeepSeek design.
 - **Use codemap to skip blind exploration.** Before scattering `glob` calls across
   an unfamiliar repo, load the `codemap` skill to generate a structured overview.
   One codemap can replace a dozen exploratory searches.
+
+## Model Tier Reference
+
+v4-pro agents (planner, deep-worker, oracle, reviewer, ui-builder, consultant):
+Reason through trade-offs, not just lookup. Analyze deeply, produce carefully.
+Never waste pro on search or simple edits.
+
+v4-flash agents (explore, librarian, light-orchestrator, generalist):
+Fast, cheap, directive. Get in, do the defined task, get out. Stop and escalate
+if the task needs deeper reasoning.
 
 ## Task Rejection Contract
 
@@ -153,7 +157,7 @@ These are unconditionally forbidden:
 - **No empty catch blocks** (`catch(e) {}`). If an error is truly ignorable, comment why.
 - **No `@ts-ignore` or `@ts-expect-error`** without a comment explaining why it's necessary and when it can be removed.
 - **No commented-out code.** Dead code belongs in git history, not the source file.
-- **No file creation unless asked.** Never proactively create README, docs, or any new file without explicit user request.
+- **No file creation unless asked** (see Core Principle #6).
 
 ## Quality Bar
 
@@ -203,6 +207,9 @@ must stay unique across all sources. Match a problem to a superpowers skill
 first, only fall back to raw reasoning when no skill applies.
 
 ## Self-Verification
+
+For non-trivial changes, load the `verification-before-completion` skill first
+to choose the narrowest verification path.
 
 **Plan verification before implementing.** When you know what you'll change,
 pre-state the verification steps: which tests to run, which callers to check,

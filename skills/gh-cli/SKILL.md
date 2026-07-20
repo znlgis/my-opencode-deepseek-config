@@ -81,29 +81,38 @@ override. Set `GH_REPO=OWNER/REPO` for session-wide default.
   (on `pr`/`issue list` and `search prs|issues`).
 - Exclude qualifiers with `--` stop-parser: `gh search issues -- "error -label:bug"`.
 
-## Issue types, sub-issues, and relationships
+## Issue types, sub-issues, and relationships (v2.94.0+)
 
-- `gh issue create`: `--type <name>`, `--parent <number|url>`,
-  `--blocked-by <number|url,...>`, `--blocking <number|url,...>`.
-- `gh issue edit`: `--type/--remove-type`, `--parent/--remove-parent`,
-  `--add-sub-issue/--remove-sub-issue`, `--add-blocked-by/--remove-blocked-by`.
-- `gh issue list --type <name>`.
-- `gh issue close <n> --duplicate-of <number|url>` (v2.88+) — closes as a
-  duplicate (sets `--reason duplicate` and links the canonical issue).
-- JSON fields: `issueType`, `parent`, `subIssues`, `subIssuesSummary`, `blockedBy`,
-  `blocking`. Objects are `{"nodes": [...], "totalCount": N}` — compare node count
-  vs `totalCount` to detect truncation (subIssues capped at 100, blocked/blocking
-  at 50).
+- `gh issue create`: `--type Bug|Feature|Task` (or custom org types on GHES 3.17+),
+  `--parent <number|url>`, `--blocked-by <number|url,...>`,
+  `--blocking <number|url,...>`.
+- `gh issue edit <n>`: `--type/--remove-type`, `--parent/--remove-parent`,
+  `--add-sub-issue <n>/--remove-sub-issue <n>`,
+  `--add-blocked-by <n>/--remove-blocked-by <n>`,
+  `--add-blocking <n>/--remove-blocking <n>`.
+- `gh issue list --type Bug|Feature|Task` (filter by type).
+- `gh issue close <n> --duplicate-of <number|url>` — closes as a duplicate
+  (sets `--reason duplicate` and links the canonical issue).
+- JSON fields: `issueType`, `parent`, `subIssues` (`nodes` + `totalCount`),
+  `subIssuesSummary`, `blockedBy` (`nodes` + `totalCount`), `blocking` (`nodes` +
+  `totalCount`). Compare `nodes.length` vs `totalCount` to detect truncation
+  (subIssues capped at 100, blocked/blocking at 50).
 - GHES availability: issue **types** require GHES 3.17+, **blocked-by/blocking**
   require GHES 3.19+. On older hosts these flags error — fall back to labels.
 
-## Discussions (`gh discussion`)
+## Discussions (`gh discussion`) — v2.94.0 preview
 
-- `gh discussion list`: `--state` (open/closed/all), `--category`, `--answered`
-  (tri-state for Q&A), `--search`, `--sort`/`--order`, `--limit`, `--json`
+- `gh discussion list`: `--state open|closed|all`, `--category <name>`,
+  `--author <login>`, `--label <name>`, `--answered` (tri-state for Q&A),
+  `--search <query>`, `--sort`/`--order`, `--limit`, `--json`
 - `gh discussion view {<n>|<url>}`: `--comments`, `--order`, `--limit`, `--json`
-- `gh discussion create`: `--title`, `--body`, `--category` (required non-interactively)
-- `gh discussion comment`: `--body`, `--edit`, `--delete` (with `--yes`)
+- `gh discussion create`: `--title`, `--body`, `--category` (required
+  non-interactively)
+- `gh discussion edit <n>`: `--title`, `--body`, `--add-label <name>`,
+  `--remove-label <name>`, `--category`
+- `gh discussion comment {<n>|<url>}`: `--body "text"`, `--editor`
+  (interactive edit), `--edit <comment-id>`, `--delete <comment-id>` (`--yes`
+  to skip confirmation prompt)
 
 ## Projects V2 (`gh project`)
 
@@ -153,14 +162,27 @@ gh cache delete <key> -R owner/repo
 gh cache delete --all -R owner/repo       # requires confirmation
 ```
 
-## Reading files and directories (`gh repo read-file` / `read-dir`)
+## Reading files and directories (`gh repo read-file` / `read-dir`) — v2.95.0 preview
 
-Read repo contents over API without cloning. Honor `-R` and `--ref <branch|tag|commit>`.
+Read repo contents over API without cloning. Use `-R`/`--repo` and
+`--ref <branch|tag|commit>` to target any repo/ref.
 
 ```bash
-gh repo read-file <path> [--ref <ref>] [--output <path> [--clobber]]
-gh repo read-dir [<path>] [--ref <ref>] [--json <fields>]
+# Read a file (prints raw content to stdout)
+gh repo read-file README.md --repo cli/cli
+gh repo read-file go.mod --ref v2.94.0 --output ./go.mod --clobber
+
+# Read a directory listing
+gh repo read-dir script --repo cli/cli
+gh repo read-dir --ref main --json name,path,size,type
 ```
+
+- Piped/stdout output is **raw bytes** — no JSON wrapper. Binary files are
+  auto-detected and refused; use `--output` to save binary files.
+- `--json` fields for `read-dir`: `name`, `path`, `gitSHA`, `size`, `type`
+  (`file`/`dir`/`submodule`/`symlink`), `encoding`, `content`.
+- `--clobber` overwrites existing output files; without it, writing to an
+  existing file is an error.
 
 ## `gh api` — the universal fallback
 
@@ -280,7 +302,7 @@ gh extension install /path/to/local                       # install from local d
 gh extension list                                          # list installed
 gh extension upgrade owner/repo                           # upgrade one
 gh extension upgrade --all                                # upgrade all
-gh extension remove owner/repo                            # uninstall
+gh extension remove owner/repo                            # uninstall (alias for `uninstall`, v2.94.0+)
 gh extension exec <name> [args]                           # run by name
 ```
 
@@ -292,6 +314,25 @@ gh alias set --shell review 'gh pr diff $1 | code -'     # pipe to editor
 gh alias list
 gh alias delete myprs
 ```
+
+## Agent Skills (`gh skill`) — v2.94.0+
+
+First-class command group for discovering, installing, and publishing Agent Skills.
+See the `gh-skill` skill for the full workflow.
+
+```bash
+gh skill list --json name,description           # discover available skills
+gh skill install owner/repo                     # install a specific skill
+gh skill install owner/repo --agent opencode    # install with agent binding (opencode, codex, antigravity, etc.)
+gh skill install --all                          # install all matching skills
+gh skill install --from-local ./local-repo      # install from a local directory
+gh skill uninstall owner/repo                   # remove an installed skill
+gh skill publish                                # publish a new skill from cwd
+```
+
+`gh skill install --agent opencode` creates the skill under
+`~/.config/opencode/skills/<name>/SKILL.md`. Use `--agent` to target a specific
+coding agent; omitting it installs to the system-global skills directory.
 
 ## AI-integrated commands (`gh agent-task`, `gh copilot`)
 
@@ -314,6 +355,10 @@ passthrough (since ~v2.80); it is **not** the old `gh-copilot` extension, which 
 deprecated Oct 2025 — do not rely on `gh copilot explain/suggest` in scripts.
 Both are interactive; prefer them for human-in-the-loop use, not scripted flows.
 
+`gh` v2.96.0 detects more programming agents from the environment (antigravity-cli,
+antigravity2.0, codex, opencode) to auto-configure agent-specific behavior in
+commands like `gh skill` and `gh agent-task`.
+
 **Request a Copilot code review on a PR** (v2.88+, github.com + GHES 3.15+):
 
 ```bash
@@ -334,7 +379,7 @@ gh pr edit <n> --add-reviewer @copilot       # or add it afterward
 - `gh run rerun <id> --failed` — rerun only failed jobs.
 - `gh attestation verify|download file.bin -R owner/repo` — Sigstore supply-chain.
 - `gh release download <tag>` — no auth needed on public repos (v2.96+).
-- `gh skill` — first-class command group (v2.90+) for discovering/installing/publishing Agent Skills; see the `gh-skill` skill for the full workflow.
+- `gh skill` — see the Agent Skills section above and the `gh-skill` skill for the full workflow.
 - `--json` with NO value: `gh pr list --json` prints all available JSON field names — use this to discover fields before querying. Works on all list/view commands.
 
 ## Quick reference
@@ -342,23 +387,26 @@ gh pr edit <n> --add-reviewer @copilot       # or add it afterward
 Most common commands agents need:
 
 ```bash
+# Issues with types (v2.94.0+)
+gh issue create --type Bug --title "..." --body "..."
+gh issue list --type Bug --assignee @me -L 20 --json number,title,state,issueType
+gh issue close <n> --duplicate-of <n>
+
 # PRs
 gh pr list --state open --label bug -L 20 --json number,title,state,headRefName
 gh pr view <n> --json state,mergeable,reviewDecision,statusCheckRollup
 gh pr create --fill --base main
-gh pr create --fill-first --base main                      # first commit msg only
 gh pr create --title "Fix X" --body "Closes #12" --base main
 gh pr diff <n>
 gh pr merge <n> --squash --delete-branch
-gh pr merge <n> --auto --squash                             # auto-merge when CI passes
 gh pr revert <n>
 gh pr checks <n>
-gh pr ready <n>                                              # mark draft as ready
+gh pr ready <n>
 
-# Issues
-gh issue list --state open --assignee @me -L 20 --json number,title,state,labels
-gh issue create --title "Bug: ..." --body "Steps..." --label bug
-gh issue close <n> --reason completed
+# Discussions (v2.94.0 preview)
+gh discussion list --state open --json number,title,category
+gh discussion create --title "..." --body "..." --category "..."
+gh discussion comment <n> --body "..."
 
 # Actions
 gh run list --workflow ci.yml --branch main --limit 20
@@ -368,27 +416,19 @@ gh run rerun <id> --failed
 
 # Releases
 gh release create v1.2.0 --generate-notes
-gh release list -L 5
+gh release download <tag>                                   # no auth for public repos
 
 # Search
 gh search prs --author @me --state open --label bug --repo OWNER/REPO
 gh search issues --repo OWNER/REPO --search "error in:title"
 gh search repos --language go --stars ">5000"
 
-# Gists
-gh gist create file.txt -d "description"
-gh gist list -L 20
+# Skills & file reading
+gh skill list --json name,description
+gh skill install owner/repo --agent opencode
+gh repo read-file README.md --repo cli/cli
 
-# Secrets / Variables
-gh secret set TOKEN -b "value" -R owner/repo
-gh variable set URL -b "https://..." -R owner/repo
-
-# Projects
-gh project item-add <number> --url <issue-url>
-gh project field-create <number> --name "Priority" --data-type SINGLE_SELECT \
-  --single-select-options "High,Medium,Low"
-
-# Config
+# Auth & config
 gh config set git_protocol ssh
 gh auth status --json
 ```

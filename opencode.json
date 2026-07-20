@@ -63,6 +63,7 @@
     "agent": {
         "explore": {
             "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro",
             "mode": "subagent"
         },
         "build": {
@@ -73,16 +74,35 @@
             "model": "deepseek/deepseek-v4-pro"
         },
         "general": {
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro"
         },
         "title": {
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro"
         },
         "summary": {
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro"
         },
         "compaction": {
-            "model": "deepseek/deepseek-v4-flash"
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro"
+        },
+        "librarian": {
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro",
+            "mode": "subagent"
+        },
+        "light-orchestrator": {
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro",
+            "mode": "subagent"
+        },
+        "generalist": {
+            "model": "deepseek/deepseek-v4-flash",
+            "fallback": "deepseek/deepseek-v4-pro",
+            "mode": "subagent"
         }
     },
     "tool_output": {
@@ -221,6 +241,11 @@
             "description": "Manage agent skills — search, preview, install, update, or publish",
             "agent": "light-orchestrator",
             "template": "Load the gh-skill skill. The user wants to manage agent skills. Use `gh skill` commands to search, preview, install, update, list, or publish skills. For installs targeting opencode, always pass `--agent opencode`. For local development, prefer `--scope project`. Pin to a ref for reproducibility."
+        },
+        "verify-plan": {
+            "description": "Plan verification before implementation — choose the narrowest proof path",
+            "agent": "deep-worker",
+            "template": "Load the verification-planning skill. Before implementing the requested change, plan the narrowest verification path: what check will prove this is correct, and what observable condition means 'done'."
         }
     }
 }

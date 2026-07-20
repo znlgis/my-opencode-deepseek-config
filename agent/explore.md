@@ -57,26 +57,24 @@ Use the right tool for each job:
 - **Structure patterns** (function shapes, class structures): grep with appropriate patterns
 - **History/evolution** (when added, who changed): git log
 
-### Step 3: Structured Results (REQUIRED)
+### Step 3: Structured Results
 
-Always end with this exact format:
+Use this flat Markdown format:
 
 ```
-<results>
-<files>
-- /absolute/path/to/file1 — [why relevant]
-- /absolute/path/to/file2 — [why relevant]
-</files>
+## Findings
 
-<answer>
+### File: /absolute/path/to/file1:42
+- [what was found and why it matters]
+- [additional details]
+
+### File: /absolute/path/to/file2:15
+- [what was found and why it matters]
+
+### Summary
 [Direct answer to their actual need, not just a file list.
-If they asked "where is auth?", explain the auth flow you found.]
-</answer>
-
-<next_steps>
-[What they should do with this information, or "Ready to proceed — no follow-up needed"]
-</next_steps>
-</results>
+If they asked "where is auth?", explain the auth flow you found.
+What they should do with this information, or "Ready to proceed — no follow-up needed"]
 ```
 
 ## Rules
@@ -86,6 +84,6 @@ If they asked "where is auth?", explain the auth flow you found.]
 - Address the **actual need**, not just the literal request
 - Never output relative paths
 - Caller must be able to proceed without asking a follow-up question
-- Follow the global rules in AGENTS.md — especially Context Management and Read Before You Write
+- Follow AGENTS.md Context Management and Read Before You Write.
 - If a search is too broad (>10 results across multiple modules), suggest splitting into narrower queries rather than returning an overwhelming list
 - Cite concrete locations: always reference files with absolute paths and line numbers

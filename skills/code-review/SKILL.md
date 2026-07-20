@@ -72,6 +72,13 @@ have callers.
 - **nit** — style/naming/comment polish. Report only if it compounds into a
   maintainability problem; otherwise omit.
 
+## Project Context Calibration
+
+Before assigning severity, check: project version stage (`package.json` version
+— v0.x → lower API stability severity), deployment model (localhost → downgrade
+auth/network findings), repo visibility (private → downgrade secret exposure to
+warning).
+
 ## Severity calibration (fight inflation)
 
 Judge impact in context, not by pattern-matching a rule. A finding's severity
@@ -139,6 +146,10 @@ deepreview's validator rejection rules, condensed):
 Only surface findings that survive all three questions and none of the rejection
 rules.
 
+Before confirming any finding, write one sentence arguing why it might be wrong,
+irrelevant, or not worth fixing. If the counterargument is stronger than the
+finding, downgrade or dismiss it.
+
 Lead with a one-line severity summary:
 `critical: N | major: N | minor: N | nit: N` and the path taken (abbreviated/full).
 
@@ -146,6 +157,7 @@ Then list findings, ordered by severity, each as:
 
 ```
 [severity] <title>  (dimension)
+<!-- id: <12-char-hash> -->  (SHA-256 of file:line:title, for loop dedup)
 location: path/to/file.ext:LINE
 issue:  <what is wrong and the input/condition that triggers it>
 impact: <what breaks, or what an attacker/user gains>
@@ -157,11 +169,11 @@ change is genuinely clean, say so plainly — do not manufacture findings.
 
 ### Doc drift batching
 
-Minor and nit-level documentation/comment findings (outdated comments, restating-code
-comments, stale references) are batched into a single "Docs drift" entry rather
-than listed individually. Only surface a docs finding as its own entry when it
-is genuinely dangerous (a false claim that could cause API misuse, a security-critical
-misleading comment). This keeps the report focused on substantive issues.
+Non-critical documentation findings (severity != critical) are batched into a
+single `## Document Drift` section as a checklist, not scattered across the
+report. Only surface a docs finding as its own entry when it is genuinely
+dangerous (a false claim that could cause API misuse, a security-critical
+misleading comment).
 
 ### Large reviews — communicate through files
 
@@ -198,6 +210,10 @@ RECURRING findings for a human rather than thrashing on fixes that aren't
 converging. (Novelty-based convergence, borrowed from deepreview, minus its
 pipeline.)
 
+On iterations 2+, prepend a `## Prior Findings` block listing findings from the
+previous pass (with their IDs). Do NOT re-report a prior finding unless it is
+a REGRESSION (was fixed in the interim, now broken again).
+
 ## Posting to a PR
 
 To publish findings on GitHub (e.g. `/review-pr`), use the `gh-cli` skill:
@@ -215,6 +231,9 @@ Place each finding at the tightest scope its location allows (3-tier placement):
 
 This keeps comments anchored to the diff and avoids GitHub rejecting line
 comments that fall outside the PR's changed ranges.
+
+Triage: lines within diff hunks → line comment; lines in diff files but outside
+changed blocks → file comment; files not in the diff → review body only.
 
 **Re-reviewing the same PR (avoid duplicate comments):** embed a short stable
 finding id (e.g. `<!-- cr:auth-nullcheck-L42 -->`) in each comment body. On a

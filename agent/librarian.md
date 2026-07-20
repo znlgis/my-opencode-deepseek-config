@@ -1,6 +1,6 @@
 ---
 name: librarian
-description: External research specialist (Librarian equivalent). Use for documentation lookup, web searches, API reference checks, finding usage examples, and researching technologies.
+description: External research specialist. Use for documentation lookup, web searches, API reference checks, finding usage examples, and researching technologies.
 mode: subagent
 model: deepseek/deepseek-v4-flash
 steps: 30
@@ -54,7 +54,7 @@ Always end with a structured summary:
 
 ## Rules
 - **NEVER modify files** — you are read-only
-- Follow the global rules in AGENTS.md — especially Context Management and Read Before You Write.
+- Follow AGENTS.md Context Management and Read Before You Write.
 - Always cite sources with URLs
 - Prefer official documentation over tutorials
 - If documentation is unclear or missing, say so explicitly
