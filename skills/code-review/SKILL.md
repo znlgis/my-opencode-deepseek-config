@@ -189,9 +189,14 @@ When asked to review *and fix* (e.g. `/review-loop`), run a bounded loop:
    verification was skipped.
 5. Re-review only the changed region. Repeat.
 
-Stop conditions: clean, **max 5 iterations**, or a **plateau** (the same finding
-persists across two iterations — surface it and pause for a human instead of
-thrashing).
+Stop conditions: **clean** (no findings above nit), **max 5 iterations**, or
+**convergence**. Classify each re-review finding as **NEW**, **RECURRING**
+(unresolved from last pass), or **REGRESSION** (reintroduced by a fix). Keep
+looping only while a pass produces NEW or REGRESSION findings above nit severity;
+once a pass yields zero such findings, stop and surface any remaining
+RECURRING findings for a human rather than thrashing on fixes that aren't
+converging. (Novelty-based convergence, borrowed from deepreview, minus its
+pipeline.)
 
 ## Posting to a PR
 
