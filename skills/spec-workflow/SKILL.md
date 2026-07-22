@@ -110,6 +110,11 @@ security/performance/migration complexity. Sections: Context · Goals/Non-Goals 
 Decisions (with alternatives considered) · Risks/Trade-offs · Migration Plan ·
 Open Questions. Focus on architecture, not line-by-line code.
 
+**Open Questions** — problems the design intentionally defers. Each entry names
+what is unknown, why it can wait, and what would trigger revisiting it. If an
+open question would change the specs, approach, or task breakdown, resolve it
+now (ask the user) — do not guess and defer.
+
 ## Writing spec files
 
 Specs define WHAT the system does and are testable. Each scenario is a potential
@@ -160,9 +165,48 @@ OpenSpec's `/opsx:update` equivalent and the disciplined form of the "jump back
 and edit an earlier artifact" philosophy above — prefer it over silently
 diverging from a stale plan. Re-run `apply` once the artifacts are current.
 
+## Action: verify (before archive)
+
+Before archiving, confirm the change is actually complete. This catches half-done
+work and spec-implementation drift before it becomes the source of truth:
+
+1. **Task completion**: every checkbox in `tasks.md` is `[x]`. If any are
+   unchecked, stop — the change is not complete. Do not archive with open tasks.
+2. **Spec coverage**: for each `## ADDED`/`## MODIFIED` requirement in the delta
+   spec, can you point to the code that fulfills it? If a requirement has no
+   corresponding implementation, flag it.
+3. **Consistency**: do the proposal's "What Changes" claims match the actual
+   implementation? If the implementation diverged from the spec, update the
+   artifacts (use the `update` action) before continuing.
+
+Report findings in three tiers: **CRITICAL** (must fix before archive — open
+tasks, missing implementation), **WARNING** (spec-implementation mismatch that
+needs an artifact update), **SUGGESTION** (untracked improvements worth noting).
+
+Do not block archive for WARNING/SUGGESTION — just surface them so the human can
+decide. CRITICAL means archive is not safe yet.
+
+## Action: update vs new — decision framework
+
+When you already have an in-flight change and scope shifts, decide: update the
+existing change or create a new one?
+
+**Update the existing change when:**
+- The intent is the same (same problem, same goal), only the approach changed
+- Over 50% of the scope overlaps with the current change
+- The current change cannot be considered "done" independently
+
+**Create a new change when:**
+- The intent has fundamentally changed (different problem, different goal)
+- The scope has exploded beyond the original proposal (3x+ tasks)
+- The current change could be archived as-is and stand on its own
+
+Think of it like git branches: same feature → continue committing; new feature →
+new branch.
+
 ## Action: archive
 
-When all tasks are done and merged:
+After verify passes (no CRITICAL findings), when all tasks are done and merged:
 
 1. **Merge delta specs into the source of truth.** For each delta spec file under
    `changes/<change-id>/specs/<capability>/spec.md`:

@@ -39,7 +39,7 @@ Essential environment variables for agent-driven scripting:
 | `GH_FORCE_TTY=1` | Force colored/formatted output even when piped |
 | `NO_COLOR=1` | Strip ANSI color from output |
 | `GH_DEBUG=api` | Log HTTP request/response for debugging |
-| `GH_TELEMETRY=0` | Disable telemetry logging |
+| `GH_TELEMETRY=0` | Disable telemetry (opt-out; default enabled since v2.91.0). Use `gh telemetry` to manage. |
 
 Token/auth: `GH_TOKEN` or `GITHUB_TOKEN` for non-interactive use. `@me` resolves to the authenticated user: `--assignee @me`, `--author @me`, `--owner @me`. Use `gh auth status --json` to verify the active session.
 
@@ -259,6 +259,7 @@ gh secret set SECRET_NAME < secret.txt -R owner/repo       # from file
 gh secret set SECRET_NAME -b "$(cmd)" -R owner/repo        # from command output
 gh secret set SECRET_NAME -b "val" --org org                # org-level
 gh secret set SECRET_NAME -b "val" --env production -R owner/repo  # env-level
+gh secret set AGENT_SECRET -b "val" --agent <agent-id>      # Copilot agent secret (v2.93.0+)
 gh secret list -R owner/repo                               # list names (not values)
 gh secret remove SECRET_NAME -R owner/repo
 
@@ -324,7 +325,9 @@ See the `gh-skill` skill for the full workflow.
 gh skill list --json name,description           # discover available skills
 gh skill install owner/repo                     # install a specific skill
 gh skill install owner/repo --agent opencode    # install with agent binding (opencode, codex, antigravity, etc.)
-gh skill install --all                          # install all matching skills
+gh skill install --all                          # install all matching skills (v2.94.0+)
+gh skill install --allow-hidden-dirs            # discover skills in .claude/skills/ etc (v2.91.0+)
+gh skill install --upstream                     # force upstream when repo re-publishes a skill (v2.91.0+)
 gh skill install --from-local ./local-repo      # install from a local directory
 gh skill uninstall owner/repo                   # remove an installed skill
 gh skill publish                                # publish a new skill from cwd

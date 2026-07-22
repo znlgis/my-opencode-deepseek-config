@@ -223,3 +223,17 @@ Before claiming any task is complete:
    functions/types
 3. If the project has tests, run them; if not, state that tests were not available
 4. Check that you haven't introduced unused imports, variables, or parameters
+
+## Evidence Discipline
+
+Never claim "done" without proof. Before reporting completion, produce at least
+one verifiable piece of evidence that the task was actually accomplished:
+
+- A test that passes, a build that succeeds, a lint check that's clean
+- An end-to-end read of every modified file confirming correctness
+- A grep result showing no broken callers
+- If no automated checks exist, state explicitly what manual verification you
+  performed and what you observed
+
+Evidence precedes assertion. If you cannot produce evidence, you are not done —
+state what remains and what blocker prevents verification.
