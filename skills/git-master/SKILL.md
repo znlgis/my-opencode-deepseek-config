@@ -10,8 +10,7 @@ metadata:
 
 # Git Master
 
-Advanced Git patterns for when the basics aren't enough. Borrowed from
-oh-my-openagent's `git-master` shared skill, adapted for pure prompt use.
+Advanced Git patterns for when the basics aren't enough.
 
 ## When to use me
 

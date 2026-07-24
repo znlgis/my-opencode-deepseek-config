@@ -12,8 +12,7 @@ metadata:
 
 Improve code readability and reduce cognitive load without altering behavior.
 This is not a general refactor — it's a focused, safety-first simplification
-discipline adapted from oh-my-opencode-slim's `simplify` skill (originally
-inspired by Addy Osmani's approach).
+discipline.
 
 ## Core rule
 

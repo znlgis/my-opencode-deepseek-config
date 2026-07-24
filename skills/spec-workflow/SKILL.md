@@ -59,7 +59,7 @@ artifact.
 ## Action: explore (optional, before propose)
 
 A no-stakes thinking pass **before** committing to a proposal — OpenSpec's
-`/opsx:explore` equivalent. Use it when the direction is still fuzzy: research the
+`/explore` command. Use it when the direction is still fuzzy: research the
 current behavior, sketch options and trade-offs, and surface open questions,
 *without* creating `changes/<change-id>/` yet. Keep it in chat (or a scratch note
 under `openspec/explorations/<topic>.md` if it needs to persist). The goal is to
@@ -161,7 +161,7 @@ Revise the planning artifacts of an in-flight change **in place** — without
 touching implementation. Use it when scope shifts, a requirement is clarified, or
 review feedback lands: edit `proposal.md`/`design.md`/`tasks.md`/delta specs to
 match reality, keep task ids stable where possible, and note what moved. This is
-OpenSpec's `/opsx:update` equivalent and the disciplined form of the "jump back
+the `update` action — the disciplined form of the "jump back
 and edit an earlier artifact" philosophy above — prefer it over silently
 diverging from a stale plan. Re-run `apply` once the artifacts are current.
 

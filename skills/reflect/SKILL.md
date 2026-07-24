@@ -15,8 +15,6 @@ enough sessions, patterns emerge: the orchestrator routes wrong, a skill is
 incomplete, a rule is ignored, a workflow is missing. Reflect surfaces these and
 proposes minimal fixes.
 
-Adapted from oh-my-opencode-slim's reflect skill.
-
 ## When to use
 
 - The user says "reflect on our sessions" or "review the config"

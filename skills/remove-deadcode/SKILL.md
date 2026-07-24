@@ -15,8 +15,7 @@ is simple: **prove it's dead before you delete it.** A confident-looking unused
 symbol is often reached through a barrel export, a test, reflection, or a
 framework entry point. Verify first.
 
-Borrowed and simplified from the oh-my-openagent `remove-deadcode` workflow,
-adapted for pure prompt use (no plugin or team-mode required).
+Pure prompt-driven dead code removal — no plugin or team-mode required.
 
 ## Phase 1: Scan (parallel)
 

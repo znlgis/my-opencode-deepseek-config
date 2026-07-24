@@ -63,7 +63,7 @@ The agent directory splits across two models with different strengths:
 
 ### Selection Principles
 
-- **Flash-first for defined work.** If the task is well-defined and a flash agent can handle it (explore, librarian, light-orchestrator), route there first. Only escalate to pro when flash is out of its depth.
+- **Flash-first for defined work.** If the task is well-defined and a flash agent can handle it, route there first. Only escalate to pro when flash is out of its depth.
 - **Pro for reasoning, never for lookup.** Never waste pro on "find where X is" or "look up Y docs" — those are explore/librarian territory.
 - **Borderline tasks: prefer flash.** When a task sits between `light-orchestrator` and `deep-worker`, try flash first. If it escalates, pro takes over with full context.
 - **Pro is the escalation path, not the default.** Flash agents should handle everything they're capable of. Pro agents handle what only they can.
@@ -73,7 +73,7 @@ The agent directory splits across two models with different strengths:
 
 | Agent | Model | Tier | For |
 |-------|-------|------|-----|
-| `planner` | deepseek/deepseek-v4-pro | Pro | Strategic planning, writing specs, architecture design, project decomposition |
+| `planner` | deepseek/deepseek-v4-pro | Pro | Strategic planning, architecture design, project decomposition, decision support |
 | `deep-worker` | deepseek/deepseek-v4-pro | Pro | Heavy implementation, multi-file changes, complex algorithms, debugging, new features |
 | `oracle` | deepseek/deepseek-v4-pro | Pro | Code analysis, root cause debugging, reading and interpreting diffs, deep code understanding |
 | `reviewer` | deepseek/deepseek-v4-pro | Pro | Code review, finding bugs, suggesting improvements, quality assessment |
@@ -82,7 +82,6 @@ The agent directory splits across two models with different strengths:
 | `explore` | deepseek/deepseek-v4-flash | Flash | Fast codebase scanning, grep, file search, finding definitions |
 | `librarian` | deepseek/deepseek-v4-flash | Flash | External research, documentation lookup, web search, API reference |
 | `light-orchestrator` | deepseek/deepseek-v4-flash | Flash | Simple tasks, single-file changes, typo fixes, config tweaks, small additions |
-| `generalist` | deepseek/deepseek-v4-flash | Flash | Miscellaneous general-purpose tasks, unclear requests |
 
 Flash agents are ~half the cost of Pro — send them all defined search/lookup/small-edit work. Pro agents cost the same as answering yourself but reason far better — reserve them for planning, analysis, review, and heavy implementation.
 

@@ -12,7 +12,7 @@ metadata:
 
 A review-gated, phased execution discipline for complex tasks. It prevents
 sprawl by forcing structure: you cannot proceed to implementation until the
-review gate passes. Adapted from oh-my-opencode-slim's deepwork workflow.
+review gate passes.
 
 ## When to use
 

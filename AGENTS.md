@@ -19,8 +19,7 @@ overlap, follow the stricter instruction.
 5. **Respect role boundaries.** Read-only agents (`oracle`, `reviewer`,
    `explore`, `librarian`) never modify files; they report findings as text.
 6. **Don't create files unless asked.** Never proactively create README files,
-   documentation, or any new file without explicit user request. The user asked
-   for code changes, not project scaffolding.
+   documentation, or any new file without explicit user request.
 7. **Right-size the model to the task.** Prefer flash for search, lookup, and
    simple edits; reserve pro for reasoning and heavy implementation. When
    borderline, prefer flash; escalate to pro only when flash is out of its depth.
@@ -37,8 +36,6 @@ agents should detect the OS language from the environment and use it for
 all user-facing output — explanations, summaries, questions, and findings.
 On a zh-CN Windows system, reply in Chinese. On an en-US system, reply in
 English. Never force English unless the user explicitly requests it.
-Subagents that return text to the orchestrator should also use the OS
-language so the orchestrator can pass it through unchanged.
 
 ## Constraints (this repository)
 
@@ -69,6 +66,9 @@ task half-done.
   it. Carry forward the plan and findings, not the raw exploration transcript.
 - **One topic per subagent.** Don't ask a single subagent to do research AND
   implementation — split them.
+- **Cache-aware prompting.** Prefer stable, prefix-matched prompt structures so
+  OpenCode's cache can reuse compute across sessions. Avoid injecting dynamic
+  content (timestamps, random IDs) at the front of prompts.
 
 ## Token Efficiency
 
@@ -105,7 +105,7 @@ v4-pro agents (planner, deep-worker, oracle, reviewer, ui-builder, consultant):
 Reason through trade-offs, not just lookup. Analyze deeply, produce carefully.
 Never waste pro on search or simple edits.
 
-v4-flash agents (explore, librarian, light-orchestrator, generalist):
+v4-flash agents (explore, librarian, light-orchestrator):
 Fast, cheap, directive. Get in, do the defined task, get out. Stop and escalate
 if the task needs deeper reasoning.
 
@@ -175,14 +175,11 @@ These are unconditionally forbidden:
 
 ## Comment Discipline
 
-- No AI boilerplate comments. Never write comments like "Initialize the service", "Set up the handler", "Create a new instance" — the code should speak for itself.
-- Comments explain WHY, not WHAT. If reading the code already tells you what it does, delete the comment.
+- No AI boilerplate comments. Comments explain WHY, not WHAT. If reading the code already tells you what it does, delete the comment.
 - No commented-out code. Remove dead code; git history preserves it.
 - No filler docstrings. Match the project's existing docstring convention; if the project doesn't use docstrings, don't add them.
 
 ## Code Style (when implementing)
-
-These rules apply when writing or modifying code in any language:
 
 - **Prefer `const` over `let`.** Use ternary expressions or early returns instead of reassignment.
 - **Avoid `else` when possible.** Use early returns — they flatten the code and reduce cognitive load.
@@ -199,12 +196,24 @@ These rules apply when writing or modifying code in any language:
 Skills live under `skills/<name>/SKILL.md` and load on demand via the `skill`
 tool. Before reinventing a workflow, check whether a skill covers it:
 
-- `gh-cli` — GitHub CLI (PRs, issues, releases, Actions). · `conventional-commits` — spec commit messages. · `security-review` — audit diff for vulns. · `git-release` — tagged releases with SemVer. · `remove-deadcode` — prune unused code with LSP verify. · `opencode-config` — author this repo's OpenCode config. · `spec-workflow` — spec-driven change loop (explore→propose→apply→archive). · `verify-with-docs` — verify library APIs against current docs before coding. · `git-master` — rebase, squash, fixup, blame, bisect, reflog, worktrees. · `gh-skill` — discover/install/update/publish agent skills. · `codemap` — annotated directory tree for orientation. · `simplify` — behavior-preserving code simplification. · `code-review` — token-frugal multi-dimension review with severity calibration. · `deepwork` — review-gated phased execution for complex tasks. · `reflect` — surface recurring friction, propose minimal config fixes.
+- `gh-cli` — GitHub CLI (PRs, issues, releases, Actions, search, API). · `gh-skill` — discover/install/update/publish agent skills. · `conventional-commits` — spec commit messages. · `security-review` — audit diff for vulns. · `code-review` — token-frugal multi-dimension review with severity calibration. · `git-release` — tagged releases with SemVer. · `remove-deadcode` — prune unused code with LSP verify. · `opencode-config` — author this repo's OpenCode config. · `spec-workflow` — spec-driven change loop (explore→propose→apply→archive). · `verify-with-docs` — verify library APIs against current docs before coding. · `git-master` — rebase, squash, fixup, blame, bisect, reflog, worktrees. · `codemap` — annotated directory tree for orientation. · `simplify` — behavior-preserving code simplification. · `deepwork` — review-gated phased execution for complex tasks. · `reflect` — surface recurring friction, propose minimal config fixes. · `verification-planning` — plan narrowest verification path before implementing.
 
 Prefer loading the relevant skill over guessing. The `superpowers` plugin also
-provides skills (brainstorming, systematic-debugging, TDD, etc.); skill names
-must stay unique across all sources. Match a problem to a superpowers skill
-first, only fall back to raw reasoning when no skill applies.
+provides process-oriented skills — load these **before** any domain-specific
+skill when starting a new task type:
+- `using-superpowers` — auto-loaded, establishes skill-first discipline
+- `brainstorming` — design before code; must invoke BEFORE any implementation
+- `systematic-debugging` — structured root-cause tracing before fixing
+- `test-driven-development` — red-green-refactor cycle
+- `writing-plans` — multi-step implementation plans
+- `executing-plans` — phased plan execution with review checkpoints
+- `verification-before-completion` — evidence-first completion gate
+- Others: `dispatching-parallel-agents`, `finishing-a-development-branch`,
+  `receiving-code-review`, `requesting-code-review`, `subagent-driven-development`,
+  `using-git-worktrees`, `writing-skills`
+
+Skill names must stay unique across all sources. Match a problem to a superpowers
+skill first, fall back to raw reasoning only when no skill applies.
 
 ## Self-Verification
 
@@ -237,3 +246,47 @@ one verifiable piece of evidence that the task was actually accomplished:
 
 Evidence precedes assertion. If you cannot produce evidence, you are not done —
 state what remains and what blocker prevents verification.
+
+## Plugins
+
+Two plugins extend this configuration's capabilities. Understand how they work
+so you can leverage them optimally.
+
+### superpowers (obra/superpowers)
+
+Provides 14 process-oriented skills listed above. The `using-superpowers`
+bootstrap is auto-injected into the first user message of every session — you
+do not need to load it manually. The bootstrap enforces skill-first discipline:
+**invoke the relevant skill before any response**, including before asking
+clarifying questions.
+
+Key rules:
+- If a skill applies, you must use it. No rationalization.
+- Process skills (brainstorming, systematic-debugging) come before domain skills.
+- Subagent sessions ignore the bootstrap — only the orchestrator follows it.
+- The `chat.messages.transform` hook fires on every step but is module-cached;
+  this is normal and not a failure signal.
+
+### DCP (opencode-dcp v3.1.14)
+
+Autonomous context pruning via a `compress` tool and automatic cleanup strategies
+(deduplication, error purge). DCP replaces the orchestrator's native `compress`
+tool and is configured in `~/.config/opencode/dcp.jsonc`.
+
+Key behaviors to know:
+- **Compress is smarter than native compaction.** Use it when a task phase
+  closes — it creates high-fidelity summaries rather than truncating.
+- **DCP only runs on the orchestrator session** (`allowSubAgents: false`).
+  Subagent results are preserved as task outputs in the orchestrator's context.
+- **Thresholds tuned for DeepSeek V4 (128K):** compression nudges start at ~45K
+  tokens, become strong at ~85K. If the orchestrator sees a nudge, compress.
+- **Deduplication:** duplicate tool calls (same tool + same args) are collapsed
+  to the most recent output. If you need to re-run a search with the same args,
+  use a slightly different query.
+- **Protected tools** (`task`, `skill`, `todowrite`, `todoread`) outputs are
+  preserved across compression — subagent results and todo state survive pruning.
+- **Summary buffer:** compressed summaries don't count against the context limit,
+  so the orchestrator can accumulate knowledge without hitting the ceiling.
+
+Native OpenCode compaction (`compaction.auto: true`) remains as a safety net
+behind DCP — it triggers only if the context window fills despite active pruning.

@@ -14,8 +14,6 @@ Generate a compact, annotated directory tree that helps any agent quickly
 understand what a codebase contains and where key things live. One well-crafted
 codemap can replace dozens of exploratory globs and reads across a session.
 
-Inspired by oh-my-opencode-slim's `codemap` skill, adapted for pure prompt use.
-
 ## When to use me
 
 - First time entering a new repository or unfamiliar subdirectory
