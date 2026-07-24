@@ -1,0 +1,105 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Opencode-DCP/opencode-dynamic-context-pruning/master/dcp.schema.json",
+  "enabled": true,
+  "autoUpdate": true,
+  "debug": false,
+
+  // 减少通知噪音：仅显示压缩摘要，不在聊天中展开详情
+  "pruneNotification": "minimal",
+  "pruneNotificationType": "toast",
+
+  // 手动模式关闭：允许模型自主决定何时压缩（而非等待 /dcp 命令）
+  "manualMode": {
+    "enabled": false,
+    "automaticStrategies": true
+  },
+
+  // 轮次保护：关闭（让 DCP 自由裁剪，不做保护缓冲）
+  "turnProtection": {
+    "enabled": false,
+    "turns": 4
+  },
+
+  "commands": {
+    "enabled": true,
+    "protectedTools": []
+  },
+
+  "experimental": {
+    // 子代理 session 不启用 DCP（短生命周期，且 orchestrator 已管理上层上下文）
+    "allowSubAgents": false,
+    "customPrompts": false
+  },
+
+  // 受保护文件模式：不裁剪这些文件的操作
+  "protectedFilePatterns": [
+    "**/opencode.json",
+    "**/AGENTS.md",
+    "**/*.env*",
+    "**/.opencode/**"
+  ],
+
+  // ══════════════════════════════════════════════════════════════
+  // 压缩策略 — 专为 DeepSeek V4 (128K context) 调优
+  // 核心理念：主动压缩 > 被动溢出，让 DCP 而非原生 compaction 管理上下文
+  // ══════════════════════════════════════════════════════════════
+  "compress": {
+    // range 模式：将连续对话范围压缩为高保真摘要
+    "mode": "range",
+    "permission": "allow",
+    "showCompression": false,
+    // 摘要缓冲：压缩摘要 token 不计入 maxContextLimit，充分利用窗口
+    "summaryBuffer": true,
+
+    // 上下文阈值（DeepSeek V4 128K 窗口调优）：
+    // 85K 开始强力推压缩（留 43K 缓冲供新内容 + 摘要）
+    "maxContextLimit": 85000,
+    // 45K 开始温和提醒模型可压缩（提前感知上下文压力）
+    "minContextLimit": 45000,
+
+    // 每 3 次 LLM 请求提醒一次压缩（比默认 5 更频繁，适配 token 效率目标）
+    "nudgeFrequency": 3,
+    // 从用户消息后第 12 条消息开始注入压缩提醒（比默认 15 更早）
+    "iterationNudgeThreshold": 12,
+    // 强力推：模型被明确要求优先考虑压缩
+    "nudgeForce": "strong",
+
+    // 压缩时保留以下工具的输出（避免关键信息丢失）
+    "protectedTools": [
+      "task",
+      "skill",
+      "todowrite",
+      "todoread"
+    ],
+
+    // <protect> 标签（关闭，我们暂无此使用模式）
+    "protectTags": false,
+    // 保护用户消息（关闭：允许压缩大型日志粘贴等场景）
+    "protectUserMessages": false
+  },
+
+  // 自动裁剪策略
+  "strategies": {
+    // 重复工具调用去重：相同 tool+args 只保留最新输出
+    "deduplication": {
+      "enabled": true,
+      "protectedTools": [
+        "task",
+        "skill",
+        "todowrite",
+        "todoread"
+      ]
+    },
+    // 错误工具输入裁剪：3 轮后移除错误工具调用的输入体（保留错误信息）
+    "purgeErrors": {
+      "enabled": true,
+      "turns": 3,
+      "protectedTools": [
+        "task",
+        "skill",
+        "todowrite",
+        "todoread"
+      ]
+    }
+  }
+}
