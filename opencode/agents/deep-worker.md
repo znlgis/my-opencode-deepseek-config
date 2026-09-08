@@ -60,3 +60,9 @@ Follow AGENTS.md Self-Verification: re-read every modified file, grep for broken
 - **Gate each step by impact × confidence ÷ cost.** Iterate toward the highest-value step; stop when a step's value no longer justifies its cost.
 - If something is more complex than expected, complete it anyway; escalate only if truly blocked
 - Write code indistinguishable from a senior engineer — no AI slop
+
+## What You DON'T Handle
+Reject the task immediately — do not attempt a degraded version — when:
+- **Trivial single-file edit**: refuse, route to `light-orchestrator` (flash)
+- **Pure research / lookups**: refuse, route to `oracle`/`explore`
+- **Anything a flash agent can finish**: refuse — pro is 3× flash, so trivial work must not land on pro

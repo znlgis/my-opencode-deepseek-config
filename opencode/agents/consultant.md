@@ -10,7 +10,6 @@ permission:
     "*": "deny"
   skills:
     "*": "deny"
-    shared-language: "allow"
     domain-modeling: "allow"
 ---
 

@@ -1,13 +1,15 @@
 ---
 name: domain-modeling
-description: Use when a project's domain language is fuzzy, terms are used inconsistently, or you need to decide whether to record an architectural decision. Maintains a CONTEXT.md glossary and offers ADRs only when warranted.
+description: Use when a project's domain language is fuzzy, terms are used inconsistently, terminology is drifting, the same concepts keep being re-explained across sessions, or you need to decide whether to record an architectural decision. Owns the CONTEXT.md glossary (a shared vocabulary of domain terms) and offers ADRs only when warranted.
 ---
 
 # Domain Modeling
 
-An active discipline for keeping a project's domain language precise. Where the
-`shared-language` skill describes the glossary, this skill is the practice of
-maintaining it during real work.
+An active discipline for keeping a project's domain language precise. It owns
+the `CONTEXT.md` glossary — a shared vocabulary of domain terms — and decides
+when a decision warrants an ADR. Trigger it when terms are used inconsistently,
+terminology drifts, or the same concept keeps being re-explained across
+sessions (each re-explanation wastes tokens that a one-sentence entry replaces).
 
 ## Layout
 
@@ -29,6 +31,9 @@ maintaining it during real work.
   implementation is wrong — fix the entry or the code.
 - **Update `CONTEXT.md` inline**, as you discover the sharper meaning. Never
   batch glossary edits at the end of a session.
+- **Pin repeated explanations.** When the same concept needs more than two
+  sentences across messages or sessions, add a one-sentence `CONTEXT.md` entry
+  so it never needs re-explaining.
 
 ## CONTEXT.md rules
 
@@ -46,5 +51,5 @@ Offer an architectural decision record only when all three hold:
 2. It would be surprising without context.
 3. There was a real trade-off between viable options.
 
-If any is missing, a glossary entry or a code comment suffices — do not create
-an ADR for routine choices.
+If any is false, record the decision as a `CONTEXT.md` glossary entry instead —
+do not create an ADR for routine choices.

@@ -13,7 +13,7 @@
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
 - Context compression: built-in compaction (opencode.jsonc) handles auto-triggering + pruning of stale tool output; DCP (dcp.jsonc) handles proactive dedup + compression thresholds — the two complement each other
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
-- Skills: **26** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
+- Skills: **25** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
 - Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
 ## DeepSeek Model Configuration
@@ -146,7 +146,7 @@ This copies the config files under `opencode/` into `~/.config/opencode/` (exclu
 
 ## Model Division of Labor
 
-This repo strictly divides work within the DeepSeek V4 model family — no other models are introduced:
+This repo strictly divides work within the DeepSeek V4 model family — no other models are introduced. The division is **3 models × per-agent thinking strength (thinking tier)**, not a 4-model matrix:
 
 | Model | Purpose |
 | --- | --- |
@@ -154,12 +154,25 @@ This repo strictly divides work within the DeepSeek V4 model family — no other
 | `deepseek/deepseek-v4-flash` | Orchestration/routing, planning, routine implementation, consultation, UI, exploration, external lookup, light edits, title/summary/compaction |
 | `deepseek/deepseek-v4-flash-vision-exp` | Multimodal: understanding and describing images, screenshots, charts, and UI mockups |
 
+Thinking strength is controlled by **`reasoning_effort`** — a **request-level** thinking-strength control (`low`/`high`/`max`), **not a model id** — set per-agent via frontmatter `options` (camelCase `reasoningEffort`, deep-merged over `model.options`), never by changing `model:`. The 3-model matrix stays intact; the same model can run at different thinking strengths:
+
+| Tier | Model × thinking | Typical agents |
+| --- | --- | --- |
+| Trivial | flash · thinking off | `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` |
+| Routine | flash · thinking on + `reasoningEffort: low` | `planner`/`light-orchestrator` |
+| Deep | pro · default high | `deep-worker`/`oracle`/`reviewer` |
+
+Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivial work never lands on pro.
+
 ### Routing Strategy
 
-- **Flash first**: well-defined tasks — routing, search, planning, routine implementation, consultation, UI, exploration — go to flash agents first
+- **Trivial → flash off**: well-defined light tasks — search, lookup, consultation, UI, exploration, doc retrieval — go to flash agents with thinking off (cheapest)
+- **Routine-nontrivial → flash low**: planning and routine multi-file work use flash + `reasoningEffort: low`
+- **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, code review, heavy multi-file implementation — pro only
 - **Vision owns multimodal**: when visual input (images, screenshots, charts) is detected, route to the `vision` agent (flash-vision model)
-- **Pro reserved for reasoning**: deep reasoning, root-cause analysis, code review, heavy multi-file implementation — pro only
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
+
+Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle).
 
 ## Agent Structure
 
@@ -184,11 +197,13 @@ This repo strictly divides work within the DeepSeek V4 model family — no other
 | `light-orchestrator` | v4-flash | read-write | Lightweight tasks, single-file edits |
 | `vision` | v4-flash-vision-exp | read-write | Multimodal: images/screenshots/charts/UI mockups |
 
-> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator.
+> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro is 3× flash).
 >
-> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review-pr` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
+> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
-> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`; `consultant` → `shared-language`/`domain-modeling`; `ui-builder`/`vision` have none.
+> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`; `consultant` → `domain-modeling`; `ui-builder`/`vision` have none.
+>
+> **Thinking tiers**: `reasoning_effort` is a request-level thinking-strength control (`low`/`high`/`max`) set per-agent via frontmatter `options` — not a model id. `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking off (cheapest); `planner`/`light-orchestrator` = flash · thinking on + `reasoningEffort: low`; `deep-worker`/`oracle`/`reviewer` = pro · default high.
 
 ## Quick Commands
 
@@ -200,8 +215,7 @@ This repo strictly divides work within the DeepSeek V4 model family — no other
 | `/quick` | `light-orchestrator` | Lightweight tasks, single-file edits |
 | `/ui` | `ui-builder` | Frontend/UI work |
 | `/vision` | `vision` | Multimodal: image/screenshot/chart understanding |
-| `/review` | `reviewer` (code-review) | Lightweight single-pass review + evidence gating |
-| `/review-pr` | `reviewer` (code-review + gh-cli) | Review a PR and post the result to GitHub |
+| `/review` | `reviewer` (code-review + gh-cli) | Local-diff or PR review: with a PR ref/URL, posts to GitHub (event=COMMENT); otherwise reviews the local diff and reports by severity; scope-first gate (>500 effective lines or trivial → report a scoped plan and stop) |
 | `/plan` | `planner` | Create plans and technical proposals |
 | `/oracle` | `oracle` | Deep analysis, root-cause tracing |
 
@@ -247,7 +261,6 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `reflect` | Continuous improvement: surface friction → propose minimal, maintainable fixes |
 | `remove-deadcode` | Safely finds and deletes dead code, verified via toolchain/LSP before removal |
 | `security-review` | Pre-merge security review (injection/XSS/SSRF/secrets/deserialization/path traversal); reports, never auto-fixes |
-| `shared-language` | Builds a domain glossary (CONTEXT.md), saving significant tokens |
 | `simplify` | Behavior-preserving code simplification (oracle analyzes → applied) |
 | `spec-workflow` | Lightweight spec-driven change: proposal → delta specs → tasks → update three-question decision tree → verify → archive |
 | `verify-with-docs` | Verifies API docs before coding — retrieval-first, hallucination-proof |
@@ -258,7 +271,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `triage` | Label-based issue triage: pull → classify → apply labels/assignees (gh); routing only, never edits content |
 | `diagnosing-bugs` | Systematic debugging: build a tight red-capable feedback loop BEFORE theorizing → reproduce + minimise → 3-5 falsifiable hypotheses → instrument one variable at a time (`[DEBUG-<hex>]` tagged) → fix at the correct seam + regression test → clean up |
 | `codebase-design` | Architecture vocabulary: module/interface/depth/seam/adapter/leverage/locality, deletion test, depth test — assess whether module boundaries are sound |
-| `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted |
+| `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted; includes the repeated-explanation trigger (pin a term when the same concept keeps being re-explained) |
 | `grill-with-docs` | Composes `grilling` + `domain-modeling`: when requirements are ambiguous AND domain language is fuzzy, converge intent one question at a time while sharpening the glossary |
 
 ## Repository Structure
@@ -278,11 +291,11 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 Describe your needs in natural language; the Orchestrator analyzes intent and picks the most suitable agent and model to execute.
 
 ```text
-"Help me debug the login API error"     → oracle analyzes root cause → returns diagnostic report
-"Optimize this loop, performance is poor" → oracle analyzes → deep-worker implements optimization
-"Review this PR for me"                 → reviewer performs multi-dimensional review → returns tiered report
-"I want to add an export feature to the user module" → planner drafts plan → deep-worker implements
-"How to use React 19's use() API"       → librarian checks docs → returns signature and examples
+"Help me debug the login API error"     → oracle analyzes root cause → returns diagnostic report   (pro high)
+"Optimize this loop, performance is poor" → oracle analyzes → deep-worker implements optimization  (pro high)
+"Review this PR for me"                 → reviewer performs multi-dimensional review → returns tiered report  (pro high)
+"I want to add an export feature to the user module" → planner drafts plan → deep-worker implements  (flash low → pro high)
+"How to use React 19's use() API"       → librarian checks docs → returns signature and examples  (flash off)
 ```
 
 ### Mode 2: Command Alias Shortcuts
@@ -311,8 +324,8 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 
 **Code review:**
 ```text
-/review-pr   ← review PR + auto-reply on GitHub
-/review      ← lightweight single-pass review
+/review #123   ← PR mode: review PR + post to GitHub (gh-cli, event=COMMENT)
+/review        ← local-diff mode: report by severity (scope-first gate)
 ```
 
 ## Sources

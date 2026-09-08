@@ -153,7 +153,7 @@ orchestrator runs a bounded loop:
 
 ## Posting to a PR
 
-To publish findings (e.g. `/review-pr`), load the `gh-cli` skill — its
+To publish findings (e.g. `/review`), load the `gh-cli` skill — its
 'Reviewing PRs' section is the single source of truth. Never auto-`APPROVE`.
 
 ## Rules

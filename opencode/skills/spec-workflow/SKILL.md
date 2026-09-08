@@ -38,14 +38,19 @@ Create `openspec/changes/<change-id>/` with a proposal, tasks, delta specs, and
 
 - **proposal.md** (1–2 pages, WHY not HOW): `## Why`, `## What Changes` (mark **BREAKING**), `## Capabilities`, `## Impact`, an initially-empty `## Updates`.
 - **tasks.md**: `- [ ]` checkboxes, grouped and ordered by dependency; each task
-  fits one session and is verifiable.
+  fits one session and states its observable done-condition in the checkbox text
+  (the verification that must pass to mark it `[x]`).
 - **design.md**: only if cross-cutting, a new pattern/dependency/data-model, or
   security/performance/migration complexity (Context · Goals/Non-Goals ·
   Decisions · Risks · Migration · Open Questions).
+- **skip_specs** — a pure refactor, tooling, or docs change with no observable
+  behavior change needs no spec contract. Set `skip_specs: true` in
+  `proposal.md` and omit delta specs; the tasks checklist still carries its own
+  done-conditions.
 
 ## Writing spec files
 
-Specs define WHAT the system does and are testable.
+Specs are behavior contracts, not implementation plans — they define WHAT the system does and are testable.
 
 - Requirement header: `### Requirement: <name>` + description using **SHALL/MUST**.
 - Scenario header: `#### Scenario: <name>` — **exactly 4 hashtags**, then WHEN/THEN bullets (3 hashtags or bullet form is silently ignored).

@@ -27,7 +27,11 @@
             "format *": "ask",
             "git push --force*": "ask",
             "git push -f *": "ask",
+            "git push --force-with-lease*": "ask",
             "git reset --hard*": "ask",
+            "git clean -fd*": "ask",
+            "git checkout .*": "ask",
+            "git checkout --*": "ask",
             "git branch -D*": "ask",
             "git stash clear*": "ask",
             "git stash drop*": "ask",
@@ -55,6 +59,13 @@
     // `options.thinking` is a provider passthrough, not a native schema field:
     // OpenCode forwards it verbatim to the DeepSeek API (OpenAI-format thinking
     // toggle — {"type":"enabled"|"disabled"}).
+    // `reasoning_effort` (camelCase `reasoningEffort` in config, lowered to
+    // snake_case in the request body) is a REQUEST-LEVEL thinking-strength
+    // control (low/high/max), NOT a model id. OpenCode does not auto-generate
+    // reasoning-effort variants for DeepSeek, so it must be set manually —
+    // per-AGENT via `agent.options` (deep-merged over `model.options`), never
+    // at the model level. Keeping it off the model id preserves the 3-model
+    // matrix (pro / flash / flash-vision-exp).
     "provider": {
         "deepseek": {
             // `cost` is USD per 1M tokens, off-peak rates effective with the
@@ -180,15 +191,9 @@
             "template": "Read the attached image(s) and describe what you see. Report findings with concrete details (text, layout, colors, positions). If the task requires code changes beyond visual interpretation, escalate to deep-worker."
         },
         "review": {
-            "description": "Route to reviewer for code review",
+            "description": "Route to reviewer for code review (local diff or PR)",
             "agent": "reviewer",
-            "template": "Load the code-review skill. Scope the diff, scale depth to effective size, review it, and report findings by severity. Do not modify code."
-        },
-
-        "review-pr": {
-            "description": "Review a PR and post findings as a pending GitHub review",
-            "agent": "reviewer",
-            "template": "Load the code-review and gh-cli skills. Review the PR diff, then post findings per the gh-cli skill's 'Reviewing PRs' section (pending review, event=COMMENT, never auto-approve). Do not modify code."
+            "template": "Load the code-review skill. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Otherwise scope the local diff and scale depth to its effective size, then review and report findings by severity. Scope-first gate: if the diff is large (>500 effective lines) or trivial, report a scoped plan and stop rather than deep-reviewing. Do not modify code."
         },
         "plan": {
             "description": "Route to planner for strategic planning",

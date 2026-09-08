@@ -8,7 +8,8 @@ description: Safely find and delete dead code — unused files, exports, functio
 Delete code that is provably unreferenced — without breaking anything. The rule
 is simple: **prove it's dead before you delete it.** A confident-looking unused
 symbol is often reached through a barrel export, a test, reflection, or a
-framework entry point. Verify first.
+framework entry point. Verify first. For behavior-preserving complexity
+reduction (simplify without deleting), use the `simplify` skill.
 
 ## Phase 1: Scan (parallel)
 

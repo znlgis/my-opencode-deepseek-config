@@ -6,6 +6,8 @@ description: Behavior-preserving code simplification — reduce complexity witho
 # Simplify
 
 Improve code readability and reduce cognitive load without altering behavior.
+For deleting code that is verified-unreferenced (not simplifying it), use the
+`remove-deadcode` skill.
 
 ## Core rule
 

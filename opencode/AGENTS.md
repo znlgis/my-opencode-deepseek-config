@@ -56,6 +56,19 @@ orchestrator prompt (`agents/orchestrator.md`).
   them out of the head of any payload; append them near the tail where a cache
   miss costs the least.
 
+### Thinking tiers
+
+- **`reasoning_effort`** is a request-level thinking-strength control
+  (`low`/`high`/`max`), NOT a model id — set per-agent via agent frontmatter
+  `options` (camelCase `reasoningEffort`, deep-merged over `model.options`).
+  The 3-model matrix is inviolate.
+- **Tiers:** trivial agents (explore/librarian/consultant/ui-builder) =
+  thinking disabled (cheapest); mid (planner/light-orchestrator) = thinking
+  enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer on pro)
+  = default high.
+- **Routing:** trivial → flash off; routine-but-nontrivial multi-file → flash
+  low; deep/uncertain → pro high.
+
 ## Scope First + Delegate Always
 
 - **Size the scope first.** 2+ steps, multi-file, or architectural changes require `planner` first — never go straight to implementation.
@@ -199,9 +212,5 @@ directly; only high-risk changes warrant the full loop.
 
 ## Plugins
 
-- **superpowers** (obra/superpowers) — process skills (brainstorming,
-  systematic debugging, TDD); its `using-superpowers` bootstrap enforces
-  skill-first discipline: invoke the relevant skill before responding.
-- **DCP** (`@tarquinen/opencode-dcp`) — autonomous context pruning and
-  deduplication. Compress when a task phase closes; subagent results survive
-  pruning. Tuned in `dcp.jsonc`.
+- **superpowers** (obra/superpowers) — process skills (brainstorming, systematic debugging, TDD); skill-first discipline.
+- **DCP** (`@tarquinen/opencode-dcp`) — autonomous context pruning + deduplication; tuned in `dcp.jsonc`.
