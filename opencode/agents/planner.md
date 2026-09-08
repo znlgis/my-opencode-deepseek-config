@@ -12,7 +12,7 @@ color: "#9B59B6"
 permission:
   task:
     "*": "deny"
-  skills:
+  skill:
     "*": "deny"
     spec-workflow: "allow"
     codebase-design: "allow"

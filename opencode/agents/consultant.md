@@ -8,7 +8,7 @@ color: "#3498DB"
 permission:
   task:
     "*": "deny"
-  skills:
+  skill:
     "*": "deny"
     domain-modeling: "allow"
 ---

@@ -13,7 +13,7 @@ permission:
   task:
     "*": "deny"
     oracle: "allow"
-  skills:
+  skill:
     "*": "deny"
     handoff: "allow"
     simplify: "allow"

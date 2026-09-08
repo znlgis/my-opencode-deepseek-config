@@ -33,11 +33,16 @@ if (-not (Test-Path -LiteralPath $Src -PathType Container)) {
     exit 1
 }
 
+# Resolve $Src to its canonical full path. $_.FullName is always absolute, so
+# the substring arithmetic below breaks if $Src was passed as a relative path
+# (or an 8.3 short name).
+$Src = (Resolve-Path -LiteralPath $Src).Path
+
 # Copy every file except node_modules and package manifests: plugin
 # dependencies and lockfiles belong to the global install, not the repo.
 Get-ChildItem -Recurse -File -LiteralPath $Src | Where-Object {
     $rel = $_.FullName.Substring($Src.Length + 1)
-    $rel -notmatch 'node_modules' -and $rel -notmatch 'package(-lock)?\.json$'
+    $rel -notmatch '(^|[\\/])node_modules([\\/]|$)' -and $rel -notmatch '(package(-lock)?\.json|bun\.lockb?|pnpm-lock\.yaml)$'
 } | ForEach-Object {
     $rel = $_.FullName.Substring($Src.Length + 1)
     $target = Join-Path $dst $rel

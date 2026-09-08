@@ -22,6 +22,7 @@
 
 - OpenCode ≥ v1.18.x (the DeepSeek provider is built in)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
+- Background subagents (delegation with `background: true`) require the environment variable `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` (PowerShell: `$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`); when unset, background delegation errors out and should fall back to foreground/serial dispatch
 
 ### Option 1: Interactive TUI Setup (Recommended)
 
@@ -127,7 +128,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 Launch OpenCode and confirm:
 1. `/models` → the current model is `deepseek/deepseek-v4-pro`
-2. The agent list shows all 11 agents, including `orchestrator`, `planner`, and `deep-worker`
+2. The agent list shows all 12 agents, including `orchestrator`, `planner`, and `deep-worker`
 3. Send any request — the Orchestrator analyzes intent and routes automatically
 
 ### Sync
@@ -205,6 +206,9 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 | Agent | Model | Role |
 | --- | --- | --- |
 | `orchestrator` | v4-flash | Default entry point: intent gate + model-aware routing + fallback chains |
+| `solo` | v4-pro (default) | Single-model inline executor: zero delegation, no background helpers, all work done inline in the current session |
+
+> `solo` is the second primary agent: `permission.task: "*": "deny"` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's default model, pro), and no build/plan background helpers (they run on built-in flash and would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
 
 ### Subagents
 
@@ -257,7 +261,7 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 | Command | Agent | Purpose |
 | --- | --- | --- |
 | `/codemap` | `explore` (codemap) | Generate a repository structure map |
-| `/learn` | `light-orchestrator` | Distill non-obvious session learnings into directory-level AGENTS.md files (root/package/feature) |
+| `/learn` | `deep-worker` | Distill non-obvious session learnings into directory-level AGENTS.md files (root/package/feature) |
 | `/simplify` | `light-orchestrator` (simplify) → spawns `oracle` | spawns read-only oracle → light-orchestrator applies the edits |
 | `/rmslop` | `deep-worker` (remove-deadcode) | Clean up dead code and AI slop |
 
@@ -282,12 +286,14 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `resolving-merge-conflicts` | Resolve merge conflicts hunk by hunk: trace original intent, never invent new behavior, never --abort |
 | `handoff` | Compresses a session into a handoff document (path references, no copied content) |
 | `opencode-config` | Writes and maintains OpenCode config in this repo (agents/skills/commands/permissions) |
+| `office-docs` | Read/write Word (.docx) and Excel (.xlsx) by converting to/from plain text or Markdown; pure Python, no MS Office or MCP required |
 | `reflect` | Continuous improvement: surface friction → propose minimal, maintainable fixes |
 | `remove-deadcode` | Safely finds and deletes dead code, verified via toolchain/LSP before removal |
 | `security-review` | Pre-merge security review (injection/XSS/SSRF/secrets/deserialization/path traversal); reports, never auto-fixes |
 | `simplify` | Behavior-preserving code simplification (oracle analyzes → applied) |
 | `spec-workflow` | Lightweight spec-driven change: proposal → delta specs → tasks → update three-question decision tree → verify → archive |
 | `verify-with-docs` | Verifies API docs before coding — retrieval-first, hallucination-proof |
+| `vision-prep` | Preprocesses large images and PDFs before a vision model: tiles oversized images, rasterizes PDF pages (DeepSeek vision downscales to ~800x800 and rejects PDF input) |
 | `grilling` | Requirements-alignment interview: one question at a time, multiple choice preferred, converge on ambiguity before acting |
 | `wait-what` | Restates hard-to-parse user messages in one sentence for confirmation before acting |
 | `writing-for-agents` | Writing leverage for agent-facing docs (skills/AGENTS.md/pointer docs) |

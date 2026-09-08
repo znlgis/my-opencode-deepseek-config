@@ -45,8 +45,10 @@ orchestrator prompt (`agents/orchestrator.md`).
 - **Temperature.** flash: 0 (thinking off). pro: unset — thinking is on and
   temperature/top_p are silently ignored.
 - **Thinking.** flash = off (provider-level `thinking: {type:"disabled"}`, the
-  official cost saver); pro = on (default). Thinking is a provider/model-level
-  switch, not a per-agent frontmatter knob.
+  official cost saver); pro = on (default). The default is set at the
+  provider/model level; an agent may override it per-agent via frontmatter
+  `options.thinking` (e.g. `planner`/`light-orchestrator` re-enable thinking
+  over flash's disabled default).
 - **One-shot requests ride flash.** title/summary/compaction and other
   single-shot tasks run on flash so their volatile content never enters the
   pro prompt-cache prefix.
@@ -72,7 +74,7 @@ orchestrator prompt (`agents/orchestrator.md`).
 ## Scope First + Delegate Always
 
 - **Size the scope first.** 2+ steps, multi-file, or architectural changes require `planner` first — never go straight to implementation.
-- **BACKGROUND FIRST.** Independent subtasks dispatch in parallel, background.
+- **BACKGROUND FIRST.** Independent subtasks dispatch in parallel, background. Requires the `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` env var; when unset, dispatch foreground instead.
 - **Delegate, don't do.** Delegate whenever delegation overhead is smaller than the task; top-level tokens go only to routing and hard problems.
 - **Subagent empty-result fallback.** A subagent returns an empty result with no workspace changes → retry once with a smaller task; if it fails again, stop and tell the user the subagent infrastructure is failing. Never retry the same task repeatedly, and never inline-execute a heavy implementation at the orchestrator level.
 - **Pass the explicit `task_id`** when resuming a subagent session.

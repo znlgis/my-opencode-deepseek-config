@@ -22,6 +22,7 @@
 
 - OpenCode ≥ v1.18.x（DeepSeek provider 为内置）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
+- 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
 
 ### 方式一：TUI 交互式配置（推荐）
 
@@ -127,7 +128,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 启动 OpenCode 确认：
 1. `/models` → 当前模型为 `deepseek/deepseek-v4-pro`
-2. Agent 列表应能看到 `orchestrator`、`planner`、`deep-worker` 等 11 个 Agent
+2. Agent 列表应能看到 `orchestrator`、`planner`、`deep-worker` 等 12 个 Agent
 3. 输入任意请求，Orchestrator 自动分析意图并路由
 
 ### 同步
@@ -205,6 +206,9 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
 | `orchestrator` | v4-flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
+| `solo` | v4-pro（默认） | 单模型内联执行器：零委派、不用后台助手，全程在当前会话所选模型内完成 |
+
+> `solo` 是第二个 primary agent：`permission.task: "*": "deny"`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话默认模型 pro）、不用 build/plan 等后台助手（它们跑在内置 flash 上，会破坏全程单模型的保证），分析、规划、实现、验证全部在当前会话内联完成。
 
 ### Subagents
 
@@ -257,7 +261,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | 命令 | Agent | 用途 |
 | --- | --- | --- |
 | `/codemap` | `explore`（codemap） | 生成仓库结构图 |
-| `/learn` | `light-orchestrator` | 把会话中的非显然经验沉淀到目录级 AGENTS.md（根/包/特性级） |
+| `/learn` | `deep-worker` | 把会话中的非显然经验沉淀到目录级 AGENTS.md（根/包/特性级） |
 | `/simplify` | `light-orchestrator`（simplify）→ spawn `oracle` | spawn oracle 只读分析 → light-orchestrator 应用编辑 |
 | `/rmslop` | `deep-worker`（remove-deadcode） | 清理死代码和 AI slop |
 
@@ -282,12 +286,14 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `resolving-merge-conflicts` | 逐 hunk 解析合并冲突：追溯原始意图、永不发明新行为、永不 --abort |
 | `handoff` | 压缩会话为交接文档（路径引用，不复制内容） |
 | `opencode-config` | 编写和维护本仓库 OpenCode 配置（agents/skills/commands/permissions） |
+| `office-docs` | 读写 Word（.docx）/Excel（.xlsx），与纯文本/Markdown 互转；纯 Python 脚本，无需 MS Office 或 MCP |
 | `reflect` | 持续改进：发现摩擦 → 提出最小可维护修复 |
 | `remove-deadcode` | 安全查找并删除死代码，删除前经工具链/LSP 验证 |
 | `security-review` | 合并前安全审查（注入/XSS/SSRF/密钥/反序列化/路径穿越），只报不改 |
 | `simplify` | 行为保持的代码简化（oracle 分析 → 应用） |
 | `spec-workflow` | 轻量规约驱动变更：proposal → delta specs → tasks → update 三问决策树 → verify → archive |
 | `verify-with-docs` | 编码前核对 API 文档，检索优先，防幻觉 |
+| `vision-prep` | 大图/PDF 送入视觉模型前的预处理：大图切块、PDF 栅格化，规避 ~800x800 降采样损失 |
 | `grilling` | 需求对齐访谈：一次一问、多选优先，歧义收敛后再动手 |
 | `wait-what` | 用户消息难懂时先一句话重述确认，再动手 |
 | `writing-for-agents` | 写给 agent 看的文档（skill/AGENTS.md/指针文档）的写作杠杆 |

@@ -21,7 +21,7 @@ permission:
     "gh pr diff*": allow
     "gh issue view*": allow
     "gh api*": allow
-  skills:
+  skill:
     "*": "deny"
     reflect: "allow"
     simplify: "allow"

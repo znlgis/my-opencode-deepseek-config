@@ -8,7 +8,7 @@ color: "#E24A4A"
 permission:
   task:
     "*": "deny"
-  skills:
+  skill:
     "*": "deny"
     remove-deadcode: "allow"
     spec-workflow: "allow"

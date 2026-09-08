@@ -18,7 +18,7 @@ permission:
     "git blame*": allow
     "git grep*": allow
     "rg *": allow
-  skills:
+  skill:
     "*": "deny"
     codemap: "allow"
 ---

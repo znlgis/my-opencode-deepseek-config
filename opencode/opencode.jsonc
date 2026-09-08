@@ -14,10 +14,30 @@
             ".env": "deny",
             "*.env": "deny",
             "*.env.*": "deny",
+            ".envrc": "deny",
+            "*.envrc": "deny",
             "*.env.example": "allow"
         },
+        // Default-ask instead of default-allow: an unrecognized destructive
+        // variant (e.g. `rm -rf` spelled or spaced differently) would match `*`
+        // and run unguarded. Resolution is last-match-wins, so the catch-all
+        // `*` MUST stay last — every allow/ask above it overrides it. The
+        // allow list covers high-frequency read-only or local operations
+        // (git status/diff/log/show, git add/commit, npm run/test, rg, node
+        // scripts/*); anything else, including unlisted destructive variants,
+        // falls through to ask.
         "bash": {
-            "*": "allow",
+            "git status*": "allow",
+            "git diff*": "allow",
+            "git log*": "allow",
+            "git show*": "allow",
+            "git stash list*": "allow",
+            "git add *": "allow",
+            "git commit*": "allow",
+            "node scripts/*": "allow",
+            "npm run *": "allow",
+            "npm test*": "allow",
+            "rg *": "allow",
             "rm -rf*": "ask",
             "rm -fr*": "ask",
             "Remove-Item -Recurse -Force*": "ask",
@@ -36,7 +56,8 @@
             "git stash clear*": "ask",
             "git stash drop*": "ask",
             "gh repo delete*": "ask",
-            "gh pr close*": "ask"
+            "gh pr close*": "ask",
+            "*": "ask"
         },
         "skill": {
             "*": "allow"
@@ -138,9 +159,10 @@
         "compaction": { "model": "deepseek/deepseek-v4-flash" }
     },
     // Trim only oversized tool outputs (full text still saved to disk, preview
-    // returned). 800 lines / 20KB balances token savings against re-reads:
-    // 200/8192 is too tight and truncates normal file reads, forcing agents to
-    // re-read and cost more tokens; 1500 is too loose.
+    // returned). 800 lines / 20KB is deliberately more conservative than the
+    // official default (max_lines=2000). It stays loose enough to avoid
+    // truncating normal file reads — 200/8192 was too tight and forced agents
+    // to re-read, costing more tokens than the tighter preview saved.
     "tool_output": {
         "max_lines": 800,
         "max_bytes": 20480

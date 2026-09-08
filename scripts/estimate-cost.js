@@ -73,7 +73,44 @@ function stripJsonc(source) {
     i++;
   }
 
-  return out.join('').replace(/,\s*(\}|\])/g, '$1');
+  return stripTrailingCommas(out.join(''));
+}
+
+// Remove trailing commas before ] or } without touching commas inside string
+// literals. Scans char-by-char so a `, }` or `, ]` sequence inside a quoted
+// string (e.g. "a, }") is never mangled, and honors backslash escapes.
+function stripTrailingCommas(source) {
+  let out = '';
+  let inString = false;
+  let escape = false;
+
+  for (let i = 0; i < source.length; i++) {
+    const ch = source[i];
+
+    if (inString) {
+      out += ch;
+      if (escape) escape = false;
+      else if (ch === '\\') escape = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      out += ch;
+      inString = true;
+      continue;
+    }
+
+    if (ch === ',') {
+      let j = i + 1;
+      while (j < source.length && /\s/.test(source[j])) j++;
+      if (source[j] === '}' || source[j] === ']') continue; // trailing comma
+    }
+
+    out += ch;
+  }
+
+  return out;
 }
 
 function parseArgs(argv) {
@@ -116,7 +153,7 @@ function main() {
   }
 
   const rows = table.map(({ id, cost }) => {
-    const inputCost = (input - cacheRead) * (cost.input || 0) / 1e6;
+    const inputCost = Math.max(0, input - cacheRead) * (cost.input || 0) / 1e6;
     const cacheCost = cacheRead * (cost.cache_read || 0) / 1e6;
     const writeCost = cacheWrite * (cost.cache_write || 0) / 1e6;
     const outputCost = output * (cost.output || 0) / 1e6;

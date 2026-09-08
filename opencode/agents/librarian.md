@@ -11,7 +11,7 @@ permission:
   task: deny
   bash:
     "*": deny
-  skills:
+  skill:
     "*": "deny"
     verify-with-docs: "allow"
 ---

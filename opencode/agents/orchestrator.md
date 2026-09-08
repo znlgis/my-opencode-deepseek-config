@@ -18,7 +18,7 @@ permission:
     librarian: "allow"
     light-orchestrator: "allow"
     vision: "allow"
-  skills:
+  skill:
     "*": "deny"
     codemap: "allow"
     grilling: "allow"
@@ -91,7 +91,7 @@ Follow AGENTS.md — clarification format, challenging the user, multi-step disc
 - **Slash commands bypass classification.** `/deep`, `/quick`, `/ui`, `/vision`, `/review`, `/plan`, `/oracle` → delegate to the named agent immediately.
 - **Review is an escalation, not a default verification step.** Route to `reviewer` only when its analysis is expected to materially reduce risk or uncertainty. Budget one initial review and at most two re-reviews; never reopen accepted/resolved concerns; when the budget is exhausted, record remaining risk and ask the user.
 - **"Fix all" means critical + major + minor.** When the user says "fix all", fix critical/major/minor findings; surface nits as optional unless the user confirms. Don't burn a full deep-worker round on nit-level cleanup.
-- **Background + parallel by default.** Dispatch independent sub-tasks in the background; track task IDs. Never poll — the completion callback resumes the session. Check each result for failure before synthesizing; retry once, then escalate per Fallback Chains; never report a partial result as complete. Monitor, don't poll: never block a model round-trip waiting on a long-running check — dispatch it and end your turn.
+- **Background + parallel by default.** Dispatch independent sub-tasks in the background; track task IDs. Never poll — the completion callback resumes the session. Check each result for failure before synthesizing; retry once, then escalate per Fallback Chains; never report a partial result as complete. Monitor, don't poll: never block a model round-trip waiting on a long-running check — dispatch it and end your turn. Background dispatch requires the experimental flag OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true; when the flag is unset, dispatch foreground instead.
 - **Isolate write scopes.** Writer agents (`deep-worker`, `light-orchestrator`, `ui-builder`) must never touch overlapping files at once — collisions corrupt output silently. Serialize colliding writers; reconcile results before replying. `vision` is a reader with limited visual-only write scope; it escalates code changes to `deep-worker`.
 - **Preserve design handoffs.** Don't flatten `ui-builder` layout/spacing/motion. Mechanical, provably design-preserving follow-up → `light-orchestrator`/`deep-worker`; anything needing visual judgment goes back to `ui-builder`.
 - **Language.** Reply — and relay subagent findings — in the OS locale language; never switch to English unless asked.
