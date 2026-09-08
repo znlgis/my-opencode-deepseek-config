@@ -174,6 +174,30 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）。
 
+### 成本对比
+
+价格取自 `opencode.jsonc` 的 `provider.deepseek.models`（USD / 1M tokens，2026-08-16 生效的 off-peak 价；peak 时段翻倍）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+
+| 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek-v4-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-v4-flash-vision-exp` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
+
+两个成本杠杆：
+
+- **模型档位**：pro 输入/输出价均为 flash 的 3×，故 trivial 任务绝不落到 pro（见上文路由策略）。
+- **提示词缓存**：`cache_read` 比输入价便宜约 **30×**（flash 0.007 vs 0.22；pro 0.022 vs 0.66）。本配置的字节稳定前缀 + 易变区纪律（见 `AGENTS.md`）正是为了最大化缓存命中率。
+
+**典型会话成本估算**（假设 200K 输入 tokens，其中 150K 命中缓存，30K 输出）：
+
+| 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
+| --- | --- | --- | --- | --- |
+| flash | 150K × 0.007 = $0.001 | 50K × 0.22 = $0.011 | 30K × 0.66 = $0.020 | **≈ $0.032** |
+| pro | 150K × 0.022 = $0.003 | 50K × 0.66 = $0.033 | 30K × 1.98 = $0.059 | **≈ $0.096** |
+
+同一 token 量下 pro ≈ 3× flash。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
+
 ## Agent 结构
 
 ### Primary Agent

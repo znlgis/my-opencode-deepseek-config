@@ -174,6 +174,30 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle).
 
+### Cost Comparison
+
+Prices are taken from `provider.deepseek.models` in `opencode.jsonc` (USD per 1M tokens, off-peak rates effective 2026-08-16; peak hours double). `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+
+| Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
+| --- | --- | --- | --- | --- | --- |
+| `deepseek-v4-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-v4-flash-vision-exp` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
+
+Two cost levers:
+
+- **Model tier**: pro's input/output prices are 3× flash, so trivial work never lands on pro (see the routing strategy above).
+- **Prompt cache**: `cache_read` is ~**30×** cheaper than the input price (flash 0.007 vs 0.22; pro 0.022 vs 0.66). This config's byte-stable prefix + volatile-zone discipline (see `AGENTS.md`) exists precisely to maximize the cache-hit rate.
+
+**Typical session cost estimate** (assume 200K input tokens, 150K cache hits, 30K output):
+
+| Model | Cache hit | Input miss | Output | Total |
+| --- | --- | --- | --- | --- |
+| flash | 150K × 0.007 = $0.001 | 50K × 0.22 = $0.011 | 30K × 0.66 = $0.020 | **≈ $0.032** |
+| pro | 150K × 0.022 = $0.003 | 50K × 0.66 = $0.033 | 30K × 1.98 = $0.059 | **≈ $0.096** |
+
+At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to estimate from actual token counts.
+
 ## Agent Structure
 
 ### Primary Agent
