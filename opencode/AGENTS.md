@@ -66,7 +66,7 @@ orchestrator prompt (`agents/orchestrator.md`).
   The 3-model matrix is inviolate.
 - **Tiers:** trivial agents (explore/librarian/consultant/ui-builder) =
   thinking disabled (cheapest); mid (planner/light-orchestrator) = thinking
-  enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer on pro)
+  enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer/solo on pro)
   = default high.
 - **Routing:** trivial → flash off; routine-but-nontrivial multi-file → flash
   low; deep/uncertain → pro high.
