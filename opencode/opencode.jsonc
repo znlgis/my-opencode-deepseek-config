@@ -2,7 +2,7 @@
     "$schema": "https://opencode.ai/config.json",
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
-    "small_model": "deepseek/deepseek-v4-flash",
+    "small_model": "deepseek/deepseek-flash",
     "autoupdate": "notify",
     "share": "disabled",
     "lsp": true,
@@ -73,10 +73,11 @@
     ],
     // DeepSeek thinking split (deepseek-harness official): flash disables
     // thinking for cheapest+fastest runs; pro keeps the default (thinking on).
-    // The vision-exp model is a flash-tier multimodal variant — same cost
-    // profile, so it mirrors flash (thinking off, temperature 0). The
-    // modalities block declares image input support; without it OpenCode
-    // treats the model as text-only and rejects read_image calls.
+    // `deepseek-flash` is the merged V4.1 Flash model — the former
+    // `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are now one
+    // natively-multimodal model, so it carries the modalities block (image
+    // input) that vision-exp used to declare. Without it OpenCode treats the
+    // model as text-only and rejects read_image calls.
     // `options.thinking` is a provider passthrough, not a native schema field:
     // OpenCode forwards it verbatim to the DeepSeek API (OpenAI-format thinking
     // toggle — {"type":"enabled"|"disabled"}).
@@ -85,8 +86,8 @@
     // control (low/high/max), NOT a model id. OpenCode does not auto-generate
     // reasoning-effort variants for DeepSeek, so it must be set manually —
     // per-AGENT via `agent.options` (deep-merged over `model.options`), never
-    // at the model level. Keeping it off the model id preserves the 3-model
-    // matrix (pro / flash / flash-vision-exp).
+    // at the model level. Keeping it off the model id preserves the 2-model
+    // matrix (pro / flash).
     "provider": {
         "deepseek": {
             // `cost` is USD per 1M tokens, off-peak rates effective with the
@@ -95,19 +96,7 @@
             // cache writes bill at the cache-miss input rate, so cache_write
             // is mapped from input.
             "models": {
-                "deepseek-v4-flash": {
-                    "cost": {
-                        "input": 0.22,
-                        "output": 0.66,
-                        "cache_read": 0.007,
-                        "cache_write": 0.22
-                    },
-                    "options": {
-                        "temperature": 0,
-                        "thinking": { "type": "disabled" }
-                    }
-                },
-                "deepseek-v4-flash-vision-exp": {
+                "deepseek-flash": {
                     "modalities": {
                         "input": ["text", "image"],
                         "output": ["text"]
@@ -152,11 +141,11 @@
     // to deep-worker (pro). `fallback` is not a real schema key — omitted;
     // OpenCode falls back small_model -> model internally.
     "agent": {
-        "build": { "model": "deepseek/deepseek-v4-flash" },
-        "plan": { "model": "deepseek/deepseek-v4-flash" },
-        "title": { "model": "deepseek/deepseek-v4-flash" },
-        "summary": { "model": "deepseek/deepseek-v4-flash" },
-        "compaction": { "model": "deepseek/deepseek-v4-flash" }
+        "build": { "model": "deepseek/deepseek-flash" },
+        "plan": { "model": "deepseek/deepseek-flash" },
+        "title": { "model": "deepseek/deepseek-flash" },
+        "summary": { "model": "deepseek/deepseek-flash" },
+        "compaction": { "model": "deepseek/deepseek-flash" }
     },
     // Trim only oversized tool outputs (full text still saved to disk, preview
     // returned). 800 lines / 20KB is deliberately more conservative than the
@@ -178,7 +167,7 @@
         "preserve_recent_tokens": 12000,
         "reserved": 10240
     },
-    // Bound image token cost for the vision-exp model. DeepSeek downscales
+    // Bound image token cost for the multimodal flash model. DeepSeek downscales
     // images to ~800x800 internally, so oversized uploads only waste base64
     // bytes. Resize anything above 1600px / 2MB before it reaches the API.
     // Key is singular `attachment` (schema-valid); the plural form is ignored.

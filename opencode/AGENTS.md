@@ -63,7 +63,7 @@ orchestrator prompt (`agents/orchestrator.md`).
 - **`reasoning_effort`** is a request-level thinking-strength control
   (`low`/`high`/`max`), NOT a model id — set per-agent via agent frontmatter
   `options` (camelCase `reasoningEffort`, deep-merged over `model.options`).
-  The 3-model matrix is inviolate.
+  The 2-model matrix is inviolate.
 - **Tiers:** trivial agents (explore/librarian/consultant/ui-builder) =
   thinking disabled (cheapest); mid (planner/light-orchestrator) = thinking
   enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer/solo on pro)
@@ -87,9 +87,8 @@ zh-CN Windows system, Chinese; en-US, English. Never force English unless asked.
 
 ## Constraints (this repository)
 
-- **No new models.** Only `deepseek/deepseek-v4-pro`,
-  `deepseek/deepseek-v4-flash`, and the multimodal
-  `deepseek/deepseek-v4-flash-vision-exp` may be used. Do not introduce others.
+- **No new models.** Only `deepseek/deepseek-v4-pro` and the natively
+  multimodal `deepseek/deepseek-flash` may be used. Do not introduce others.
 - **No new dependencies** without explicit justification from the user.
 - **Pure-config philosophy.** Prefer prompt/config changes over new tooling.
 

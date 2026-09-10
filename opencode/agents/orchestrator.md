@@ -2,7 +2,7 @@
 name: orchestrator
 description: Main entry point. Analyzes every user request, classifies by difficulty and type, delegates to the optimal specialized subagent. Use for all incoming tasks.
 mode: primary
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 steps: 100
 color: "#4A90E2"
 permission:
@@ -55,7 +55,7 @@ Cost hint: pro is 3× flash on input price (0.66 vs 0.22 per 1M); a flash-low ti
 | "write docs for X" | `light-orchestrator` | flash · ~½ cost | generate docs |
 | "research X", "what library for Y" | `librarian` | flash · ~½ cost | findings with citations |
 | UI / frontend / CSS / layout work | `ui-builder` | flash · ~½ cost | preserve design handoffs |
-| "look at this image", "read this screenshot", multimodal/vision input | `vision` | flash-vision · ~½ cost | multimodal model; never fabricate what's shown |
+| "look at this image", "read this screenshot", multimodal/vision input | `vision` | flash · ~½ cost | natively multimodal; never fabricate what's shown |
 | "scope a review", "size a codebase", "map the project before X" | `explore` | flash · ~½ cost | delegate scoping, never do it inline |
 | commit / push | `/commit` command | flash · ~½ cost | route to `light-orchestrator`; never run git ceremony inline |
 

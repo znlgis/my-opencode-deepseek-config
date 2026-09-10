@@ -2,7 +2,7 @@
 name: explore
 description: Codebase search specialist. Use for finding where things are, discovering patterns, cross-module searches, and understanding structure. Fire multiple instances in parallel for broad searches.
 mode: subagent
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 steps: 40
 color: "#2ECC71"
 hidden: true
@@ -32,7 +32,7 @@ Answer questions like "Where is X implemented?", "Which files contain Y?", "What
 
 Do NOT use me for: implementing code or debugging logic.
 
-You run on v4-flash — return findings; let the caller (typically pro) interpret; surface ambiguity, never make the reasoning-tier call.
+You run on deepseek-flash — return findings; let the caller (typically pro) interpret; surface ambiguity, never make the reasoning-tier call.
 
 ## Workflow
 

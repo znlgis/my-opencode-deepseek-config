@@ -2,12 +2,12 @@
 
 **简体中文** | [English](README.en-US.md)
 
-**OpenCode × DeepSeek 最优配置** —— 在 OpenCode 多 Agent 框架下，将 DeepSeek V4 模型族（Pro + Flash + Flash-Vision）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
+**OpenCode × DeepSeek 最优配置** —— 在 OpenCode 多 Agent 框架下，将 DeepSeek V4 模型族（Pro + Flash）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
 
 ## 当前配置概览
 
 - 默认主 Agent：`orchestrator`
-- 主模型：`deepseek/deepseek-v4-pro`，轻量模型：`deepseek/deepseek-v4-flash`，多模态模型：`deepseek/deepseek-v4-flash-vision-exp`
+- 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
 - 代理层级：`subagent_depth: 3`（支持 3 级代理嵌套）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
@@ -49,23 +49,21 @@ opencode
 ```jsonc
 {
   "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-v4-flash"
+  "small_model": "deepseek/deepseek-flash"
 }
 ```
 
-本配置在 `provider` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。多模态 `deepseek-v4-flash-vision-exp` 同为 flash 档，沿用 flash 设置。示例（flash）：
+本配置在 `provider` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原 `deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 已合并为一个原生多模态模型，因此由它声明 `modalities`（图像输入）。示例（flash）：
 
 ```jsonc
 "provider": {
   "deepseek": {
     "models": {
-      "deepseek-v4-flash": {
-        "options": {
-          "temperature": 0,
-          "thinking": { "type": "disabled" }
-        }
-      },
-      "deepseek-v4-flash-vision-exp": {
+      "deepseek-flash": {
+        "modalities": {
+          "input": ["text", "image"],
+          "output": ["text"]
+        },
         "options": {
           "temperature": 0,
           "thinking": { "type": "disabled" }
@@ -76,7 +74,7 @@ opencode
 }
 ```
 
-> **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro`、`deepseek/deepseek-v4-flash` 和 `deepseek/deepseek-v4-flash-vision-exp`。
+> **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-flash`。
 
 ## 安装部署
 
@@ -147,15 +145,14 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 ## 模型分工
 
-本仓库严格限制在 DeepSeek V4 模型族内分工，不引入其他模型——**3 个模型 × 按 Agent 分档的思考强度（thinking tier）**，而非 4 模型矩阵：
+本仓库严格限制在 DeepSeek V4 模型族内分工，不引入其他模型——**2 个模型 × 按 Agent 分档的思考强度（thinking tier）**，而非多模型矩阵：
 
 | 模型 | 用途 |
 | --- | --- |
 | `deepseek/deepseek-v4-pro` | 深度推理、根因分析、代码审查、重型多文件实现 |
-| `deepseek/deepseek-v4-flash` | 编排/路由、规划、常规实现、咨询、UI、探索、外部检索、轻量编辑、标题/摘要/压缩 |
-| `deepseek/deepseek-v4-flash-vision-exp` | 多模态：图像/截图/图表/UI 稿的理解与描述 |
+| `deepseek/deepseek-flash` | 编排/路由、规划、常规实现、咨询、UI、探索、外部检索、轻量编辑、标题/摘要/压缩；原生多模态（图像/截图/图表/UI 稿理解） |
 
-思考强度由 **`reasoning_effort`** 控制——它是**请求级**的思考强度开关（`low`/`high`/`max`），**不是模型 ID**，按 Agent 经 frontmatter `options`（camelCase `reasoningEffort`，深度合并到 `model.options`）设置，不改 `model:` 字段。这样 3 模型矩阵不变，同一模型可跑不同思考档：
+思考强度由 **`reasoning_effort`** 控制——它是**请求级**的思考强度开关（`low`/`high`/`max`），**不是模型 ID**，按 Agent 经 frontmatter `options`（camelCase `reasoningEffort`，深度合并到 `model.options`）设置，不改 `model:` 字段。这样 2 模型矩阵不变，同一模型可跑不同思考档：
 
 | 档位 | 模型 × thinking | 典型 Agent |
 | --- | --- | --- |
@@ -170,7 +167,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 - **Trivial → flash off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走 flash agent，thinking 关闭（最省）
 - **Routine-nontrivial → flash low**：规划、常规多文件实现等稍有难度的任务走 flash + `reasoningEffort: low`
 - **Deep/uncertain → pro high**：深度推理、根因分析、代码审查、重型多文件实现——只用 pro
-- **Vision 专责多模态**：检测到图像/截图/图表等视觉输入时，路由到 `vision` agent（flash-vision 模型）
+- **Vision 专责多模态**：检测到图像/截图/图表等视觉输入时，路由到 `vision` agent（`deepseek-flash`，原生多模态）
 - **自动升级**：flash agent 无法胜任时自动升级到 pro（带完整上下文）
 
 用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）。
@@ -181,8 +178,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
 | --- | --- | --- | --- | --- | --- |
-| `deepseek-v4-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
-| `deepseek-v4-flash-vision-exp` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
 | `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
 
 两个成本杠杆：
@@ -205,7 +201,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
-| `orchestrator` | v4-flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
+| `orchestrator` | flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
 | `solo` | v4-pro（默认） | 单模型内联执行器：零委派、不用后台助手，全程在当前会话所选模型内完成 |
 
 > `solo` 是第二个 primary agent：`permission.task: "*": "deny"`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话默认模型 pro）、不用 build/plan 等后台助手（它们跑在内置 flash 上，会破坏全程单模型的保证），分析、规划、实现、验证全部在当前会话内联完成。
@@ -214,16 +210,16 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 | Agent | 模型 | 权限 | 作用 |
 | --- | --- | --- | --- |
-| `planner` | v4-flash | 读写 | 规划、架构、拆解任务 |
+| `planner` | flash | 读写 | 规划、架构、拆解任务 |
 | `deep-worker` | v4-pro | 读写 | 重型实现、多文件改动、复杂调试 |
 | `oracle` | v4-pro | **只读** | 根因分析、深度理解代码 |
 | `reviewer` | v4-pro | **只读** | 单遍代码审查（证据门控） |
-| `ui-builder` | v4-flash | 读写 | 前端与 UI 相关任务 |
-| `consultant` | v4-flash | 读写 | 方案讨论、最佳实践建议 |
-| `explore` | v4-flash | **只读** | 代码库搜索、并行探索 |
-| `librarian` | v4-flash | **只读** | 文档检索、Web 搜索 |
-| `light-orchestrator` | v4-flash | 读写 | 轻量任务、单文件编辑 |
-| `vision` | v4-flash-vision-exp | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
+| `ui-builder` | flash | 读写 | 前端与 UI 相关任务 |
+| `consultant` | flash | 读写 | 方案讨论、最佳实践建议 |
+| `explore` | flash | **只读** | 代码库搜索、并行探索 |
+| `librarian` | flash | **只读** | 文档检索、Web 搜索 |
+| `light-orchestrator` | flash | 读写 | 轻量任务、单文件编辑 |
+| `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
 
 > `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 是 3× flash）。
 >
@@ -365,7 +361,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ## 设计哲学
 
 - **纯配置驱动，零额外依赖** —— 所有能力由 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现
-- **DeepSeek V4 模型族极致利用** —— Pro 做深度推理与重型实现，Flash 做路由、规划与常规执行，Flash-Vision 专责多模态
+- **DeepSeek V4 模型族极致利用** —— Pro 做深度推理与重型实现，Flash 做路由、规划、常规执行与原生多模态
 - **Token 效率优先** —— 路径引用替代粘贴文件、技能按需加载、压缩分级管理
 - **插件增效但不喧宾夺主** —— superpowers 提供过程纪律，DCP（dcp.jsonc）主动去重+压缩阈值，内置 compaction（opencode.jsonc）自动触发+prune 兜底；两插件均固定版本（pin）以保字节稳定前缀，避免自动更新导致前缀漂移
 - **执行与探索分离** —— deep-worker/light-orchestrator 禁止研究/委托，explore/librarian 禁止修改
@@ -373,7 +369,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **Scope First + Delegate Always** —— 先定范围（2+ 步/多文件/架构变更先走 planner），再委派执行，顶层 token 只留给路由与难题
 - **原子 TODO** —— 多步任务先写有序 TODO，逐条 in_progress→completed；格式 `path: action for scenario — verify by check`
 - **按模型成本分级压缩** —— DCP 的 `modelMaxLimits`/`modelMinLimits` 让 pro（输入成本 3× flash）更早压缩、flash 更晚压缩，用更小的上下文窗口换取更省的压缩点
-- **视觉输入成本封顶** —— `attachment.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 vision-exp 内部 ~800x800 降采样，避免 base64 字节浪费
+- **视觉输入成本封顶** —— `attachment.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
 - **持续改进** —— reflect 机制化发现摩擦、code-review 证据门控保证质量

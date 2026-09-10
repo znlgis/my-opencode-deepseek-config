@@ -2,12 +2,12 @@
 
 [简体中文](README.md) | **English**
 
-**OpenCode × DeepSeek Optimal Config** — a configuration scheme that pushes the DeepSeek V4 model family (Pro + Flash + Flash-Vision) to its full potential within OpenCode's multi-agent framework. Core philosophy: **token efficiency first — the best development results at the lowest context cost**.
+**OpenCode × DeepSeek Optimal Config** — a configuration scheme that pushes the DeepSeek V4 model family (Pro + Flash) to its full potential within OpenCode's multi-agent framework. Core philosophy: **token efficiency first — the best development results at the lowest context cost**.
 
 ## Current Configuration Overview
 
 - Default primary agent: `orchestrator`
-- Primary model: `deepseek/deepseek-v4-pro`; lightweight model: `deepseek/deepseek-v4-flash`; multimodal model: `deepseek/deepseek-v4-flash-vision-exp`
+- Primary model: `deepseek/deepseek-v4-pro`; lightweight/multimodal model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal)
 - Agent nesting: `subagent_depth: 3` (supports 3 levels of subagent nesting)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
@@ -49,23 +49,21 @@ Permanent setup: add `DEEPSEEK_API_KEY` to your system environment variables.
 ```jsonc
 {
   "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-v4-flash"
+  "small_model": "deepseek/deepseek-flash"
 }
 ```
 
-This config splits thinking at the `provider` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). The multimodal `deepseek-v4-flash-vision-exp` is flash-tier and mirrors flash's settings. Example (flash):
+This config splits thinking at the `provider` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). `deepseek-flash` is the merged V4.1 Flash model — the former `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are now one natively multimodal model, so it declares `modalities` (image input). Example (flash):
 
 ```jsonc
 "provider": {
   "deepseek": {
     "models": {
-      "deepseek-v4-flash": {
-        "options": {
-          "temperature": 0,
-          "thinking": { "type": "disabled" }
-        }
-      },
-      "deepseek-v4-flash-vision-exp": {
+      "deepseek-flash": {
+        "modalities": {
+          "input": ["text", "image"],
+          "output": ["text"]
+        },
         "options": {
           "temperature": 0,
           "thinking": { "type": "disabled" }
@@ -76,7 +74,7 @@ This config splits thinking at the `provider` layer: flash disables thinking and
 }
 ```
 
-> **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro`, `deepseek/deepseek-v4-flash`, and `deepseek/deepseek-v4-flash-vision-exp`.
+> **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro` and `deepseek/deepseek-flash`.
 
 ## Installation
 
@@ -147,15 +145,14 @@ This copies the config files under `opencode/` into `~/.config/opencode/` (exclu
 
 ## Model Division of Labor
 
-This repo strictly divides work within the DeepSeek V4 model family — no other models are introduced. The division is **3 models × per-agent thinking strength (thinking tier)**, not a 4-model matrix:
+This repo strictly divides work within the DeepSeek V4 model family — no other models are introduced. The division is **2 models × per-agent thinking strength (thinking tier)**, not a multi-model matrix:
 
 | Model | Purpose |
 | --- | --- |
 | `deepseek/deepseek-v4-pro` | Deep reasoning, root-cause analysis, code review, heavy multi-file implementation |
-| `deepseek/deepseek-v4-flash` | Orchestration/routing, planning, routine implementation, consultation, UI, exploration, external lookup, light edits, title/summary/compaction |
-| `deepseek/deepseek-v4-flash-vision-exp` | Multimodal: understanding and describing images, screenshots, charts, and UI mockups |
+| `deepseek/deepseek-flash` | Orchestration/routing, planning, routine implementation, consultation, UI, exploration, external lookup, light edits, title/summary/compaction; natively multimodal (images/screenshots/charts/UI mockups) |
 
-Thinking strength is controlled by **`reasoning_effort`** — a **request-level** thinking-strength control (`low`/`high`/`max`), **not a model id** — set per-agent via frontmatter `options` (camelCase `reasoningEffort`, deep-merged over `model.options`), never by changing `model:`. The 3-model matrix stays intact; the same model can run at different thinking strengths:
+Thinking strength is controlled by **`reasoning_effort`** — a **request-level** thinking-strength control (`low`/`high`/`max`), **not a model id** — set per-agent via frontmatter `options` (camelCase `reasoningEffort`, deep-merged over `model.options`), never by changing `model:`. The 2-model matrix stays intact; the same model can run at different thinking strengths:
 
 | Tier | Model × thinking | Typical agents |
 | --- | --- | --- |
@@ -170,7 +167,7 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 - **Trivial → flash off**: well-defined light tasks — search, lookup, consultation, UI, exploration, doc retrieval — go to flash agents with thinking off (cheapest)
 - **Routine-nontrivial → flash low**: planning and routine multi-file work use flash + `reasoningEffort: low`
 - **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, code review, heavy multi-file implementation — pro only
-- **Vision owns multimodal**: when visual input (images, screenshots, charts) is detected, route to the `vision` agent (flash-vision model)
+- **Vision owns multimodal**: when visual input (images, screenshots, charts) is detected, route to the `vision` agent (`deepseek-flash`, natively multimodal)
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle).
@@ -181,8 +178,7 @@ Prices are taken from `provider.deepseek.models` in `opencode.jsonc` (USD per 1M
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
 | --- | --- | --- | --- | --- | --- |
-| `deepseek-v4-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
-| `deepseek-v4-flash-vision-exp` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
+| `deepseek-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
 | `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
 
 Two cost levers:
@@ -205,7 +201,7 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 
 | Agent | Model | Role |
 | --- | --- | --- |
-| `orchestrator` | v4-flash | Default entry point: intent gate + model-aware routing + fallback chains |
+| `orchestrator` | flash | Default entry point: intent gate + model-aware routing + fallback chains |
 | `solo` | v4-pro (default) | Single-model inline executor: zero delegation, no background helpers, all work done inline in the current session |
 
 > `solo` is the second primary agent: `permission.task: "*": "deny"` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's default model, pro), and no build/plan background helpers (they run on built-in flash and would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
@@ -214,16 +210,16 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 
 | Agent | Model | Permission | Role |
 | --- | --- | --- | --- |
-| `planner` | v4-flash | read-write | Planning, architecture, task breakdown |
+| `planner` | flash | read-write | Planning, architecture, task breakdown |
 | `deep-worker` | v4-pro | read-write | Heavy implementation, multi-file changes, complex debugging |
 | `oracle` | v4-pro | **read-only** | Root-cause analysis, deep code understanding |
 | `reviewer` | v4-pro | **read-only** | Single-pass code review (evidence-gated) |
-| `ui-builder` | v4-flash | read-write | Frontend and UI tasks |
-| `consultant` | v4-flash | read-write | Approach discussions, best-practice advice |
-| `explore` | v4-flash | **read-only** | Codebase search, parallel exploration |
-| `librarian` | v4-flash | **read-only** | Documentation lookup, web search |
-| `light-orchestrator` | v4-flash | read-write | Lightweight tasks, single-file edits |
-| `vision` | v4-flash-vision-exp | read-write | Multimodal: images/screenshots/charts/UI mockups |
+| `ui-builder` | flash | read-write | Frontend and UI tasks |
+| `consultant` | flash | read-write | Approach discussions, best-practice advice |
+| `explore` | flash | **read-only** | Codebase search, parallel exploration |
+| `librarian` | flash | **read-only** | Documentation lookup, web search |
+| `light-orchestrator` | flash | read-write | Lightweight tasks, single-file edits |
+| `vision` | flash | read-write | Multimodal: images/screenshots/charts/UI mockups |
 
 > `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro is 3× flash).
 >
@@ -365,7 +361,7 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 ## Design Philosophy
 
 - **Pure config-driven, zero extra dependencies** — every capability comes from `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`
-- **Maximum use of the DeepSeek V4 model family** — Pro for deep reasoning and heavy implementation, Flash for routing, planning, and routine execution, Flash-Vision for multimodal tasks
+- **Maximum use of the DeepSeek V4 model family** — Pro for deep reasoning and heavy implementation, Flash for routing, planning, routine execution, and native multimodal tasks
 - **Token efficiency first** — path references instead of pasted files, skills loaded on demand, tiered compression management
 - **Plugins add value without stealing the spotlight** — superpowers provides process discipline, DCP (dcp.jsonc) handles proactive dedup + compression thresholds, built-in compaction (opencode.jsonc) handles auto-trigger + prune fallback; both plugins are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 - **Execution separated from exploration** — deep-worker/light-orchestrator must not research or delegate; explore/librarian must not modify
@@ -373,7 +369,7 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Scope First + Delegate Always** — define scope first (2+ steps / multi-file / architecture changes go through planner), then delegate execution; top-level tokens are reserved for routing and hard problems
 - **Atomic TODOs** — multi-step tasks start with an ordered TODO list, one item in_progress → completed at a time; format `path: action for scenario — verify by check`
 - **Per-model cost-tiered compression** — DCP's `modelMaxLimits`/`modelMinLimits` make pro (3× flash input cost) compress earlier and flash later, trading a smaller context window for a cheaper compression point
-- **Vision input cost cap** — `attachment.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with vision-exp's internal ~800x800 downsampling, to avoid wasted base64 bytes
+- **Vision input cost cap** — `attachment.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change
 - **Volatile-zone discipline** — volatile content (timestamps, random IDs, dynamic file lists) sits at the payload tail to protect DeepSeek's prompt-cache prefix
 - **Continuous improvement** — reflect mechanizes friction discovery, code-review's evidence gating guards quality

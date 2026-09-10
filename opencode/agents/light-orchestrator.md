@@ -2,7 +2,7 @@
 name: light-orchestrator
 description: Lightweight executor. Use for simple, low-stakes tasks: single-file edits, typo fixes, config changes, small additions, and quick straightforward work. Also handles miscellaneous tasks that don't fit other specialists.
 mode: subagent
-model: deepseek/deepseek-v4-flash
+model: deepseek/deepseek-flash
 options:
   thinking:
     type: enabled

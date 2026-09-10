@@ -64,7 +64,7 @@
 
     // Per-model overrides (keyed by exact 'providerID/modelID'). Pro input costs
     // 3x flash (0.66 vs 0.22 per 1M), so compress pro sessions EARLIER to cut the
-    // expensive window; flash/vision keep the global 77K/38K baseline.
+    // expensive window; flash keeps the global 77K/38K baseline.
     "modelMaxLimits": {
       "deepseek/deepseek-v4-pro": 55000
     },
