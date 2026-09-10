@@ -66,8 +66,10 @@ orchestrator prompt (`agents/orchestrator.md`).
   The 2-model matrix is inviolate.
 - **Tiers:** trivial agents (explore/librarian/consultant/ui-builder) =
   thinking disabled (cheapest); mid (planner/light-orchestrator) = thinking
-  enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer/solo on pro)
-  = default high.
+  enabled + `reasoningEffort: low`; deep (deep-worker/oracle/reviewer) = pro,
+  default high. `solo` is a primary agent with no `model:` field, so it runs on
+  the session's selected model (pro by default, flash if the user switches) —
+  its thinking tier follows that model, not a fixed pro/high.
 - **Routing:** trivial → flash off; routine-but-nontrivial multi-file → flash
   low; deep/uncertain → pro high.
 

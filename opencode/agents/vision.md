@@ -8,6 +8,9 @@ color: "#9B59B6"
 permission:
   task:
     "*": "deny"
+  skill:
+    "*": deny
+    "vision-prep": allow
   bash:
     "*": deny
     "git status*": allow

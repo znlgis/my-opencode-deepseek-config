@@ -8,6 +8,9 @@ color: "#E91E63"
 permission:
   task:
     "*": "deny"
+  skill:
+    "*": deny
+    "codebase-design": allow
 ---
 
 # UI Builder

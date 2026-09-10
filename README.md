@@ -167,7 +167,8 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | --- | --- | --- |
 | 低（trivial） | flash · thinking 关 | `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` |
 | 中（routine） | flash · thinking 开 + `reasoningEffort: low` | `planner`/`light-orchestrator` |
-| 高（deep） | pro · 默认 high | `deep-worker`/`oracle`/`reviewer`/`solo` |
+| 高（deep） | pro · 默认 high | `deep-worker`/`oracle`/`reviewer` |
+| 跟随会话 | 会话所选模型（默认 pro） | `solo`（无 `model` 字段，思考档随该模型） |
 
 成本比：pro 输入价 3× flash（0.66 vs 0.22 / 1M tokens），故 trivial 任务绝不落到 pro。
 
@@ -234,9 +235,9 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`；`planner` → `spec-workflow`/`codebase-design`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`；`consultant` → `domain-modeling`；`ui-builder`/`vision`/`solo` 无白名单。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`；`planner` → `spec-workflow`/`codebase-design`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。
 >
-> **思考分档（thinking tiers）**：`reasoning_effort` 是按 Agent 经 frontmatter `options` 设置的请求级思考强度（`low`/`high`/`max`），不是模型 ID。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking 关（最省）；`planner`/`light-orchestrator` = flash · thinking 开 + `reasoningEffort: low`；`deep-worker`/`oracle`/`reviewer`/`solo` = pro · 默认 high。
+> **思考分档（thinking tiers）**：`reasoning_effort` 是按 Agent 经 frontmatter `options` 设置的请求级思考强度（`low`/`high`/`max`），不是模型 ID。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking 关（最省）；`planner`/`light-orchestrator` = flash · thinking 开 + `reasoningEffort: low`；`deep-worker`/`oracle`/`reviewer` = pro · 默认 high；`solo` 无 `model` 字段，跟随会话所选模型（默认 pro），思考档随该模型而定。
 
 ## 快捷命令
 

@@ -7,6 +7,40 @@ color: "#607D8B"
 permission:
   task:
     "*": "deny"
+  skill:
+    "*": deny
+    "brainstorming": allow
+    "systematic-debugging": allow
+    "test-driven-development": allow
+    "verification-before-completion": allow
+    "writing-plans": allow
+    "executing-plans": allow
+    "code-review": allow
+    "security-review": allow
+    "diagnosing-bugs": allow
+    "codebase-design": allow
+    "domain-modeling": allow
+    "remove-deadcode": allow
+    "simplify": allow
+    "git-master": allow
+    "git-release": allow
+    "resolving-merge-conflicts": allow
+    "spec-workflow": allow
+    "to-tickets": allow
+    "triage": allow
+    "gh-cli": allow
+    "opencode-config": allow
+    "writing-for-agents": allow
+    "writing-skills": allow
+    "verify-with-docs": allow
+    "codemap": allow
+    "grilling": allow
+    "grill-with-docs": allow
+    "office-docs": allow
+    "wait-what": allow
+    "handoff": allow
+    "reflect": allow
+    "vision-prep": allow
 ---
 
 # Solo
@@ -23,7 +57,7 @@ You are the single-model inline executor. You run on the session's selected mode
 ## Workflow
 
 - Follow global AGENTS.md: multi-step tasks start with an ordered TODO list, then minimal changes, self-verification, and Git safety.
-- Load skills with the `skill` tool when a workflow applies — skills are unrestricted.
+- Load skills with the `skill` tool when a workflow applies. Your `permission.skill` allowlist covers the full local skill set (process, review, git, spec, and config skills); anything outside it is denied.
 
 ## What You DON'T Handle
 
