@@ -73,11 +73,10 @@
     ],
     // DeepSeek thinking split (deepseek-harness official): flash disables
     // thinking for cheapest+fastest runs; pro keeps the default (thinking on).
-    // `deepseek-flash` is the merged V4.1 Flash model — the former
-    // `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are now one
-    // natively-multimodal model, so it carries the modalities block (image
-    // input) that vision-exp used to declare. Without it OpenCode treats the
-    // model as text-only and rejects read_image calls.
+    // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
+    // and vision variants are now one natively-multimodal model, so it carries
+    // the modalities block (image input). Without it OpenCode treats the model
+    // as text-only and rejects read_image calls.
     // `options.thinking` is a provider passthrough, not a native schema field:
     // OpenCode forwards it verbatim to the DeepSeek API (OpenAI-format thinking
     // toggle — {"type":"enabled"|"disabled"}).

@@ -326,3 +326,45 @@ gh status
 gh config set git_protocol ssh
 gh auth status --json
 ```
+
+## Common workflows
+
+### Create a PR from the current branch
+
+```bash
+# 1. Confirm the branch is pushed and see what will be included
+git status --short
+git log --oneline origin/main..HEAD
+
+# 2. Create the PR. --fill derives title/body from commits; override when needed.
+gh pr create --base main --fill
+# Explicit form when the commit messages are not a good title/body:
+gh pr create --base main --title "feat(api): add pagination" --body "Closes #42"
+
+# 3. Verify and request review
+gh pr view --json number,url,reviewDecision,statusCheckRollup
+gh pr edit --add-reviewer @teammate
+```
+
+`--fill` fails if the branch has no commits ahead of base; use `--fill-first`
+(first commit only) or explicit `--title`/`--body`. Never pass `--body` and
+`--fill` together — `--fill` is ignored when `--body` is set.
+
+### List and filter issues
+
+```bash
+# My open bugs, newest first, machine-readable
+gh issue list --assignee @me --state open --label bug -L 20 \
+  --json number,title,state,labels,updatedAt
+
+# Full-text search within titles, scoped to a repo
+gh issue list --search "timeout in:title" --state open -L 20
+
+# Triage view: unassigned, no milestone
+gh issue list --state open --no-assignee --no-milestone -L 30 \
+  --json number,title,labels
+```
+
+`gh issue list` defaults to open issues and `-L 30`; always pass `-L` explicitly
+when scripting so the result count is deterministic. Use `--json` + a field list
+for parsing — never scrape the human-readable table.

@@ -16,6 +16,15 @@
 - 技能：`skills/` 目录下 **25 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载
 - 插件：`superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）、`@tarquinen/opencode-dcp`（固定版本 `@3.1.15`，智能上下文裁剪）；两者均固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
 
+### 插件与模型映射（重要）
+
+两个插件**均不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型：
+
+- **DCP 3.1.15**：`PluginConfig` 仅暴露 `modelMaxLimits` / `modelMinLimits`（按模型设压缩阈值），**没有** per-step 模型指派字段。本配置已为 pro 设置更早的压缩阈值（`dcp.jsonc`），这是 DCP 层面唯一可做的模型相关调优。
+- **superpowers v6.3.0**：纯 skill 注入插件（`.opencode/plugins/superpowers.js`），无任何模型配置面。
+
+因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码，勿重复调研。
+
 ## DeepSeek 模型配置
 
 ### 前置条件
@@ -53,7 +62,7 @@ opencode
 }
 ```
 
-本配置在 `provider` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原 `deepseek-v4-flash` 与 `deepseek-v4-flash-vision-exp` 已合并为一个原生多模态模型，因此由它声明 `modalities`（图像输入）。示例（flash）：
+本配置在 `provider` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `modalities`（图像输入）。示例（flash）：
 
 ```jsonc
 "provider": {

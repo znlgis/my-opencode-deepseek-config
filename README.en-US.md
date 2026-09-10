@@ -16,6 +16,15 @@
 - Skills: **25** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
 - Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
+### Plugins and Model Mapping (Important)
+
+Neither plugin exposes a model-mapping capability, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside the plugins:
+
+- **DCP 3.1.15**: `PluginConfig` exposes only `modelMaxLimits` / `modelMinLimits` (per-model compression thresholds); there is **no** per-step model-assignment field. This config already sets an earlier compression threshold for pro (`dcp.jsonc`) — the only model-related tuning DCP allows.
+- **superpowers v6.3.0**: a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with no model configuration surface.
+
+So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source — do not re-investigate.
+
 ## DeepSeek Model Configuration
 
 ### Prerequisites
@@ -53,7 +62,7 @@ Permanent setup: add `DEEPSEEK_API_KEY` to your system environment variables.
 }
 ```
 
-This config splits thinking at the `provider` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). `deepseek-flash` is the merged V4.1 Flash model — the former `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` are now one natively multimodal model, so it declares `modalities` (image input). Example (flash):
+This config splits thinking at the `provider` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). `deepseek-flash` is the merged V4.1 Flash model — the former text-only and vision variants are now one natively multimodal model, so it declares `modalities` (image input). Example (flash):
 
 ```jsonc
 "provider": {
