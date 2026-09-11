@@ -107,6 +107,70 @@ For any task with 2 or more steps:
   parallel dispatch. Never act on assumptions about a background task's result
   before it returns. Overlapping writers on the same file corrupt output.
 
+## Progress & Failure Discipline
+
+Large tasks must stay observable and survive partial failure. A single failed
+step never aborts the whole task.
+
+### Progress visibility
+
+- **Every todo item carries a completion criterion.** The atomic TODO format
+  (`path: <action> for <scenario> — verify by <check>`) already encodes it —
+  never add a todo you cannot verify.
+- **Report progress at each phase boundary**, not only at the end: emit
+  `[done/total]` plus the current item. One line, no ceremony.
+- **Mark failures in the list.** A blocked item stays `in_progress` with a
+  `blocked: <reason>` note and a follow-up todo describing the unblock path —
+  never silently drop it or mark it `completed`.
+- **Final report is a tally.** Close with `succeeded / failed / skipped`
+  counts and the reason for each non-success. Never present a partial result
+  as complete.
+
+### Error classification
+
+Classify every tool/subagent failure before reacting:
+
+- **transient** — network, timeout, rate limit, lock contention, flaky test.
+  Retry is appropriate.
+- **recoverable** — wrong argument, wrong path, missing flag, stale assumption.
+  Retry only after changing the approach.
+- **fatal** — permission denied, missing dependency, contradictory
+  requirements, logic that cannot hold. Do not retry; report and stop that unit.
+
+### Retry policy
+
+- **Cap: 3 attempts per operation**, counting the first try. On the 4th
+  failure, stop retrying that operation.
+- **Every retry must change strategy** — different argument, path, tool, or
+  decomposition. Replaying the identical call is forbidden (see Anti-Patterns
+  loop detection).
+- **Retry only transient/recoverable errors.** Fatal errors are reported, not
+  retried.
+- **After the cap:** mark the unit failed, record the last error, and continue
+  with independent units. Escalate to a more capable agent only when the
+  failure blocks the task's core goal.
+
+### Timeout selection
+
+Timeouts are a per-call tool argument, not a runtime-adaptive mechanism — pick
+the value by task class before invoking:
+
+- **Fast reads/searches** (`git status`, `rg`, `ls`) → short (30s).
+- **Builds/tests/installs** (`npm test`, `npm run build`, package installs) →
+  long (300s).
+- **Unknown duration** → start at 60s. On timeout, treat it as `transient` and
+  **change strategy** (run in background, split the command, or reduce scope) —
+  never replay the identical command with a longer timeout.
+
+### Failure isolation
+
+- **Decompose into independently completable units.** A unit's failure must not
+  block the others; collect successes and failures separately.
+- **Partial success is a valid outcome.** Deliver the completed units, report
+  the failed ones with reasons, and let the user decide the next step.
+- **Never hard-carry a blocked unit.** Do not burn the remaining budget forcing
+  a step that cannot succeed — mark it blocked and move on.
+
 ## Git Safety
 
 - Only stage and commit files you modified in this session. Never `git add -A`,

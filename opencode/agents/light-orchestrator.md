@@ -49,7 +49,7 @@ Reject the task immediately — do not attempt a degraded version — when:
 ```
 
 ## Rules
-- Follow AGENTS.md — especially Comment Discipline, and Quality Bar
+- Follow AGENTS.md — especially Comment Discipline, Quality Bar, and Progress & Failure Discipline (retry cap 3, strategy change, mark blocked units instead of hard-carrying)
 - Be fast, be correct, be minimal
 - If the task is more complex than expected or involves 2+ non-trivial files, escalate to `deep-worker` (v4-pro) immediately
 - **No research, no delegation.** You have the full task context from the orchestrator. The only subagent you may spawn is `oracle` (read-only) for analysis — e.g. the `/simplify` two-stage flow. Never spawn any other subagent.

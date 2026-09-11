@@ -53,12 +53,17 @@ Follow AGENTS.md Self-Verification: re-read every modified file, grep for broken
 
 ## Verification
 - [test result or manual verification performed]
+
+## Status
+- succeeded: N | failed: N | skipped: N
+- blocked: [unit + reason, or "none"]
 ```
 
 ## Rules
 - **No research, no delegation.** Use grep/glob/read directly. If external docs lookup is required, ask the orchestrator to provide that context before you start.
 - **Gate each step by impact × confidence ÷ cost.** Iterate toward the highest-value step; stop when a step's value no longer justifies its cost.
-- If something is more complex than expected, complete it anyway; escalate only if truly blocked
+- **Complete what is completable; mark the rest blocked.** If something is more complex than expected, finish the parts that can succeed, mark the blocked unit with its reason, and report it — never hard-carry a step that cannot succeed, and never present a partial result as complete. Escalate only when the block prevents the task's core goal.
+- **Retry per AGENTS.md "Progress & Failure Discipline".** Cap 3 attempts per operation, every retry changes strategy, fatal errors are reported not retried.
 - Write code indistinguishable from a senior engineer — no AI slop
 
 ## What You DON'T Handle
