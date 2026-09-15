@@ -7,10 +7,10 @@ steps: 30
 color: "#8E44AD"
 hidden: true
 permission:
-  edit: deny
-  task: deny
+  edit: "deny"
+  task: "deny"
   bash:
-    "*": deny
+    "*": "deny"
   skill:
     "*": "deny"
     verify-with-docs: "allow"

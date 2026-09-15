@@ -235,7 +235,7 @@ Other optimizations:
 | Change | What changed | Savings |
 | --- | --- | --- |
 | `AGENTS.md` trim | 15173 → 14117 bytes | **7.0%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
-| `orchestrator.md` trim | 14678 → 14102 bytes | **3.9%**, plus removal of duplicated wording shared with `AGENTS.md` |
+| `orchestrator.md` trim | 14678 → 14078 bytes | **4.1%**, plus removal of duplicated wording shared with `AGENTS.md` |
 | `dcp.jsonc` comment trim | comments only, keys/values unchanged | no runtime cost (comments never enter the API request) |
 | Built-in utility agents on flash | build/plan/title/summary/compaction | single-call cost drops to **1/3** of pro |
 

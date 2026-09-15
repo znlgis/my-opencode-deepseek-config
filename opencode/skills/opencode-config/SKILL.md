@@ -19,9 +19,30 @@ this file only covers this repository's local conventions.
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input.
 - Use the singular keys (`plugin`, `snapshot`), not the fork's plural (`plugins`, `snapshots`).
 
+## Version drift: installed 1.18.4 vs the `dev` branch
+This repo targets the **installed** OpenCode (1.18.4), whose schema uses
+**singular** keys. The `dev`-branch source (the `opencode-docs` reference) is a
+future/v2 schema that renamed them to **plural** and dropped several keys. Do
+NOT "fix" the repo to match `dev` — that breaks 1.18.4. Verify against the
+installed binary with `opencode debug config` (it echoes the resolved config and
+errors on invalid keys), not against `dev` source.
+
+| Concern | 1.18.4 (this repo) | `dev` branch |
+| --- | --- | --- |
+| Top-level keys | `agent`, `command`, `plugin`, `provider`, `permission`, `attachment` | `agents`, `commands`, `plugins`, `providers`, `permissions`, `attachments` |
+| `small_model`, `subagent_depth` | present | absent |
+| `skills` | object (`paths`/`urls`) | flat array of path/URL strings |
+| `compaction` | `tail_turns`, `preserve_recent_tokens`, `reserved` | `keep.tokens`, `buffer` |
+| Model `cost` | flat `cache_read` / `cache_write` | nested `cache: { read, write }` |
+| Agent `options` (thinking, `reasoningEffort`) | supported | not in the agent schema |
+
+`dev` decodes with `onExcessProperty: "ignore"`, so unknown keys are silently
+dropped rather than erroring — a config can look valid on `dev` while its keys
+do nothing. That is why the installed binary is the authority here.
+
 ## Config key shapes (authoritative)
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it. String shorthand (`"alias": "../docs"`) allowed.
-- **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills.
+- **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills. (1.18.4 shape; `dev` replaces this with a flat string array — see the drift table above.)
 - **agent (inline)** — override built-ins or define agents inline in `opencode.jsonc`: `"agent": { "build": { "model": "…", "mode": "subagent" } }`. Inline keys override file-based `agents/<name>.md`.
 - **compaction** — `{ "auto": bool, "prune": bool, "tail_turns": number, "preserve_recent_tokens": number, "reserved": number }` (defaults: `auto` true, `prune` false). `tail_turns` caps how many recent user turns (plus their assistant/tool responses) stay verbatim; `preserve_recent_tokens` caps the verbatim token budget for recent turns; `reserved` is the token buffer kept to avoid overflow during compaction.
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).

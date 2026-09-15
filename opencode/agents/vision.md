@@ -9,17 +9,17 @@ permission:
   task:
     "*": "deny"
   skill:
-    "*": deny
-    "vision-prep": allow
+    "*": "deny"
+    "vision-prep": "allow"
   bash:
-    "*": deny
-    "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "rg *": allow
-    "Get-ChildItem*": allow
-    "Get-Content*": allow
+    "*": "deny"
+    "git status*": "allow"
+    "git diff*": "allow"
+    "git log*": "allow"
+    "git show*": "allow"
+    "rg *": "allow"
+    "Get-ChildItem*": "allow"
+    "Get-Content*": "allow"
 ---
 
 # Vision

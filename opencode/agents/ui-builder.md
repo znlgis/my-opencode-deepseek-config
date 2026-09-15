@@ -9,8 +9,8 @@ permission:
   task:
     "*": "deny"
   skill:
-    "*": deny
-    "codebase-design": allow
+    "*": "deny"
+    "codebase-design": "allow"
 ---
 
 # UI Builder

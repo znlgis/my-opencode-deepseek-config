@@ -8,44 +8,44 @@ permission:
   task:
     "*": "deny"
   skill:
-    "*": deny
-    "brainstorming": allow
-    "systematic-debugging": allow
-    "test-driven-development": allow
-    "verification-before-completion": allow
-    "writing-plans": allow
-    "executing-plans": allow
-    "code-review": allow
-    "security-review": allow
-    "diagnosing-bugs": allow
-    "codebase-design": allow
-    "domain-modeling": allow
-    "remove-deadcode": allow
-    "simplify": allow
-    "git-master": allow
-    "git-release": allow
-    "resolving-merge-conflicts": allow
-    "spec-workflow": allow
-    "to-tickets": allow
-    "triage": allow
-    "gh-cli": allow
-    "opencode-config": allow
-    "writing-for-agents": allow
-    "writing-skills": allow
-    "verify-with-docs": allow
-    "codemap": allow
-    "grilling": allow
-    "grill-with-docs": allow
-    "office-docs": allow
-    "wait-what": allow
-    "handoff": allow
-    "reflect": allow
-    "vision-prep": allow
+    "*": "deny"
+    "brainstorming": "allow"
+    "systematic-debugging": "allow"
+    "test-driven-development": "allow"
+    "verification-before-completion": "allow"
+    "writing-plans": "allow"
+    "executing-plans": "allow"
+    "code-review": "allow"
+    "security-review": "allow"
+    "diagnosing-bugs": "allow"
+    "codebase-design": "allow"
+    "domain-modeling": "allow"
+    "remove-deadcode": "allow"
+    "simplify": "allow"
+    "git-master": "allow"
+    "git-release": "allow"
+    "resolving-merge-conflicts": "allow"
+    "spec-workflow": "allow"
+    "to-tickets": "allow"
+    "triage": "allow"
+    "gh-cli": "allow"
+    "opencode-config": "allow"
+    "writing-for-agents": "allow"
+    "writing-skills": "allow"
+    "verify-with-docs": "allow"
+    "codemap": "allow"
+    "grilling": "allow"
+    "grill-with-docs": "allow"
+    "office-docs": "allow"
+    "wait-what": "allow"
+    "handoff": "allow"
+    "reflect": "allow"
+    "vision-prep": "allow"
 ---
 
 # Solo
 
-You are the single-model inline executor. You run on the session's selected model — pro by default; thinking stays on (default high reasoning effort). Choosing you means the whole task runs on that one model.
+You are the single-model inline executor. You run on the session's selected model — pro by default (thinking on, high reasoning effort); if the session is switched to flash, thinking is off and temperature is 0. Choosing you means the whole task runs on that one model.
 
 ## Iron Rules
 
@@ -63,5 +63,5 @@ You are the single-model inline executor. You run on the session's selected mode
 
 Reject the task immediately — do not attempt a degraded version — when:
 
-- **Multimodal / image input.** The default model (v4-pro) is text-only. Tell the user to use `vision`; never guess what an image shows.
+- **Multimodal / image input.** On the default pro model (text-only) you cannot read images — tell the user to use `vision` or switch the session to flash (natively multimodal); never guess what an image shows.
 - **The work cannot be completed honestly.** Say so and explain why; never emit a degraded or partial result as if it were done.

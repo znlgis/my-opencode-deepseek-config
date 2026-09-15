@@ -7,17 +7,17 @@ steps: 40
 color: "#2ECC71"
 hidden: true
 permission:
-  edit: deny
-  task: deny
+  edit: "deny"
+  task: "deny"
   bash:
-    "*": deny
-    "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "git blame*": allow
-    "git grep*": allow
-    "rg *": allow
+    "*": "deny"
+    "git status*": "allow"
+    "git diff*": "allow"
+    "git log*": "allow"
+    "git show*": "allow"
+    "git blame*": "allow"
+    "git grep*": "allow"
+    "rg *": "allow"
   skill:
     "*": "deny"
     codemap: "allow"

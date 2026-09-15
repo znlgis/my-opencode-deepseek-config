@@ -6,21 +6,21 @@ model: deepseek/deepseek-v4-pro
 steps: 40
 color: "#F39C12"
 permission:
-  edit: deny
-  task: deny
+  edit: "deny"
+  task: "deny"
   bash:
-    "*": deny
-    "git status*": allow
-    "git diff*": allow
-    "git log*": allow
-    "git show*": allow
-    "git blame*": allow
-    "git grep*": allow
-    "rg *": allow
-    "gh pr view*": allow
-    "gh pr diff*": allow
-    "gh issue view*": allow
-    "gh api*": allow
+    "*": "deny"
+    "git status*": "allow"
+    "git diff*": "allow"
+    "git log*": "allow"
+    "git show*": "allow"
+    "git blame*": "allow"
+    "git grep*": "allow"
+    "rg *": "allow"
+    "gh pr view*": "allow"
+    "gh pr diff*": "allow"
+    "gh issue view*": "allow"
+    "gh api*": "allow"
   skill:
     "*": "deny"
     reflect: "allow"
