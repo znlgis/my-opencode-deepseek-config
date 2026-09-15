@@ -43,9 +43,11 @@
 
   // ══════════════════════════════════════════════════════════════
   // Compression strategy — tuned for DeepSeek V4 (1M context window)
-  // Core principle: proactive compression > passive overflow; DCP compresses proactively at the 77K threshold, native auto compaction is the near-overflow fallback — the two complement each other
-  // Division of labor: built-in compaction handles auto-trigger + prune (opencode.jsonc); DCP handles proactive dedup + compression thresholds. The two complement each other.
-  // Per-model overrides (modelMaxLimits/modelMinLimits) let pro compress earlier than flash — pro input costs 3x flash.
+  // Proactive compression beats passive overflow: DCP compresses at the
+  // thresholds below; native auto compaction (opencode.jsonc) is the
+  // near-overflow fallback. The two complement each other.
+  // Per-model overrides let pro compress earlier than flash — pro input
+  // costs 3x flash, so the expensive window is cut first.
   // ══════════════════════════════════════════════════════════════
   "compress": {
     // range mode: compress a contiguous conversation range into a high-fidelity summary
@@ -55,10 +57,9 @@
     // Summary buffer: compressed-summary tokens don't count toward maxContextLimit, fully using the window
     "summaryBuffer": true,
 
-    // Context thresholds (absolute token values, not percentages):
-    // DeepSeek V4 actually has a 1M context window (not 128K); with percentages, 60%≈600K and
-    // 30%≈300K, which normal sessions (20K-200K) never reach, so DCP would never trigger compression.
-    // Use absolute token values instead to restore the intended ~77K/38K proactive compression, decoupled from the model window.
+    // Context thresholds are ABSOLUTE token values, not percentages: DeepSeek V4
+    // has a 1M window, so 60%/30% would mean 600K/300K — normal sessions
+    // (20K-200K) never reach that and DCP would never trigger.
     "maxContextLimit": 77000,
     "minContextLimit": 38000,
 
@@ -72,11 +73,10 @@
       "deepseek/deepseek-v4-pro": 26000
     },
 
-    // Remind compression every 3 LLM requests (more frequent than default 5, tuned for token efficiency)
+    // Nudge every 3 LLM requests (default 5) and from the 12th message after a
+    // user message (default 15) — earlier reminders keep the window small.
     "nudgeFrequency": 3,
-    // Inject compression reminders starting from the 12th message after a user message (earlier than default 15)
     "iterationNudgeThreshold": 12,
-    // Strong nudge: the model is explicitly asked to prioritize compression
     "nudgeForce": "strong",
 
     // Preserve the output of the following tools during compression (avoid losing critical info)
@@ -89,8 +89,9 @@
 
     // <protect> tags (off — we have no such usage pattern yet)
     "protectTags": false,
-    // Allow DCP to compress user messages (e.g. large log pastes), key for DeepSeek V4 1M window efficiency.
-    // When set to true, all user messages are kept permanently — 20K+ log pastes become incompressible.
+    // Allow DCP to compress user messages (e.g. large log pastes). Setting this
+    // true would keep every user message permanently, making 20K+ log pastes
+    // incompressible.
     "protectUserMessages": false
   },
 

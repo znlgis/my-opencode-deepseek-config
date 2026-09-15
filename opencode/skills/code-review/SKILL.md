@@ -47,6 +47,28 @@ outside the blast radius — not pre-existing unchanged code, not unrelated file
 ADRs and other historical decision documents are records, not living specs: do
 not flag them stale.
 
+## Model tier — flash first, pro on escalation
+
+Review is two-tier so the common case never pays pro prices:
+
+| Tier | Agent | Handles |
+| --- | --- | --- |
+| **1 — flash** | `light-orchestrator` (via `/review`) | Abbreviated path: ≤8 logic files, ≤300 effective lines, no stakes trigger. |
+| **2 — pro** | `reviewer` | Full path, any high-stakes trigger, or a tier-1 finding that needs deep confirmation. |
+
+Escalate to tier 2 when **any** of these holds:
+
+- The path is **Full** (large diff or high-stakes override).
+- Tier 1 found a **critical** or **major** finding whose impact it cannot
+  confirm from the diff alone (needs cross-file tracing).
+- The diff touches a trust boundary (also load `security-review`).
+- The user explicitly asked for a deep review.
+
+Otherwise stay on tier 1 and report. A tier-1 report is a complete review, not a
+preview — do not escalate merely to double-check a clean result. When escalating,
+pass the tier-1 findings as unverified leads so tier 2 confirms rather than
+re-derives them.
+
 ## Large-diff two-axis split
 
 Default is the single pass above. Only when the effective diff is large

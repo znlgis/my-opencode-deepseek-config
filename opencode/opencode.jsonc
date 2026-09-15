@@ -73,20 +73,19 @@
     ],
     // DeepSeek thinking split (deepseek-harness official): flash disables
     // thinking for cheapest+fastest runs; pro keeps the default (thinking on).
-    // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
-    // and vision variants are now one natively-multimodal model, so it carries
-    // the modalities block (image input). Without it OpenCode treats the model
-    // as text-only and rejects read_image calls.
+    // `deepseek-flash` is the merged V4.1 Flash model — the former text-only and
+    // vision variants are now one natively-multimodal model, so it carries the
+    // modalities block (image input). Without it OpenCode treats the model as
+    // text-only and rejects read_image calls.
     // `options.thinking` is a provider passthrough, not a native schema field:
     // OpenCode forwards it verbatim to the DeepSeek API (OpenAI-format thinking
     // toggle — {"type":"enabled"|"disabled"}).
-    // `reasoning_effort` (camelCase `reasoningEffort` in config, lowered to
-    // snake_case in the request body) is a REQUEST-LEVEL thinking-strength
-    // control (low/high/max), NOT a model id. OpenCode does not auto-generate
-    // reasoning-effort variants for DeepSeek, so it must be set manually —
-    // per-AGENT via `agent.options` (deep-merged over `model.options`), never
-    // at the model level. Keeping it off the model id preserves the 2-model
-    // matrix (pro / flash).
+    // `reasoning_effort` (camelCase `reasoningEffort`, lowered to snake_case in
+    // the request body) is a REQUEST-LEVEL thinking-strength control
+    // (low/high/max), NOT a model id. OpenCode does not auto-generate
+    // reasoning-effort variants for DeepSeek, so it is set per-AGENT via
+    // `agent.options` (deep-merged over `model.options`), never at the model
+    // level — that keeps the 2-model matrix (pro / flash) intact.
     "provider": {
         "deepseek": {
             // `cost` is USD per 1M tokens, off-peak rates effective with the
@@ -147,10 +146,10 @@
         "compaction": { "model": "deepseek/deepseek-flash" }
     },
     // Trim only oversized tool outputs (full text still saved to disk, preview
-    // returned). 800 lines / 20KB is deliberately more conservative than the
-    // official default (max_lines=2000). It stays loose enough to avoid
-    // truncating normal file reads — 200/8192 was too tight and forced agents
-    // to re-read, costing more tokens than the tighter preview saved.
+    // returned). 800 lines / 20KB is more conservative than the official
+    // default (max_lines=2000) yet loose enough to avoid truncating normal file
+    // reads — 200/8192 was too tight and forced agents to re-read, costing more
+    // tokens than the tighter preview saved.
     "tool_output": {
         "max_lines": 800,
         "max_bytes": 20480
@@ -201,9 +200,14 @@
             "template": "Read the attached image(s) and describe what you see. Report findings with concrete details (text, layout, colors, positions). If the task requires code changes beyond visual interpretation, escalate to deep-worker."
         },
         "review": {
-            "description": "Route to reviewer for code review (local diff or PR)",
+            "description": "Code review — flash first pass, pro escalation on complex findings",
+            "agent": "light-orchestrator",
+            "template": "Load the code-review skill and run the tier-1 (flash) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (pro) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
+        },
+        "deep-review": {
+            "description": "Force a pro (deepseek-v4-pro) code review, skipping the flash first pass",
             "agent": "reviewer",
-            "template": "Load the code-review skill. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Otherwise scope the local diff and scale depth to its effective size, then review and report findings by severity. Scope-first gate: if the diff is large (>500 effective lines) or trivial, report a scoped plan and stop rather than deep-reviewing. Do not modify code."
+            "template": "Load the code-review skill and run the Full path regardless of size. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Report findings by severity. Do not modify code."
         },
         "plan": {
             "description": "Route to planner for strategic planning",

@@ -14,6 +14,7 @@
 - 上下文压缩：内置 compaction（opencode.jsonc）管自动触发 + prune 裁旧工具输出，DCP（dcp.jsonc）管主动去重 + 压缩阈值，两者互补
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **25 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载
+- 命令：**17 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
 - 插件：`superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）、`@tarquinen/opencode-dcp`（固定版本 `@3.1.15`，智能上下文裁剪）；两者均固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
 
 ### 插件与模型映射（重要）
@@ -176,11 +177,23 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 - **Trivial → flash off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走 flash agent，thinking 关闭（最省）
 - **Routine-nontrivial → flash low**：规划、常规多文件实现等稍有难度的任务走 flash + `reasoningEffort: low`
-- **Deep/uncertain → pro high**：深度推理、根因分析、代码审查、重型多文件实现——只用 pro
-- **Vision 专责多模态**：检测到图像/截图/图表等视觉输入时，路由到 `vision` agent（`deepseek-flash`，原生多模态）
+- **Deep/uncertain → pro high**：深度推理、根因分析、重型多文件实现——只用 pro
+- **代码审查 → flash 初检，pro 升级**：`/review` 默认走 flash 初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（pro）；`/deep-review` 强制 pro 全量审查
+- **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）；非视觉任务不主动传图、不启用视觉能力
 - **自动升级**：flash agent 无法胜任时自动升级到 pro（带完整上下文）
 
-用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）。
+用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）；`/review` → flash 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ flash 初检后升级 pro。
+
+#### 代码审查的两级模型（轻量化 Review）
+
+| 层级 | 模型 | 执行者 | 覆盖范围 |
+| --- | --- | --- | --- |
+| Tier 1（默认） | `deepseek-flash` | `light-orchestrator`（`/review`） | Abbreviated 路径：≤8 个逻辑文件且 ≤300 有效行，且无高风险触发 |
+| Tier 2（升级） | `deepseek-v4-pro` | `reviewer`（`/deep-review` 或自动升级） | Full 路径、高风险触发、或 Tier 1 发现需跨文件确认的 critical/major |
+
+升级触发条件（命中任一即升级）：路径为 Full（大 diff 或高风险正则命中）；Tier 1 发现 critical/major 但无法仅凭 diff 确认影响；diff 触及信任边界（同时加载 `security-review`）；用户明确要求深度审查。
+
+Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认一下"而升级。升级时把 Tier 1 发现作为**未验证线索**传给 Tier 2，让 pro 确认而非重新推导，避免重复 token 消耗。
 
 ### 成本对比
 
@@ -205,6 +218,27 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 同一 token 量下 pro ≈ 3× flash。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
 
+#### 优化前后成本对比
+
+以"审查一个 300 有效行的本地 diff"为例（假设 60K 输入 tokens，其中 45K 命中缓存，8K 输出）：
+
+| 方案 | 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
+| --- | --- | --- | --- | --- | --- |
+| 优化前（`/review` 固定 pro） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
+| 优化后（`/review` flash 初检） | flash | 45K × 0.007 = $0.0003 | 15K × 0.22 = $0.003 | 8K × 0.66 = $0.005 | **≈ $0.009** |
+| 优化后（升级到 pro 全量） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
+
+**节省比例**：小 diff 走 flash 初检约省 **67%**（$0.027 → $0.009）；只有命中升级触发条件时才付 pro 全价，且升级时传递未验证线索避免重复推导。
+
+其他优化项的 token 节省：
+
+| 优化项 | 变更 | 节省 |
+| --- | --- | --- |
+| `AGENTS.md` 精简 | 15179 → 14117 字节 | 每轮常驻上下文省 **7.0%**（该文件每轮都加载，收益随会话轮数线性放大） |
+| `orchestrator.md` 精简 | 14654 → 14078 字节 | 省 **3.9%**，且消除与 `AGENTS.md` 的重复表述 |
+| `dcp.jsonc` 注释精简 | 仅注释，键值不变 | 无运行时成本（注释不进入 API 请求） |
+| 内置 utility agent 全走 flash | build/plan/title/summary/compaction | 单次调用成本降至 pro 的 **1/3** |
+
 ## Agent 结构
 
 ### Primary Agent
@@ -223,7 +257,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | `planner` | flash | 读写 | 规划、架构、拆解任务 |
 | `deep-worker` | v4-pro | 读写 | 重型实现、多文件改动、复杂调试 |
 | `oracle` | v4-pro | **只读** | 根因分析、深度理解代码 |
-| `reviewer` | v4-pro | **只读** | 单遍代码审查（证据门控） |
+| `reviewer` | v4-pro | **只读** | 代码审查升级层：Full 路径 / 高风险触发 / 确认 flash 初检线索 |
 | `ui-builder` | flash | 读写 | 前端与 UI 相关任务 |
 | `consultant` | flash | 读写 | 方案讨论、最佳实践建议 |
 | `explore` | flash | **只读** | 代码库搜索、并行探索 |
@@ -249,7 +283,8 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | `/quick` | `light-orchestrator` | 轻量任务、单文件编辑 |
 | `/ui` | `ui-builder` | 前端/UI 工作 |
 | `/vision` | `vision` | 多模态：图像/截图/图表理解 |
-| `/review` | `reviewer`（code-review + gh-cli） | 本地 diff 或 PR 审查：带 PR ref/URL 时回帖 GitHub（event=COMMENT），否则审查本地 diff 并按严重度分级报告；scope-first 门控（>500 有效行或琐碎 diff 先报 scoped 计划并停止） |
+| `/review` | `light-orchestrator`（code-review）→ 按需升级 `reviewer` | 代码审查：默认 flash 初检（Abbreviated 路径直接出报告）；命中升级触发条件时委派 `reviewer`（pro）并传递未验证线索；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
+| `/deep-review` | `reviewer`（code-review + gh-cli） | 强制 pro 全量审查，跳过 flash 初检；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
 | `/plan` | `planner` | 制定计划、技术方案 |
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 
@@ -284,7 +319,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 | Skill | 作用 |
 | --- | --- |
-| `code-review` | 单遍代码审查 + 证据门控；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
+| `code-review` | 单遍代码审查 + 证据门控；flash 初检 / pro 升级两级模型；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
 | `codemap` | 生成带标注的仓库结构图，快速定向，节省探索 token |
 | `gh-cli` | GitHub CLI v2.100+ 参考：PR 回帖、api、rate limit、gh pr checks、gh skill/gh-aw、GHSA 安全要点 |
 | `git-master` | 高级 Git 操作：rebase、squash、fixup、bisect、reflog、代码考古、worktree |
@@ -358,10 +393,18 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 /oracle  → /deep  → /rmslop  → /commit
 ```
 
-**代码审查：**
+**代码审查（flash 初检 → pro 升级）：**
 ```text
+/review        ← 默认：flash 初检（Abbreviated 路径直接出报告，最省）
 /review #123   ← PR 模式：审查 PR + 回帖 GitHub（gh-cli，event=COMMENT）
-/review        ← 本地 diff 模式：按严重度分级报告（scope-first 门控）
+/deep-review   ← 强制 pro 全量审查（大 diff / 高风险 / 需要跨文件确认时）
+```
+
+**日常编码（flash 为主）：**
+```text
+「给 utils 加一个日期格式化函数」  → light-orchestrator 单文件实现   （flash low）
+「这个函数为什么返回 undefined」   → explore 定位 → 直接回答        （flash off）
+/quick 修一下这个拼写错误          → light-orchestrator 直接改       （flash low）
 ```
 
 ## 借鉴来源
@@ -384,3 +427,4 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
 - **持续改进** —— reflect 机制化发现摩擦、code-review 证据门控保证质量
+- **审查成本分级** —— 代码审查默认 flash 初检（省约 67%），仅在升级触发条件命中时付 pro 全价；升级时传递未验证线索，避免重复推导

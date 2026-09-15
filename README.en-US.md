@@ -14,6 +14,7 @@
 - Context compression: built-in compaction (opencode.jsonc) handles auto-triggering + pruning of stale tool output; DCP (dcp.jsonc) handles proactive dedup + compression thresholds — the two complement each other
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **25** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
+- Commands: **17** shortcut commands (agent routing / operations / inline / spec), see below
 - Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
 ### Plugins and Model Mapping (Important)
@@ -176,11 +177,23 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 
 - **Trivial → flash off**: well-defined light tasks — search, lookup, consultation, UI, exploration, doc retrieval — go to flash agents with thinking off (cheapest)
 - **Routine-nontrivial → flash low**: planning and routine multi-file work use flash + `reasoningEffort: low`
-- **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, code review, heavy multi-file implementation — pro only
-- **Vision owns multimodal**: when visual input (images, screenshots, charts) is detected, route to the `vision` agent (`deepseek-flash`, natively multimodal)
+- **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, heavy multi-file implementation — pro only
+- **Code review → flash first pass, pro escalation**: `/review` runs a flash first pass (Abbreviated path) by default and delegates to `reviewer` (pro) only when an escalation trigger fires; `/deep-review` forces a full pro review
+- **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal); non-visual tasks never attach images or invoke vision
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
 
-Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle).
+Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle); `/review` → flash first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → flash first pass then pro escalation.
+
+#### Two-Tier Code Review (Lightweight Review)
+
+| Tier | Model | Executor | Coverage |
+| --- | --- | --- | --- |
+| Tier 1 (default) | `deepseek-flash` | `light-orchestrator` (`/review`) | Abbreviated path: ≤8 logic files and ≤300 effective lines, no high-stakes trigger |
+| Tier 2 (escalation) | `deepseek-v4-pro` | `reviewer` (`/deep-review` or auto-escalation) | Full path, a high-stakes trigger, or a Tier-1 critical/major needing cross-file confirmation |
+
+Escalation triggers (any one): the path is Full (large diff or high-stakes regex hit); Tier 1 found a critical/major it cannot confirm from the diff alone; the diff touches a trust boundary (also load `security-review`); the user explicitly asked for a deep review.
+
+A Tier-1 report is a **complete review**, not a preview — a clean result is never escalated merely to double-check. On escalation, Tier-1 findings are passed as **unverified leads** so pro confirms rather than re-derives them, avoiding duplicate token spend.
 
 ### Cost Comparison
 
@@ -205,6 +218,27 @@ Two cost levers:
 
 At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to estimate from actual token counts.
 
+#### Before/After Cost Comparison
+
+Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hits, 8K output):
+
+| Approach | Model | Cache hit | Input miss | Output | Total |
+| --- | --- | --- | --- | --- | --- |
+| Before (`/review` always pro) | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
+| After (`/review` flash first pass) | flash | 45K × 0.007 = $0.0003 | 15K × 0.22 = $0.003 | 8K × 0.66 = $0.005 | **≈ $0.009** |
+| After (escalated to full pro) | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
+
+**Savings**: a small diff on the flash first pass saves about **67%** ($0.027 → $0.009); the full pro price is paid only when an escalation trigger fires, and escalation passes unverified leads to avoid re-derivation.
+
+Other optimizations:
+
+| Change | What changed | Savings |
+| --- | --- | --- |
+| `AGENTS.md` trim | 15179 → 14117 bytes | **7.0%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
+| `orchestrator.md` trim | 14654 → 14078 bytes | **3.9%**, plus removal of duplicated wording shared with `AGENTS.md` |
+| `dcp.jsonc` comment trim | comments only, keys/values unchanged | no runtime cost (comments never enter the API request) |
+| Built-in utility agents on flash | build/plan/title/summary/compaction | single-call cost drops to **1/3** of pro |
+
 ## Agent Structure
 
 ### Primary Agent
@@ -223,7 +257,7 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 | `planner` | flash | read-write | Planning, architecture, task breakdown |
 | `deep-worker` | v4-pro | read-write | Heavy implementation, multi-file changes, complex debugging |
 | `oracle` | v4-pro | **read-only** | Root-cause analysis, deep code understanding |
-| `reviewer` | v4-pro | **read-only** | Single-pass code review (evidence-gated) |
+| `reviewer` | v4-pro | **read-only** | Review escalation tier: Full path / high-stakes trigger / confirming flash first-pass leads |
 | `ui-builder` | flash | read-write | Frontend and UI tasks |
 | `consultant` | flash | read-write | Approach discussions, best-practice advice |
 | `explore` | flash | **read-only** | Codebase search, parallel exploration |
@@ -249,7 +283,8 @@ At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to e
 | `/quick` | `light-orchestrator` | Lightweight tasks, single-file edits |
 | `/ui` | `ui-builder` | Frontend/UI work |
 | `/vision` | `vision` | Multimodal: image/screenshot/chart understanding |
-| `/review` | `reviewer` (code-review + gh-cli) | Local-diff or PR review: with a PR ref/URL, posts to GitHub (event=COMMENT); otherwise reviews the local diff and reports by severity; scope-first gate (>500 effective lines or trivial → report a scoped plan and stop) |
+| `/review` | `light-orchestrator` (code-review) → escalates to `reviewer` as needed | Code review: flash first pass by default (Abbreviated path reports directly); delegates to `reviewer` (pro) with unverified leads when an escalation trigger fires; posts to GitHub (event=COMMENT) with a PR ref/URL |
+| `/deep-review` | `reviewer` (code-review + gh-cli) | Forces a full pro review, skipping the flash first pass; posts to GitHub (event=COMMENT) with a PR ref/URL |
 | `/plan` | `planner` | Create plans and technical proposals |
 | `/oracle` | `oracle` | Deep analysis, root-cause tracing |
 
@@ -284,7 +319,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 
 | Skill | Purpose |
 | --- | --- |
-| `code-review` | Single-pass code review + evidence gating; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
+| `code-review` | Single-pass code review + evidence gating; two-tier flash first pass / pro escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
 | `codemap` | Generates an annotated repository structure map for quick orientation, saving exploration tokens |
 | `gh-cli` | GitHub CLI v2.100+ reference: PR posting, api, rate limits, gh pr checks, gh skill/gh-aw, GHSA security notes |
 | `git-master` | Advanced Git operations: rebase, squash, fixup, bisect, reflog, code archaeology, worktrees |
@@ -358,10 +393,18 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 /oracle  → /deep  → /rmslop  → /commit
 ```
 
-**Code review:**
+**Code review (flash first pass → pro escalation):**
 ```text
+/review        ← default: flash first pass (Abbreviated path reports directly, cheapest)
 /review #123   ← PR mode: review PR + post to GitHub (gh-cli, event=COMMENT)
-/review        ← local-diff mode: report by severity (scope-first gate)
+/deep-review   ← force a full pro review (large diff / high stakes / cross-file confirmation)
+```
+
+**Daily coding (flash-first):**
+```text
+"Add a date-formatting helper to utils"  → light-orchestrator single-file implementation  (flash low)
+"Why does this function return undefined?" → explore locates → answer directly             (flash off)
+/quick fix this typo                     → light-orchestrator edits directly                (flash low)
 ```
 
 ## Sources
@@ -384,3 +427,4 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change
 - **Volatile-zone discipline** — volatile content (timestamps, random IDs, dynamic file lists) sits at the payload tail to protect DeepSeek's prompt-cache prefix
 - **Continuous improvement** — reflect mechanizes friction discovery, code-review's evidence gating guards quality
+- **Tiered review cost** — code review defaults to a flash first pass (about 67% cheaper), paying full pro price only when an escalation trigger fires; escalation passes unverified leads to avoid re-derivation
