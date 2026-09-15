@@ -23,7 +23,7 @@ this file only covers this repository's local conventions.
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it. String shorthand (`"alias": "../docs"`) allowed.
 - **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills.
 - **agent (inline)** — override built-ins or define agents inline in `opencode.jsonc`: `"agent": { "build": { "model": "…", "mode": "subagent" } }`. Inline keys override file-based `agents/<name>.md`.
-- **compaction** — `{ "auto": bool, "prune": bool, "reserved": number }` (defaults: `auto` true, `prune` false). `reserved` is the token buffer kept to avoid overflow during compaction.
+- **compaction** — `{ "auto": bool, "prune": bool, "tail_turns": number, "preserve_recent_tokens": number, "reserved": number }` (defaults: `auto` true, `prune` false). `tail_turns` caps how many recent user turns (plus their assistant/tool responses) stay verbatim; `preserve_recent_tokens` caps the verbatim token budget for recent turns; `reserved` is the token buffer kept to avoid overflow during compaction.
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)

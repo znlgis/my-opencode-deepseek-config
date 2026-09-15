@@ -14,7 +14,7 @@
 - 上下文压缩：内置 compaction（opencode.jsonc）管自动触发 + prune 裁旧工具输出，DCP（dcp.jsonc）管主动去重 + 压缩阈值，两者互补
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **25 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载
-- 命令：**17 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
+- 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
 - 插件：`superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）、`@tarquinen/opencode-dcp`（固定版本 `@3.1.15`，智能上下文裁剪）；两者均固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
 
 ### 插件与模型映射（重要）
@@ -234,8 +234,8 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 | 优化项 | 变更 | 节省 |
 | --- | --- | --- |
-| `AGENTS.md` 精简 | 15179 → 14117 字节 | 每轮常驻上下文省 **7.0%**（该文件每轮都加载，收益随会话轮数线性放大） |
-| `orchestrator.md` 精简 | 14654 → 14078 字节 | 省 **3.9%**，且消除与 `AGENTS.md` 的重复表述 |
+| `AGENTS.md` 精简 | 15173 → 14117 字节 | 每轮常驻上下文省 **7.0%**（该文件每轮都加载，收益随会话轮数线性放大） |
+| `orchestrator.md` 精简 | 14678 → 14102 字节 | 省 **3.9%**，且消除与 `AGENTS.md` 的重复表述 |
 | `dcp.jsonc` 注释精简 | 仅注释，键值不变 | 无运行时成本（注释不进入 API 请求） |
 | 内置 utility agent 全走 flash | build/plan/title/summary/compaction | 单次调用成本降至 pro 的 **1/3** |
 
@@ -269,7 +269,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`；`planner` → `spec-workflow`/`codebase-design`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`；`planner` → `spec-workflow`/`codebase-design`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。
 >
 > **思考分档（thinking tiers）**：`reasoning_effort` 是按 Agent 经 frontmatter `options` 设置的请求级思考强度（`low`/`high`/`max`），不是模型 ID。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking 关（最省）；`planner`/`light-orchestrator` = flash · thinking 开 + `reasoningEffort: low`；`deep-worker`/`oracle`/`reviewer` = pro · 默认 high；`solo` 无 `model` 字段，跟随会话所选模型（默认 pro），思考档随该模型而定。
 

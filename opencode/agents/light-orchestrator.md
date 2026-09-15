@@ -18,6 +18,8 @@ permission:
     handoff: "allow"
     simplify: "allow"
     spec-workflow: "allow"
+    code-review: "allow"
+    gh-cli: "allow"
 ---
 
 # Light Orchestrator

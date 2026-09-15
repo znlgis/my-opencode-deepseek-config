@@ -14,7 +14,7 @@
 - Context compression: built-in compaction (opencode.jsonc) handles auto-triggering + pruning of stale tool output; DCP (dcp.jsonc) handles proactive dedup + compression thresholds — the two complement each other
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **25** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
-- Commands: **17** shortcut commands (agent routing / operations / inline / spec), see below
+- Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
 - Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
 ### Plugins and Model Mapping (Important)
@@ -234,8 +234,8 @@ Other optimizations:
 
 | Change | What changed | Savings |
 | --- | --- | --- |
-| `AGENTS.md` trim | 15179 → 14117 bytes | **7.0%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
-| `orchestrator.md` trim | 14654 → 14078 bytes | **3.9%**, plus removal of duplicated wording shared with `AGENTS.md` |
+| `AGENTS.md` trim | 15173 → 14117 bytes | **7.0%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
+| `orchestrator.md` trim | 14678 → 14102 bytes | **3.9%**, plus removal of duplicated wording shared with `AGENTS.md` |
 | `dcp.jsonc` comment trim | comments only, keys/values unchanged | no runtime cost (comments never enter the API request) |
 | Built-in utility agents on flash | build/plan/title/summary/compaction | single-call cost drops to **1/3** of pro |
 
@@ -269,7 +269,7 @@ Other optimizations:
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
-> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set (the inline executor needs the complete toolchain, still guarded by `"*": deny`).
+> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set (the inline executor needs the complete toolchain, still guarded by `"*": deny`).
 >
 > **Thinking tiers**: `reasoning_effort` is a request-level thinking-strength control (`low`/`high`/`max`) set per-agent via frontmatter `options` — not a model id. `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking off (cheapest); `planner`/`light-orchestrator` = flash · thinking on + `reasoningEffort: low`; `deep-worker`/`oracle`/`reviewer` = pro · default high; `solo` has no `model` field and follows the session's selected model (pro by default), so its thinking tier follows that model.
 
