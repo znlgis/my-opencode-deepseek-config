@@ -37,8 +37,8 @@ in `agents/orchestrator.md` — do not restate them here.
 
 - **Byte-stable prefix.** Agent prompts, AGENTS.md, and rule order stay
   byte-identical; early reorders bust the prefix cache and re-pay full input
-  cost. Append volatile content (timestamps, random IDs, dynamic file lists)
-  near the END of the payload, never the head.
+  cost. Volatile content (timestamps, random IDs, per-request tokens, dynamic
+  file lists) goes near the END of the payload, never the head.
 - **Freeze toolsets.** Never reorder tool schemas or injected rules mid-session.
 - **Temperature.** flash: 0 (thinking off). pro: unset — thinking is on and
   temperature/top_p are silently ignored.
@@ -51,9 +51,6 @@ in `agents/orchestrator.md` — do not restate them here.
   pro prompt-cache prefix.
 - **reasoning_content** must round-trip on tool calls (opencode handles this);
   never reorder messages in ways that break it.
-- **Volatile zone.** Timestamps, random IDs, per-request tokens, and dynamic
-  file lists bust the prefix cache if they appear early. Keep them out of the
-  head of any payload; append them near the tail where a miss costs the least.
 
 ### Thinking tiers
 
@@ -95,6 +92,10 @@ zh-CN Windows system, Chinese; en-US, English. Never force English unless asked.
 
 - **No new models.** Only `deepseek/deepseek-v4-pro` and the natively
   multimodal `deepseek/deepseek-flash` may be used. Do not introduce others.
+- **Vision input is opt-in.** `deepseek-flash` accepts images, but an image
+  enters the payload only when the user supplied one or explicitly asked about
+  one. Never attach, generate, or request images for a non-visual task; route
+  genuine visual work to the `vision` agent.
 - **No new dependencies** without explicit justification from the user.
 - **Pure-config philosophy.** Prefer prompt/config changes over new tooling.
 
@@ -265,21 +266,17 @@ Before claiming any task complete:
    TODOs, or incomplete logic.
 2. Grep for broken callers of any function you changed.
 3. Run tests if they exist; otherwise state what manual verification you did.
-4. Plan the narrowest verification path before implementing — pick the cheapest
-   check (build / lint / unit / manual command) that proves the change; never
-   run the full suite just because files changed.
 
-**Verify once per phase, not per edit.** Batch verification: one parse + one
-grep sweep covers all edits in a phase. Do not re-verify after every small edit
-batch — that is a bonus verification loop (Core Principle 8).
+Set the verification budget before implementing: the minimum non-duplicative
+evidence that proves the change (build / lint / unit / manual command — never
+the full suite just because files changed). Small mechanical changes follow
+ordinary project checks; only high-risk changes warrant the full loop. Verify
+once per phase, not per edit — one parse + one grep sweep covers a phase; a
+re-check after every small edit is a bonus loop (Core Principle 8).
 
-Evidence precedes assertion — a passing build, clean lint, end-to-end read, or
-a grep showing no broken callers. A passing build or clean lint is evidence;
-"it typechecks" alone is not QA for a behavior change.
-
-Set a verification budget up front — choose the minimum non-duplicative evidence
-that covers your claims. Small mechanical changes follow ordinary project checks
-directly; only high-risk changes warrant the full loop.
+Evidence precedes assertion: a passing build, clean lint, end-to-end read, or a
+grep showing no broken callers. "It typechecks" alone is not QA for a behavior
+change.
 
 ## Plugins
 

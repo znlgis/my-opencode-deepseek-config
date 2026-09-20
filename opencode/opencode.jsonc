@@ -7,7 +7,11 @@
     "share": "disabled",
     "lsp": true,
     "formatter": true,
-    "subagent_depth": 3,
+    // Nesting cap = the deepest chain the agent graph actually uses:
+    // orchestrator → light-orchestrator → oracle (2 spawn levels). Every other
+    // subagent is denied `task`, so a third level is dead headroom that only
+    // enables accidental token amplification.
+    "subagent_depth": 2,
     "permission": {
         "read": {
             "*": "allow",

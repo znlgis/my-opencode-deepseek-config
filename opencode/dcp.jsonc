@@ -47,7 +47,8 @@
   // thresholds below; native auto compaction (opencode.jsonc) is the
   // near-overflow fallback. The two complement each other.
   // Per-model overrides let pro compress earlier than flash — pro input
-  // costs 3x flash, so the expensive window is cut first.
+  // costs 3x flash, so the expensive window is cut first. Both models are
+  // listed explicitly below rather than relying on inheritance.
   // ══════════════════════════════════════════════════════════════
   "compress": {
     // range mode: compress a contiguous conversation range into a high-fidelity summary
@@ -59,22 +60,31 @@
 
     // Context thresholds are ABSOLUTE token values, not percentages: DeepSeek V4
     // has a 1M window, so 60%/30% would mean 600K/300K — normal sessions
-    // (20K-200K) never reach that and DCP would never trigger.
+    // (20K-200K) never reach that and DCP would never trigger. Both values sit
+    // below DCP's own defaults (100K/50K): compressing earlier re-pays less
+    // cached prefix on every later request.
     "maxContextLimit": 77000,
     "minContextLimit": 38000,
 
-    // Per-model overrides (keyed by exact 'providerID/modelID'). Pro input costs
-    // 3x flash (0.66 vs 0.22 per 1M), so compress pro sessions EARLIER to cut the
-    // expensive window; flash keeps the global 77K/38K baseline.
+    // Per-model overrides — the only model-mapping DCP exposes (keys are matched
+    // as exact 'providerID/modelID', verified in dist/index.js). Listed for BOTH
+    // models so the routing is explicit rather than inherited:
+    //   pro   55K/26K — input costs 3x flash (0.66 vs 0.22 per 1M), so the
+    //                   expensive window is cut earliest.
+    //   flash 77K/38K — mirrors the global default above.
     "modelMaxLimits": {
-      "deepseek/deepseek-v4-pro": 55000
+      "deepseek/deepseek-v4-pro": 55000,
+      "deepseek/deepseek-flash": 77000
     },
     "modelMinLimits": {
-      "deepseek/deepseek-v4-pro": 26000
+      "deepseek/deepseek-v4-pro": 26000,
+      "deepseek/deepseek-flash": 38000
     },
 
     // Nudge every 3 LLM requests (default 5) and from the 12th message after a
-    // user message (default 15) — earlier reminders keep the window small.
+    // user message (default 15), in "strong" form (injected as a user-role
+    // message). Nudges cost a few hundred tokens; acting on them shrinks the
+    // window by tens of thousands, so early-ish nudging is cost-positive.
     "nudgeFrequency": 3,
     "iterationNudgeThreshold": 12,
     "nudgeForce": "strong",

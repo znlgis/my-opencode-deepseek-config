@@ -8,12 +8,12 @@
 
 - Default primary agent: `orchestrator`
 - Primary model: `deepseek/deepseek-v4-pro`; lightweight/multimodal model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal)
-- Agent nesting: `subagent_depth: 3` (supports 3 levels of subagent nesting)
+- Agent nesting: `subagent_depth: 2` (exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
 - Context compression: built-in compaction (opencode.jsonc) handles auto-triggering + pruning of stale tool output; DCP (dcp.jsonc) handles proactive dedup + compression thresholds — the two complement each other
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
-- Skills: **25** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool
+- Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
 - Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
@@ -21,7 +21,7 @@
 
 Neither plugin exposes a model-mapping capability, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside the plugins:
 
-- **DCP 3.1.15**: `PluginConfig` exposes only `modelMaxLimits` / `modelMinLimits` (per-model compression thresholds); there is **no** per-step model-assignment field. This config already sets an earlier compression threshold for pro (`dcp.jsonc`) — the only model-related tuning DCP allows.
+- **DCP 3.1.15**: `PluginConfig` exposes only `modelMaxLimits` / `modelMinLimits` (per-model compression thresholds); there is **no** per-step model-assignment field. This config lists **both models explicitly** (keys are exact `providerID/modelID`, verified against `dist/index.js`): pro `55K/26K`, flash `77K/38K` — pro input costs 3x flash, so the expensive window is cut first. That is the only model-related tuning DCP allows.
 - **superpowers v6.3.0**: a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with no model configuration surface.
 
 So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source — do not re-investigate.
@@ -85,6 +85,30 @@ This config splits thinking at the `provider` layer: flash disables thinking and
 ```
 
 > **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro` and `deepseek/deepseek-flash`.
+
+## Quick Start
+
+```powershell
+# 1. Clone
+git clone https://github.com/znlgis/my-opencode-deepseek-config.git
+
+# 2. Point opencode at this repo's config directory (current session)
+$env:OPENCODE_CONFIG_DIR = "D:\path\to\my-opencode-deepseek-config\opencode"
+
+# 3. Configure the API key (either way: /connect in the TUI, or the env var)
+$env:DEEPSEEK_API_KEY = "sk-your-key-here"
+
+# 4. Start
+opencode
+```
+
+Three self-checks after launch: `/models` shows `deepseek/deepseek-v4-pro`; the agent list has all 12 custom agents; describe any task in plain language and `orchestrator` classifies and routes it (to skip routing, use `/quick`, `/deep`, `/review`, … directly).
+
+After editing repo files, sync them to the global config directory (`~/.config/opencode` is an independent copy, not a symlink):
+
+```powershell
+.\scripts\sync-config.ps1
+```
 
 ## Installation
 
@@ -153,6 +177,8 @@ This copies the config files under `opencode/` into `~/.config/opencode/` (exclu
 .\scripts\sync-config.ps1 -Src "D:\path\to\my-opencode-deepseek-config\opencode"
 ```
 
+> **Note**: stale-file cleanup inside `skills/`, `agents/`, and `commands/` is driven by the git index plus git history. A deletion that is `git rm`-staged but **not yet committed** is not recognized as stale, so delete that same-name copy in the global directory by hand once; after the commit, a re-run of the sync reconciles it automatically.
+
 ## Model Division of Labor
 
 This repo strictly divides work within the DeepSeek V4 model family — no other models are introduced. The division is **2 models × per-agent thinking strength (thinking tier)**, not a multi-model matrix:
@@ -179,7 +205,7 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 - **Routine-nontrivial → flash low**: planning and routine multi-file work use flash + `reasoningEffort: low`
 - **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, heavy multi-file implementation — pro only
 - **Code review → flash first pass, pro escalation**: `/review` runs a flash first pass (Abbreviated path) by default and delegates to `reviewer` (pro) only when an escalation trigger fires; `/deep-review` forces a full pro review
-- **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal); non-visual tasks never attach images or invoke vision
+- **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `attachment.image` to 1600px / 2MiB to avoid wasting base64 bytes
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle); `/review` → flash first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → flash first pass then pro escalation.
@@ -230,14 +256,33 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 
 **Savings**: a small diff on the flash first pass saves about **67%** ($0.027 → $0.009); the full pro price is paid only when an escalation trigger fires, and escalation passes unverified leads to avoid re-derivation.
 
-Other optimizations:
+Other optimizations (byte counts are LF-normalized, i.e. how the repo stores them):
 
 | Change | What changed | Savings |
 | --- | --- | --- |
-| `AGENTS.md` trim | 15173 → 14117 bytes | **7.0%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
-| `orchestrator.md` trim | 14678 → 14078 bytes | **4.1%**, plus removal of duplicated wording shared with `AGENTS.md` |
-| `dcp.jsonc` comment trim | comments only, keys/values unchanged | no runtime cost (comments never enter the API request) |
-| Built-in utility agents on flash | build/plan/title/summary/compaction | single-call cost drops to **1/3** of pro |
+| `AGENTS.md` trim (two passes cumulative) | 15173 → 13938 bytes | **8.1%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
+| `orchestrator.md` trim (two passes cumulative) | 14678 → 12776 bytes | **12.9%** (−1157 bytes this pass: dropped thinking-tier / retry-cap / reference-paths rules duplicating `AGENTS.md`, plus 10 redundant `· ~½ cost` labels) |
+| Default entry static prefix | `AGENTS.md` + `orchestrator.md` 28050 → 26714 bytes | **1336 bytes ≈ 334 tokens per turn** (~5% of the default entry's always-loaded prefix) |
+| Skill roster slimming | 25 → 23 (merged `wait-what`/`grill-with-docs` into `grilling`) | Always-on roster name+description **10,127 → 9,802 bytes** (−325 bytes ≈ −81 tokens), and two fewer mis-pickable entries |
+| `subagent_depth` 3 → 2 | Matches the deepest chain actually used | Closes the unused third nesting level, removing an accidental token-amplification surface |
+| `dcp.jsonc` comment expansion | Comments only; the one key change lists flash's thresholds explicitly at the same values as the globals | Comments never reach the API — zero runtime cost |
+| Built-in utility agents on flash | build/plan/title/summary/compaction | Single-call cost drops to **1/3** of pro |
+
+> Note: a smaller always-loaded prefix is paid back in full on every **cache miss** and at the `cache_read` rate (flash 0.007 / pro 0.022 per 1M) on hits — but a smaller prefix also means a higher hit rate and later compression, and both effects compound.
+
+**Measured baseline** (this machine, 2026-09-20, after the trims):
+
+```powershell
+opencode run "Reply with exactly: OK" --agent orchestrator --format json
+```
+
+| Metric | Measured |
+| --- | --- |
+| First-request input tokens | **16,254** (cache read 0 — cold start, no cache hit) |
+| Output tokens | 1 |
+| Cost for that request | **$0.00358** (flash, off-peak) |
+
+Of those 16,254 tokens, `AGENTS.md` (13,938 B) + `orchestrator.md` (12,776 B) ≈ 6.7K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
 
 ## Agent Structure
 
@@ -269,7 +314,7 @@ Other optimizations:
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
-> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`/`wait-what`/`grill-with-docs`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set (the inline executor needs the complete toolchain, still guarded by `"*": deny`).
+> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set (the inline executor needs the complete toolchain, still guarded by `"*": deny`). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget.
 >
 > **Thinking tiers**: `reasoning_effort` is a request-level thinking-strength control (`low`/`high`/`max`) set per-agent via frontmatter `options` — not a model id. `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking off (cheapest); `planner`/`light-orchestrator` = flash · thinking on + `reasoningEffort: low`; `deep-worker`/`oracle`/`reviewer` = pro · default high; `solo` has no `model` field and follows the session's selected model (pro by default), so its thinking tier follows that model.
 
@@ -315,7 +360,7 @@ Other optimizations:
 
 ## Skills
 
-OpenCode exposes skills on demand via the native `skill` tool — agents load them only when needed, so they never occupy context.
+OpenCode exposes skills on demand via the native `skill` tool — agents load them only when needed, so the **bodies** never occupy context. The roster of names + descriptions, however, is always on: see the note after the table.
 
 | Skill | Purpose |
 | --- | --- |
@@ -335,25 +380,46 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `spec-workflow` | Lightweight spec-driven change: proposal → delta specs → tasks → update three-question decision tree → verify → archive |
 | `verify-with-docs` | Verifies API docs before coding — retrieval-first, hallucination-proof |
 | `vision-prep` | Preprocesses large images and PDFs before a vision model: tiles oversized images, rasterizes PDF pages (DeepSeek vision downscales to ~800x800 and rejects PDF input) |
-| `grilling` | Requirements-alignment interview: one question at a time, multiple choice preferred, converge on ambiguity before acting |
-| `wait-what` | Restates hard-to-parse user messages in one sentence for confirmation before acting |
+| `grilling` | Requirements-alignment interview: one question at a time, multiple choice preferred, until intent is clear; also carries the "message didn't land → restate in one sentence" branch and the "fuzzy domain language → pair with `domain-modeling`" branch (absorbs the former `wait-what`/`grill-with-docs`) |
 | `writing-for-agents` | Writing leverage for agent-facing docs (skills/AGENTS.md/pointer docs) |
 | `to-tickets` | Breaks a spec/plan into trackable GitHub issues (one independently completable, verifiable unit per issue, with acceptance criteria) |
 | `triage` | Label-based issue triage: pull → classify → apply labels/assignees (gh); routing only, never edits content |
 | `diagnosing-bugs` | Systematic debugging: build a tight red-capable feedback loop BEFORE theorizing → reproduce + minimise → 3-5 falsifiable hypotheses → instrument one variable at a time (`[DEBUG-<hex>]` tagged) → fix at the correct seam + regression test → clean up |
 | `codebase-design` | Architecture vocabulary: module/interface/depth/seam/adapter/leverage/locality, deletion test, depth test — assess whether module boundaries are sound |
 | `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted; includes the repeated-explanation trigger (pin a term when the same concept keeps being re-explained) |
-| `grill-with-docs` | Composes `grilling` + `domain-modeling`: when requirements are ambiguous AND domain language is fuzzy, converge intent one question at a time while sharpening the glossary |
+
+> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** context (this repo: 23 local + 14 superpowers + 1 built-in ≈ 10KB ≈ 2.5K tokens, fully applied to built-in agents with no allowlist). So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed.
 
 ## Repository Structure
 
 ```text
 ├── opencode/          # OpenCode config directory (agents/, skills/, opencode.jsonc, AGENTS.md, dcp.jsonc)
-├── scripts/           # sync-config.ps1 (sync to global config) + validate-jsonc.js (JSONC validation)
+├── scripts/           # sync-config.ps1 (sync to global config)
+│                      # validate-jsonc.js (JSONC validation)
+│                      # estimate-cost.js (cost estimate from token counts)
 ├── README.md          # Simplified Chinese (default)
 ├── README.en-US.md    # English
 └── LICENSE
 ```
+
+## Configuration Change Points
+
+When editing config, locate "what to change → which file", so you never change the wrong layer:
+
+| What you want to change | File | Location |
+| --- | --- | --- |
+| Model list / prices / thinking / temperature | `opencode.jsonc` | `provider.deepseek.models` |
+| Global profile: default agent, small model, nesting depth, tool-output caps, compaction, attachment resize | `opencode.jsonc` | top-level keys |
+| Permissions (read / bash / skill / external directories) | `opencode.jsonc` | `permission` |
+| Built-in utility agents (build/plan/title/summary/compaction) model | `opencode.jsonc` | `agent` |
+| Shortcut command agents and templates | `opencode.jsonc` | `command` |
+| One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |
+| Global behavior rules (principles, failure discipline, cache discipline, anti-patterns) | `opencode/AGENTS.md` | the matching section |
+| Plugin versions (pins) | `opencode/opencode.jsonc` | `plugin` |
+| DCP compression thresholds / dedup / error purge | `opencode/dcp.jsonc` | `compress` / `strategies` |
+| A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
+
+> After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode` and restart opencode (config is loaded once at startup). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode debug config`.
 
 ## Usage Guide
 
@@ -407,6 +473,39 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 /quick fix this typo                     → light-orchestrator edits directly                (flash low)
 ```
 
+## Refactor Change Log
+
+A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and explicit mapping only — no new model, no new dependency, no new tooling.**
+
+**Removed**
+
+| Removed | Reason |
+| --- | --- |
+| `skills/wait-what/` | Duplicated the "confirm before acting" rule in `grilling`; one behavior should not hold two roster slots |
+| `skills/grill-with-docs/` | Only a composition note for `grilling` + `domain-modeling`; the composition is now stated in `grilling`'s body |
+| 4 rules in `orchestrator.md` that duplicated `AGENTS.md` | thinking tiers / retry cap / reference-paths etc. are defined once in `AGENTS.md`; restating them only adds always-loaded tokens |
+| 10 `· ~½ cost` labels in the `orchestrator.md` routing table | The same information is declared once in the table header; per-row repetition is noise |
+| The third level of `subagent_depth: 3` | The deepest chain in use is 2 levels; nobody used level 3, which only offered accidental nesting amplification |
+
+**Added / strengthened**
+
+| Added | Expected benefit |
+| --- | --- |
+| Hard constraint "Vision input is opt-in" in `AGENTS.md` | Guarantees at the rule layer that non-visual tasks never attach or generate images; only user-supplied images reach `vision` (flash multimodal) |
+| Both models listed explicitly in `dcp.jsonc` compression thresholds | Model mapping no longer relies on inheritance: pro `55K/26K`, flash `77K/38K` — the split is readable from the config alone |
+| Corrected attachment limits in `vision-prep` | It claimed "2000×2000 / 5MiB (opencode default)", contradicting this repo's `attachment.image` (1600px / 2MiB) and misleading preprocessing |
+| "Configuration Change Points" table | Locate the right file and section in one step; trial-and-error is itself token spend |
+| "Quick Start" four-step TL;DR | New machines go from "read the whole doc" to "copy four lines" |
+
+**Final routing rules for the two models** (these are the only two models referenced anywhere in the repo)
+
+| Model | Trigger | Role | Price (USD/1M, off-peak) |
+| --- | --- | --- | --- |
+| `deepseek/deepseek-flash` | **Default**; the vast majority of high-frequency work | Orchestration/routing, planning, routine implementation, single-file edits, consultation, UI, exploration, doc retrieval, title/summary/compaction, batch generation; the **only** vision entry point (enabled only when the user supplies an image) | in 0.22 / out 0.66 / cache 0.007 |
+| `deepseek/deepseek-v4-pro` | Tasks complex enough to need deep logical analysis (automatic, or manual via `/deep`, `/oracle`, `/deep-review`) | Complex reasoning, root-cause analysis, code-review escalation, architecture design, hard debugging, heavy multi-file implementation | in 0.66 / out 1.98 / cache 0.022 |
+
+Switching: automatic — `orchestrator` classifies by intent and routes, and a flash agent self-escalates when it can't finish; manual — `/deep`, `/oracle`, `/deep-review` go straight to pro, everything else defaults to flash.
+
 ## Sources
 
 The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (intent gating, read-only isolation, anti-patterns), [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) (dispatcher-first, fallback chains, rejection contract, prompt-cache safety), [anomalyco/opencode](https://github.com/anomalyco/opencode) (config schema, skill system), [cli/cli](https://github.com/cli/cli) (gh v2.100 command set), [OpenSpec](https://github.com/Fission-AI/OpenSpec) (delta specs), [mattpocock/skills](https://github.com/mattpocock/skills) (conflict resolution, handoff documents, debugging/architecture/domain-modeling skills), [pi](https://github.com/earendil-works/pi) (answer first then act, terse responses), and [deepreview](https://github.com/mechanai/deepreview) (effective-size routing). Pure config, zero extra dependencies. **Borrow, don't copy**: take only lightweight design ideas, simplify before adding.
@@ -422,8 +521,10 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Scope First + Delegate Always** — define scope first (2+ steps / multi-file / architecture changes go through planner), then delegate execution; top-level tokens are reserved for routing and hard problems
 - **Atomic TODOs** — multi-step tasks start with an ordered TODO list, one item in_progress → completed at a time; format `path: action for scenario — verify by check`
 - **Controllable progress + failure isolation** — every TODO carries a verifiable completion criterion and reports `[done/total]` at phase boundaries; errors are classified transient/recoverable/fatal, with at most 3 attempts per operation and a mandatory strategy change on each retry; large tasks split into independent units so one failure never blocks the rest, closing with a `succeeded / failed / skipped` tally
-- **Per-model cost-tiered compression** — DCP's `modelMaxLimits`/`modelMinLimits` make pro (3× flash input cost) compress earlier and flash later, trading a smaller context window for a cheaper compression point
+- **Per-model cost-tiered compression** — DCP's `modelMaxLimits`/`modelMinLimits` make pro (3× flash input cost) compress earlier and flash later; both models are listed **explicitly**, so the split is readable from the config
 - **Vision input cost cap** — `attachment.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
+- **The roster is the budget** — each agent's `permission.skill` allowlist also decides its skill roster size; a denied skill never enters the roster and therefore never enters the always-loaded context
+- **Vision is opt-in** — images enter the payload only when the user supplies them; non-visual tasks never attach or generate images
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change
 - **Volatile-zone discipline** — volatile content (timestamps, random IDs, dynamic file lists) sits at the payload tail to protect DeepSeek's prompt-cache prefix
 - **Continuous improvement** — reflect mechanizes friction discovery, code-review's evidence gating guards quality

@@ -64,13 +64,14 @@ time.
 | Large image / dense small text | `tile.py` into 2x2 (or finer) grid |
 | Grid size (when tiling) | `--grid NxN` with N = ceil(long_edge / 800), so each tile stays <= ~800px |
 | PDF (any) | `pdf2png.py` to PNG, then tile if page is large |
-| Byte/size limit exceeded | Already handled by opencode's built-in resize; no action needed |
+| Byte/size limit exceeded | Already handled by this repo's `attachment.image` resize (1600px / 2 MiB); no action needed |
 
 ## Notes
 
-- opencode already auto-resizes images to fit its 2000x2000 / 5MiB limit, so
-  oversized uploads are not the real problem — the ~800x800 downscale is.
-  Tiling is the fix for readability, not resizing.
+- This repo caps attachments at 1600x1600 / 2 MiB (`attachment.image` in
+  `opencode.jsonc`), below opencode's own default — so the upload limit is not
+  the problem; the model's ~800x800 downscale is. Tiling is the fix for
+  readability, not resizing.
 - Always use absolute paths.
 - After tiling, describe each tile's content and combine; do not send the
   original full-size image expecting the model to read fine print.
