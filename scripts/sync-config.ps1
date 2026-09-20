@@ -40,9 +40,10 @@ $Src = (Resolve-Path -LiteralPath $Src).Path
 
 # Copy every file except node_modules and package manifests: plugin
 # dependencies and lockfiles belong to the global install, not the repo.
+$excludedFromSync = '(^|[\\/])node_modules([\\/]|$)|(^|[\\/])\.git([\\/]|$)|(package(-lock)?\.json|bun\.lockb?|pnpm-lock\.yaml)$'
 Get-ChildItem -Recurse -File -LiteralPath $Src | Where-Object {
     $rel = $_.FullName.Substring($Src.Length + 1)
-    $rel -notmatch '(^|[\\/])node_modules([\\/]|$)' -and $rel -notmatch '(package(-lock)?\.json|bun\.lockb?|pnpm-lock\.yaml)$'
+    $rel -notmatch $excludedFromSync
 } | ForEach-Object {
     $rel = $_.FullName.Substring($Src.Length + 1)
     $target = Join-Path $dst $rel
@@ -60,33 +61,35 @@ if (Test-Path -LiteralPath $dst -PathType Container) {
 }
 
 # Delete reconciliation: remove target files the repo used to manage but no
-# longer does (e.g. skills deleted from the repo). Only the `skills`, `agents`,
-# and `commands` subdirectories are reconciled -- never the whole target dir --
-# so files the user created locally (never tracked by git) are left untouched.
+# longer does (e.g. skills deleted from the repo). The whole target tree is
+# scanned except node_modules and package manifests -- those belong to the
+# global install; anything the repo never tracked is left untouched.
 #
-# $managed = union of (currently tracked paths) and (paths deleted at any point
-# in git history), with the leading `opencode/` prefix stripped and separators
-# normalized to `/`.
+# $managed = union of (currently tracked paths) and (every path that ever
+# appeared in a commit). The history log is deliberately unfiltered: with
+# `--diff-filter=D` a deletion that is staged but not yet committed is in no
+# commit's diff, so the stale copy would survive the sync (that is how a
+# removed dcp.jsonc could linger in the global config dir). Every path ever
+# added is "managed", and the delete check below is purely "source lacks it".
+#
+# Paths are relative to the repo's opencode/ dir, with separators normalized
+# to `/`.
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $managed = @(
-    git -C $repoRoot ls-files -- opencode/skills opencode/agents opencode/commands
-    git -C $repoRoot log --all --diff-filter=D --name-only --pretty=format: -- opencode/skills opencode/agents opencode/commands
+    git -C $repoRoot ls-files -- opencode
+    git -C $repoRoot log --all --name-only --pretty=format: -- opencode
 ) | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' } |
     ForEach-Object { ($_ -replace '^opencode/', '') -replace '\\', '/' } |
     Sort-Object -Unique
 
 $toDelete = @()
-foreach ($dir in 'skills', 'agents', 'commands') {
-    $targetDir = Join-Path $dst $dir
-    if (-not (Test-Path -LiteralPath $targetDir -PathType Container)) { continue }
-    Get-ChildItem -Recurse -File -LiteralPath $targetDir | ForEach-Object {
-        $rel = ($_.FullName.Substring($dst.Length + 1)) -replace '\\', '/'
-        if ($managed -contains $rel) {
-            $srcPath = Join-Path $Src ($rel -replace '/', '\')
-            if (-not (Test-Path -LiteralPath $srcPath -PathType Leaf)) {
-                $toDelete += $rel
-            }
-        }
+Get-ChildItem -Recurse -File -Force -LiteralPath $dst | ForEach-Object {
+    $rel = ($_.FullName.Substring($dst.Length + 1)) -replace '\\', '/'
+    if ($rel -match $excludedFromSync) { return }
+    if ($managed -notcontains $rel) { return }
+    $srcPath = Join-Path $Src ($rel -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $srcPath -PathType Leaf)) {
+        $toDelete += $rel
     }
 }
 

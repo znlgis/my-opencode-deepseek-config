@@ -69,8 +69,7 @@
         "external_directory": "ask"
     },
     "plugin": [
-        "superpowers@git+https://github.com/obra/superpowers.git#v6.3.0",
-        "@tarquinen/opencode-dcp@3.1.15"
+        "superpowers@git+https://github.com/obra/superpowers.git#v6.3.0"
     ],
     "instructions": [
         "AGENTS.md"
@@ -97,11 +96,28 @@
             // values. DeepSeek publishes no standalone cache-write price —
             // cache writes bill at the cache-miss input rate, so cache_write
             // is mapped from input.
+            //
+            // `limit` mirrors the models.dev catalog (context 1M / output 384K)
+            // and adds `input` — the ONE knob that decides when built-in
+            // compaction fires. overflow.ts computes:
+            //     usable = limit.input - compaction.reserved
+            //     isOverflow: session tokens >= usable
+            // Without `input`, usable falls back to `context - maxOutputTokens`
+            // = 1,000,000 - 32,000 = 968,000, i.e. a session could grow to ~968K
+            // tokens before anything is compressed, and `compaction.reserved`
+            // would be silently ignored (it is only read on the `input` path).
+            // Declaring `input` turns the cap into an explicit working budget:
+            // flash 115K / pro 148K (see the compaction block below).
             "models": {
                 "deepseek-flash": {
                     "modalities": {
                         "input": ["text", "image"],
                         "output": ["text"]
+                    },
+                    "limit": {
+                        "context": 1000000,
+                        "input": 131072,
+                        "output": 384000
                     },
                     "cost": {
                         "input": 0.22,
@@ -115,6 +131,11 @@
                     }
                 },
                 "deepseek-v4-pro": {
+                    "limit": {
+                        "context": 1000000,
+                        "input": 163840,
+                        "output": 384000
+                    },
                     "cost": {
                         "input": 0.66,
                         "output": 1.98,
@@ -158,16 +179,34 @@
         "max_lines": 800,
         "max_bytes": 20480
     },
-    // DCP compresses proactively at its absolute 77K/38K thresholds (see
-    // dcp.jsonc); native auto compaction is the near-overflow fallback.
-    // prune:true drops stale tool outputs, so the two layers complement rather
-    // than overlap.
+    // Built-in context compaction is the ONLY compression layer (no DCP): it
+    // runs the `compaction` agent (flash — see the agent block) over the head
+    // of the session, keeps a verbatim tail, and prunes old tool output.
+    //
+    // When it fires: session tokens >= limit.input - reserved.
+    //     flash: 131072 - 16000 = 115,072
+    //     pro:   163840 - 16000 = 147,840
+    // Both windows sit far below the 1M hard limit on purpose: every request
+    // re-sends the whole context, so a 968K session (the un-capped default)
+    // costs ~8x more per request than a compacted one on cache misses and
+    // ~8x more on cache reads too. Compacting early is the cheapest lever
+    // available in a pure-config setup.
+    //
+    // `reserved` is the overflow buffer during compaction — it is read ONLY
+    // when the model declares `limit.input` (see the provider block).
     "compaction": {
         "auto": true,
+        // Clears the output of old tool calls (keeps the newest ~40K tokens of
+        // tool output, protects `skill` output, and only acts when it can free
+        // >20K tokens). Runs per request, forked off the request path.
         "prune": true,
+        "reserved": 16000,
+        // Verbatim tail kept across a compaction: up to 8 recent user turns
+        // capped by a 12K-token budget (the budget usually binds first).
+        // Everything older is replaced by the summary the compaction agent
+        // writes, so this number is the "working memory" left after a squeeze.
         "tail_turns": 8,
-        "preserve_recent_tokens": 12000,
-        "reserved": 10240
+        "preserve_recent_tokens": 12000
     },
     // Bound image token cost for the multimodal flash model. DeepSeek downscales
     // images to ~800x800 internally, so oversized uploads only waste base64

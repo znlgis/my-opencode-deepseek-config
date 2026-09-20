@@ -282,5 +282,7 @@ change.
 
 - **superpowers** (obra/superpowers) — process skills (brainstorming, systematic
   debugging, TDD); skill-first discipline.
-- **DCP** (`@tarquinen/opencode-dcp`) — autonomous context pruning +
-  deduplication; tuned in `dcp.jsonc`.
+
+Context compression is **built-in only** — there is no DCP plugin. Compaction
+fires at `limit.input - compaction.reserved` (flash ~115K, pro ~148K tokens) and
+prunes old tool output per request; both are configured in `opencode.jsonc`.

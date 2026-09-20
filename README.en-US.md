@@ -11,18 +11,17 @@
 - Agent nesting: `subagent_depth: 2` (exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
-- Context compression: built-in compaction (opencode.jsonc) handles auto-triggering + pruning of stale tool output; DCP (dcp.jsonc) handles proactive dedup + compression thresholds — the two complement each other
+- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.reserved` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), plus per-request `prune` of stale tool output; no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` (git URL pinned to tag `#v6.3.0`, process skills), `@tarquinen/opencode-dcp` (pinned to `@3.1.15`, intelligent context pruning); both are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
+- Plugins: `superpowers` only (git URL pinned to tag `#v6.3.0`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
 
 ### Plugins and Model Mapping (Important)
 
-Neither plugin exposes a model-mapping capability, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside the plugins:
+The single remaining plugin, **superpowers v6.3.0**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin.
 
-- **DCP 3.1.15**: `PluginConfig` exposes only `modelMaxLimits` / `modelMinLimits` (per-model compression thresholds); there is **no** per-step model-assignment field. This config lists **both models explicitly** (keys are exact `providerID/modelID`, verified against `dist/index.js`): pro `55K/26K`, flash `77K/38K` — pro input costs 3x flash, so the expensive window is cut first. That is the only model-related tuning DCP allows.
-- **superpowers v6.3.0**: a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with no model configuration surface.
+> `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`provider.deepseek.models.*.limit.input`) plus per-request `prune`; one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
 
 So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source — do not re-investigate.
 
@@ -265,7 +264,7 @@ Other optimizations (byte counts are LF-normalized, i.e. how the repo stores the
 | Default entry static prefix | `AGENTS.md` + `orchestrator.md` 28050 → 26714 bytes | **1336 bytes ≈ 334 tokens per turn** (~5% of the default entry's always-loaded prefix) |
 | Skill roster slimming | 25 → 23 (merged `wait-what`/`grill-with-docs` into `grilling`) | Always-on roster name+description **10,127 → 9,802 bytes** (−325 bytes ≈ −81 tokens), and two fewer mis-pickable entries |
 | `subagent_depth` 3 → 2 | Matches the deepest chain actually used | Closes the unused third nesting level, removing an accidental token-amplification surface |
-| `dcp.jsonc` comment expansion | Comments only; the one key change lists flash's thresholds explicitly at the same values as the globals | Comments never reach the API — zero runtime cost |
+| DCP removed + compression window made explicit | Plugin and `dcp.jsonc` deleted; `limit.input` now declares the working window (flash 115K / pro 148K) | Cap on context carried per request drops from the implicit **968K** to **115K/148K** (~1/8); cache misses save proportionally, with one fewer third-party plugin |
 | Built-in utility agents on flash | build/plan/title/summary/compaction | Single-call cost drops to **1/3** of pro |
 
 > Note: a smaller always-loaded prefix is paid back in full on every **cache miss** and at the `cache_read` rate (flash 0.007 / pro 0.022 per 1M) on hits — but a smaller prefix also means a higher hit rate and later compression, and both effects compound.
@@ -278,11 +277,12 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 | Metric | Measured |
 | --- | --- |
-| First-request input tokens | **16,254** (cache read 0 — cold start, no cache hit) |
+| First-request prompt tokens | **14,690** (8,161 uncached + 6,528 cache read) |
 | Output tokens | 1 |
-| Cost for that request | **$0.00358** (flash, off-peak) |
+| Cost for that request | **$0.00184** (flash, off-peak) |
+| Baseline: same command before DCP removal | 16,254 tokens (cache read 0) → now **−1,564 (≈ −9.6%)** |
 
-Of those 16,254 tokens, `AGENTS.md` (13,938 B) + `orchestrator.md` (12,776 B) ≈ 6.7K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
+Of those 14,690 tokens, `AGENTS.md` (13,938 B) + `orchestrator.md` (12,776 B) ≈ 6.7K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
 
 ## Agent Structure
 
@@ -393,7 +393,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 ## Repository Structure
 
 ```text
-├── opencode/          # OpenCode config directory (agents/, skills/, opencode.jsonc, AGENTS.md, dcp.jsonc)
+├── opencode/          # OpenCode config directory (agents/, skills/, opencode.jsonc, AGENTS.md)
 ├── scripts/           # sync-config.ps1 (sync to global config)
 │                      # validate-jsonc.js (JSONC validation)
 │                      # estimate-cost.js (cost estimate from token counts)
@@ -416,7 +416,7 @@ When editing config, locate "what to change → which file", so you never change
 | One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |
 | Global behavior rules (principles, failure discipline, cache discipline, anti-patterns) | `opencode/AGENTS.md` | the matching section |
 | Plugin versions (pins) | `opencode/opencode.jsonc` | `plugin` |
-| DCP compression thresholds / dedup / error purge | `opencode/dcp.jsonc` | `compress` / `strategies` |
+| Compression trigger window (per model) / prune / preserved tail | `opencode/opencode.jsonc` | `provider.deepseek.models.<id>.limit.input` + `compaction` |
 | A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
 
 > After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode` and restart opencode (config is loaded once at startup). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode debug config`.
@@ -486,13 +486,14 @@ A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and 
 | 4 rules in `orchestrator.md` that duplicated `AGENTS.md` | thinking tiers / retry cap / reference-paths etc. are defined once in `AGENTS.md`; restating them only adds always-loaded tokens |
 | 10 `· ~½ cost` labels in the `orchestrator.md` routing table | The same information is declared once in the table header; per-row repetition is noise |
 | The third level of `subagent_depth: 3` | The deepest chain in use is 2 levels; nobody used level 3, which only offered accidental nesting amplification |
+| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + plugin cache | Its value (absolute-threshold early compression, tool-call dedup) is covered by built-in compaction's explicit per-model windows + per-request `prune`; one plugin fewer means less always-on injection and one less prefix-drift path |
 
 **Added / strengthened**
 
 | Added | Expected benefit |
 | --- | --- |
 | Hard constraint "Vision input is opt-in" in `AGENTS.md` | Guarantees at the rule layer that non-visual tasks never attach or generate images; only user-supplied images reach `vision` (flash multimodal) |
-| Both models listed explicitly in `dcp.jsonc` compression thresholds | Model mapping no longer relies on inheritance: pro `55K/26K`, flash `77K/38K` — the split is readable from the config alone |
+| Compression trigger changed from an implicit default to an explicit declaration | Without `limit.input` the trigger is `context − maxOutputTokens` = **968K**, and `compaction.reserved` is **dead config** (only the `input` path reads it). Now flash 115K / pro 148K — the split is readable from the config alone |
 | Corrected attachment limits in `vision-prep` | It claimed "2000×2000 / 5MiB (opencode default)", contradicting this repo's `attachment.image` (1600px / 2MiB) and misleading preprocessing |
 | "Configuration Change Points" table | Locate the right file and section in one step; trial-and-error is itself token spend |
 | "Quick Start" four-step TL;DR | New machines go from "read the whole doc" to "copy four lines" |
@@ -515,13 +516,13 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Pure config-driven, zero extra dependencies** — every capability comes from `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`
 - **Maximum use of the DeepSeek V4 model family** — Pro for deep reasoning and heavy implementation, Flash for routing, planning, routine execution, and native multimodal tasks
 - **Token efficiency first** — path references instead of pasted files, skills loaded on demand, tiered compression management
-- **Plugins add value without stealing the spotlight** — superpowers provides process discipline, DCP (dcp.jsonc) handles proactive dedup + compression thresholds, built-in compaction (opencode.jsonc) handles auto-trigger + prune fallback; both plugins are version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
+- **Plugins add value without stealing the spotlight** — the only plugin, superpowers, provides process discipline and nothing else (version-pinned to keep the prefix byte-stable); context compression is 100% built-in compaction, with no third-party compression layer
 - **Execution separated from exploration** — deep-worker/light-orchestrator must not research or delegate; explore/librarian must not modify
 - **Cache + thinking discipline** — stable static prefixes to hit DeepSeek's prompt cache; flash disables thinking + temperature 0 (provider layer), pro keeps thinking on by default
 - **Scope First + Delegate Always** — define scope first (2+ steps / multi-file / architecture changes go through planner), then delegate execution; top-level tokens are reserved for routing and hard problems
 - **Atomic TODOs** — multi-step tasks start with an ordered TODO list, one item in_progress → completed at a time; format `path: action for scenario — verify by check`
 - **Controllable progress + failure isolation** — every TODO carries a verifiable completion criterion and reports `[done/total]` at phase boundaries; errors are classified transient/recoverable/fatal, with at most 3 attempts per operation and a mandatory strategy change on each retry; large tasks split into independent units so one failure never blocks the rest, closing with a `succeeded / failed / skipped` tally
-- **Per-model cost-tiered compression** — DCP's `modelMaxLimits`/`modelMinLimits` make pro (3× flash input cost) compress earlier and flash later; both models are listed **explicitly**, so the split is readable from the config
+- **Per-model cost-tiered compression** — `limit.input` declares a separate working window per model: flash `131072−16000=115,072` (high-frequency path, tighter window), pro `163840−16000=147,840` (deep tasks, more headroom to reduce lossy compactions); the trigger point is computed, not inherited
 - **Vision input cost cap** — `attachment.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
 - **The roster is the budget** — each agent's `permission.skill` allowlist also decides its skill roster size; a denied skill never enters the roster and therefore never enters the always-loaded context
 - **Vision is opt-in** — images enter the payload only when the user supplies them; non-visual tasks never attach or generate images

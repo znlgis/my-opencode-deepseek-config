@@ -11,18 +11,17 @@
 - 代理层级：`subagent_depth: 2`（恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：内置 compaction（opencode.jsonc）管自动触发 + prune 裁旧工具输出，DCP（dcp.jsonc）管主动去重 + 压缩阈值，两者互补
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.reserved`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），另有每轮请求的 prune 清理旧工具输出；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：`superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）、`@tarquinen/opencode-dcp`（固定版本 `@3.1.15`，智能上下文裁剪）；两者均固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
+- 插件：仅 `superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
 
 ### 插件与模型映射（重要）
 
-两个插件**均不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型：
+唯一保留的插件 **superpowers v6.3.0** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。
 
-- **DCP 3.1.15**：`PluginConfig` 仅暴露 `modelMaxLimits` / `modelMinLimits`（按模型设压缩阈值），**没有** per-step 模型指派字段。本配置把**两个模型都显式列出**（键为精确 `providerID/modelID`，已核对 `dist/index.js`）：pro `55K/26K`、flash `77K/38K`——pro 输入价 3× flash，所以先切贵的窗口。这是 DCP 层面唯一可做的模型相关调优。
-- **superpowers v6.3.0**：纯 skill 注入插件（`.opencode/plugins/superpowers.js`），无任何模型配置面。
+> 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`provider.deepseek.models.*.limit.input`）与每轮 `prune` 覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
 因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码，勿重复调研。
 
@@ -265,7 +264,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | 默认入口静态前缀合计 | `AGENTS.md` + `orchestrator.md` 28050 → 26714 字节 | 每轮省 **1336 字节 ≈ 334 tokens**（约占默认入口常驻前缀的 5%） |
 | Skills 名册瘦身 | 25 → 23 个（合并 `wait-what`/`grill-with-docs` 进 `grilling`） | 名册 name+description 常驻成本 **10,127 → 9,802 字节**（−325 字节 ≈ −81 tokens），且少两个可能选错的入口 |
 | `subagent_depth` 3 → 2 | 覆盖实际最深链路即可 | 关掉未使用的第 3 层嵌套，避免意外 token 放大 |
-| `dcp.jsonc` 注释扩充 | 仅注释，键值仅新增 flash 的显式阈值（与全局默认同值） | 注释不进入 API 请求，零运行时成本 |
+| 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（flash 115K / pro 148K） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K/148K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
 | 内置 utility agent 全走 flash | build/plan/title/summary/compaction | 单次调用成本降至 pro 的 **1/3** |
 
 > 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.007 / pro 0.022 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
@@ -278,11 +277,12 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 | 指标 | 实测值 |
 | --- | --- |
-| 首轮 input tokens | **16,254**（cache read 0 —— 冷启动无缓存命中） |
+| 首轮 prompt tokens | **14,690**（未命中 8,161 + 命中缓存 6,528） |
 | output tokens | 1 |
-| 单次费用 | **$0.00358**（flash，off-peak 价） |
+| 单次费用 | **$0.00184**（flash，off-peak 价） |
+| 对比：移除 DCP 前同一命令 | 16,254 tokens（cache read 0）→ 现 **−1,564（≈ −9.6%）** |
 
-这 16,254 tokens 里，`AGENTS.md`（13,938 B）+ `orchestrator.md`（12,776 B）≈ 6.7K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
+这 14,690 tokens 里，`AGENTS.md`（13,938 B）+ `orchestrator.md`（12,776 B）≈ 6.7K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
 
 ## Agent 结构
 
@@ -389,12 +389,11 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
 > **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文（本仓库 23 个本地 + 14 个 superpowers + 1 个内置 ≈ 10KB ≈ 2.5K tokens，对未设白名单的内置 Agent 全量生效）。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。
-| `grill-with-docs` | 组合 `grilling` + `domain-modeling`：需求歧义且领域术语模糊时，一次一问收敛意图并同步锐化术语表 |
 
 ## 仓库结构
 
 ```text
-├── opencode/          # OpenCode 配置目录（agents/、skills/、opencode.jsonc、AGENTS.md、dcp.jsonc）
+├── opencode/          # OpenCode 配置目录（agents/、skills/、opencode.jsonc、AGENTS.md）
 ├── scripts/           # sync-config.ps1（同步到全局配置）
 │                      # validate-jsonc.js（JSONC 校验）
 │                      # estimate-cost.js（按 token 数估算费用）
@@ -417,7 +416,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |
 | 全局行为规则（原则、失败纪律、缓存纪律、反模式） | `opencode/AGENTS.md` | 对应小节 |
 | 插件版本（pin） | `opencode/opencode.jsonc` | `plugin` |
-| DCP 压缩阈值 / 去重 / 错误清理 | `opencode/dcp.jsonc` | `compress` / `strategies` |
+| 压缩触发窗口（按模型）/ prune / 保留尾部 | `opencode/opencode.jsonc` | `provider.deepseek.models.<id>.limit.input` + `compaction` |
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
 > 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，并重启 opencode（配置只在启动时加载一次）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode debug config`。
@@ -487,13 +486,14 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `orchestrator.md` 中重复 `AGENTS.md` 的 4 条规则 | thinking tier / retry cap / reference-paths 等已由 `AGENTS.md` 单点定义，重复表述只增加常驻 token |
 | `orchestrator.md` 路由表中 10 处 `· ~½ cost` 标注 | 同一信息在表头已声明一次，逐行重复属于噪音 |
 | `subagent_depth: 3` 的第 3 层 | 实际最深链路只有 2 层，第 3 层无人使用，只提供意外嵌套放大的可能 |
+| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + 插件缓存 | 其价值（绝对值阈值提前压缩、工具调用去重）已由内置 compaction 的显式模型窗口 + 每轮 `prune` 覆盖；少一个插件 = 少一份常驻注入、少一条前缀漂移路径 |
 
 **新增 / 强化**
 
 | 新增项 | 预期收益 |
 | --- | --- |
 | `AGENTS.md` 硬约束「Vision input is opt-in」 | 从规则层保证非视觉任务不传图/不生成图，只有用户提供图像时才走 `vision`（flash 多模态） |
-| `dcp.jsonc` 显式列出**两个模型**的压缩阈值 | 模型映射不再依赖继承；pro `55K/26K`、flash `77K/38K`，读配置即可确认分工 |
+| 压缩触发点从隐式默认改为显式声明 | 不写 `limit.input` 时触发点 = `context − maxOutputTokens` = **968K**，且 `compaction.reserved` 是**死配置**（只有 `input` 路径才读它）。现在 flash 115K / pro 148K，读配置即可确认 |
 | `vision-prep` 修正附件上限陈述 | 原文档写「2000×2000 / 5MiB（opencode 默认）」，与本仓 `attachment.image`（1600px / 2MiB）矛盾，会误导预处理 |
 | README「配置变更点速查」表 | 维护时一次定位到文件与小节，减少试错（试错本身就是 token 消耗） |
 | README「快速开始」四步 TL;DR | 新机器上手从「读完全文」变成「照抄四行」 |
@@ -516,13 +516,13 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **纯配置驱动，零额外依赖** —— 所有能力由 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现
 - **DeepSeek V4 模型族极致利用** —— Pro 做深度推理与重型实现，Flash 做路由、规划、常规执行与原生多模态
 - **Token 效率优先** —— 路径引用替代粘贴文件、技能按需加载、压缩分级管理
-- **插件增效但不喧宾夺主** —— superpowers 提供过程纪律，DCP（dcp.jsonc）主动去重+压缩阈值，内置 compaction（opencode.jsonc）自动触发+prune 兜底；两插件均固定版本（pin）以保字节稳定前缀，避免自动更新导致前缀漂移
+- **插件增效但不喧宾夺主** —— 唯一插件 superpowers 只提供过程纪律（固定 pin 以保字节稳定前缀）；上下文压缩 100% 交给内置 compaction，不引入第三方压缩层
 - **执行与探索分离** —— deep-worker/light-orchestrator 禁止研究/委托，explore/librarian 禁止修改
 - **缓存与 thinking 纪律** —— 静态前缀稳定以命中 DeepSeek 提示词缓存；flash 关 thinking + temperature 0（provider 层），pro 默认 thinking 开
 - **Scope First + Delegate Always** —— 先定范围（2+ 步/多文件/架构变更先走 planner），再委派执行，顶层 token 只留给路由与难题
 - **原子 TODO** —— 多步任务先写有序 TODO，逐条 in_progress→completed；格式 `path: action for scenario — verify by check`
 - **进度可控 + 失败隔离** —— 每个 TODO 带可验证完成判据，阶段边界汇报 `[done/total]`；错误分 transient/recoverable/fatal 三类，同一操作最多重试 3 次且每次必须换策略；大任务拆成独立单元，单元失败不阻塞其余，最终汇总 `succeeded / failed / skipped`
-- **按模型成本分级压缩** —— DCP 的 `modelMaxLimits`/`modelMinLimits` 让 pro（输入成本 3× flash）更早压缩、flash 更晚压缩；两个模型都**显式列出**，读配置即可确认分工
+- **按模型成本分级压缩** —— 用 `limit.input` 给两个模型分别声明工作窗口：flash `131072−16000=115,072`（高频路径，窗口更紧）、pro `163840−16000=147,840`（深度任务，留更多余量以减少有损压缩次数）；触发点是算出来的，不是继承来的
 - **视觉输入成本封顶** —— `attachment.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
