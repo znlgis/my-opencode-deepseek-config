@@ -8,10 +8,10 @@
 
 - Default primary agent: `orchestrator`
 - Primary model: `deepseek/deepseek-v4-pro`; lightweight/multimodal model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal)
-- Agent nesting: `subagent_depth: 2` (exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
+- Agent nesting: `subagent_depth: 2` (classic key; desktop v2 reads only the identical `experimental.subagent_depth`, both written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
-- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.reserved` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), plus per-request `prune` of stale tool output; no third-party compression plugin
+- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.reserved` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), plus per-request `prune` of stale tool output (`prune`/`tail_turns` take effect on 1.18.4 only — desktop v2 ignores them, while `reserved`/`preserve_recent_tokens` carry over renamed); no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below

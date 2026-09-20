@@ -12,6 +12,12 @@
     // subagent is denied `task`, so a third level is dead headroom that only
     // enables accidental token amplification.
     "subagent_depth": 2,
+    // Desktop v2 reads only `experimental.subagent_depth` (top-level is
+    // dropped); the classic line reads `subagent_depth` above. Both carry
+    // the same value.
+    "experimental": {
+        "subagent_depth": 2
+    },
     "permission": {
         "read": {
             "*": "allow",
@@ -23,14 +29,15 @@
             "*.env.example": "allow"
         },
         // Default-ask instead of default-allow: an unrecognized destructive
-        // variant (e.g. `rm -rf` spelled or spaced differently) would match `*`
-        // and run unguarded. Resolution is last-match-wins, so the catch-all
-        // `*` MUST stay last — every allow/ask above it overrides it. The
+        // variant (e.g. `rm -rf` spelled or spaced differently) matches only `*`
+        // and is put to a human. Resolution is last-match-wins, so the catch-all
+        // `*` goes FIRST — every specific rule below overrides it. The
         // allow list covers high-frequency read-only or local operations
         // (git status/diff/log/show, git add/commit, npm run/test, rg, node
         // scripts/*); anything else, including unlisted destructive variants,
         // falls through to ask.
         "bash": {
+            "*": "ask",
             "git status*": "allow",
             "git diff*": "allow",
             "git log*": "allow",
@@ -60,8 +67,7 @@
             "git stash clear*": "ask",
             "git stash drop*": "ask",
             "gh repo delete*": "ask",
-            "gh pr close*": "ask",
-            "*": "ask"
+            "gh pr close*": "ask"
         },
         "skill": {
             "*": "allow"
@@ -198,20 +204,22 @@
         "auto": true,
         // Clears the output of old tool calls (keeps the newest ~40K tokens of
         // tool output, protects `skill` output, and only acts when it can free
-        // >20K tokens). Runs per request, forked off the request path.
+        // >20K tokens). Runs per request, forked off the request path. Classic-only: v2 drops `prune`.
         "prune": true,
         "reserved": 16000,
         // Verbatim tail kept across a compaction: up to 8 recent user turns
         // capped by a 12K-token budget (the budget usually binds first).
         // Everything older is replaced by the summary the compaction agent
         // writes, so this number is the "working memory" left after a squeeze.
+        // Desktop v2 drops `tail_turns` and maps `reserved`→`buffer`,
+        // `preserve_recent_tokens`→`keep.tokens`.
         "tail_turns": 8,
         "preserve_recent_tokens": 12000
     },
     // Bound image token cost for the multimodal flash model. DeepSeek downscales
     // images to ~800x800 internally, so oversized uploads only waste base64
     // bytes. Resize anything above 1600px / 2MB before it reaches the API.
-    // Key is singular `attachment` (schema-valid); the plural form is ignored.
+    // Classic spelling is singular `attachment`; desktop v2 reads its own `media` and up-converts it.
     "attachment": {
         "image": {
             "auto_resize": true,

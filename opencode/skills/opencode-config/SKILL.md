@@ -17,34 +17,49 @@ this file only covers this repository's local conventions.
 
 ## Hard constraints
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input.
-- Use the singular keys (`plugin`, `snapshot`), not the fork's plural (`plugins`, `snapshots`).
+- Write the classic singular keys (`plugin`, `snapshot`, `attachment`, `permission`); desktop v2 up-converts them. Do not switch to v2-native spellings (`plugins`, `snapshots`, `media`, `permissions`) — 1.18.4 silently ignores those.
 
-## Version drift: installed 1.18.4 vs the `dev` branch
-This repo targets the **installed** OpenCode (1.18.4), whose schema uses
-**singular** keys. The `dev`-branch source (the `opencode-docs` reference) is a
-future/v2 schema that renamed them to **plural** and dropped several keys. Do
-NOT "fix" the repo to match `dev` — that breaks 1.18.4. Verify against the
-installed binary with `opencode debug config` (it echoes the resolved config and
-errors on invalid keys), not against `dev` source.
+## Runtime compatibility: desktop v2 (primary) + 1.18.4 (floor)
+Two generations read this repo's config: **desktop v2** — the app's bundled
+`opencode-cli.exe` (2.0.x), used daily — and the **1.18.4 CLI**, the minimum
+supported version (classic line). Write the classic spellings; v2's compat
+layer up-converts them (`agent`→`agents`, `command`→`commands`,
+`plugin`→`plugins`, `attachment`→`media`, `snapshot`→`snapshots`,
+`permission`→an ordered `permissions` list, `small_model`→the `title` agent's
+model, `skills.paths`/`urls`→a flat array). Two keys diverge (see the table):
+`subagent_depth` needs both spellings written, and `compaction` maps
+`reserved`/`preserve_recent_tokens` while dropping `prune`/`tail_turns`. Agent
+frontmatter `options` (thinking, `reasoningEffort`) survives on v2 — it lands
+in the request body. Verify against **both** binaries (`debug config` on
+each); unknown keys are silently dropped by both, so a config can look valid
+while a key does nothing.
 
-| Concern | 1.18.4 (this repo) | `dev` branch |
+| Concern | 1.18.4 (floor) | desktop v2 (primary) |
 | --- | --- | --- |
-| Top-level keys | `agent`, `command`, `plugin`, `provider`, `permission`, `attachment` | `agents`, `commands`, `plugins`, `providers`, `permissions`, `attachments` |
-| `small_model`, `subagent_depth` | present | absent |
+| Key spellings | classic: `agent`, `command`, `plugin`, `snapshot`, `permission`, `attachment` | v2-native: `agents`, `commands`, `plugins`, `snapshots`, `permissions`, `media` (the compat layer converts) |
+| `small_model` | present | expanded into the `title` agent's `model` |
+| `subagent_depth` | top-level, read as-is | only `experimental.subagent_depth`; top-level is dropped — write both |
 | `skills` | object (`paths`/`urls`) | flat array of path/URL strings |
-| `compaction` | `tail_turns`, `preserve_recent_tokens`, `reserved` | `keep.tokens`, `buffer` |
+| `compaction` | `prune`, `tail_turns`, `preserve_recent_tokens`, `reserved` | `keep.tokens` (from `preserve_recent_tokens`), `buffer` (from `reserved`); `prune`/`tail_turns` dropped |
 | Model `cost` | flat `cache_read` / `cache_write` | nested `cache: { read, write }` |
-| Agent `options` (thinking, `reasoningEffort`) | supported | not in the agent schema |
+| Agent `options` (thinking, `reasoningEffort`) | supported | supported — lands in the agent's request body |
 
-`dev` decodes with `onExcessProperty: "ignore"`, so unknown keys are silently
-dropped rather than erroring — a config can look valid on `dev` while its keys
-do nothing. That is why the installed binary is the authority here.
+### Two silent-failure traps (both bit this repo)
+1. **YAML strictness (v2 only).** v2's frontmatter parser is strict YAML; an
+   unquoted `: ` in `description` aborts the parse, and v2 falls back to
+   "whole file as system prompt + default agent" (no model, no steps, no
+   permissions, `mode: primary`). 1.18.4's parser tolerates it, so the break
+   is invisible on the classic line. Quote any description containing `: `.
+2. **Permission order (both lines).** Resolution is last-match-wins over the
+   merged list [v2 defaults → global config → agent]: put the catch-all `*`
+   FIRST and every specific rule after it. A trailing catch-all silently
+   shadows all rules above it.
 
 ## Config key shapes (authoritative)
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it. String shorthand (`"alias": "../docs"`) allowed.
-- **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills. (1.18.4 shape; `dev` replaces this with a flat string array — see the drift table above.)
+- **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills. (classic shape; desktop v2 up-converts it to a flat string array.)
 - **agent (inline)** — override built-ins or define agents inline in `opencode.jsonc`: `"agent": { "build": { "model": "…", "mode": "subagent" } }`. Inline keys override file-based `agents/<name>.md`.
-- **compaction** — `{ "auto": bool, "prune": bool, "tail_turns": number, "preserve_recent_tokens": number, "reserved": number }` (defaults: `auto` true, `prune` false). `tail_turns` caps how many recent user turns (plus their assistant/tool responses) stay verbatim; `preserve_recent_tokens` caps the verbatim token budget for recent turns; `reserved` is the token buffer kept to avoid overflow during compaction.
+- **compaction** — `{ "auto": bool, "prune": bool, "tail_turns": number, "preserve_recent_tokens": number, "reserved": number }` (defaults: `auto` true, `prune` false). `tail_turns` caps how many recent user turns (plus their assistant/tool responses) stay verbatim; `preserve_recent_tokens` caps the verbatim token budget for recent turns; `reserved` is the token buffer kept to avoid overflow during compaction. Desktop v2 maps `reserved`→`buffer` and `preserve_recent_tokens`→`keep.tokens`, and drops `prune`/`tail_turns`.
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)
@@ -84,6 +99,7 @@ do nothing. That is why the installed binary is the authority here.
 
 ## Permissions (`opencode.json` → `permission`)
 - Default-allow, deny the dangerous: `deny` `.env*` reads (except `.env.example`); `ask` on destructive bash (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
+- **Order: last match wins.** Put the catch-all `*` first; every specific rule after it overrides. Applies to the JSONC blocks and to agent `permission` blocks (v2 normalizes everything into one ordered rule list per action). v2 action names: `bash`→`shell`, `task`→`subagent`.
 
 ## Before you finish
 1. Re-read every changed file end-to-end.

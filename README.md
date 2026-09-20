@@ -8,10 +8,10 @@
 
 - 默认主 Agent：`orchestrator`
 - 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
-- 代理层级：`subagent_depth: 2`（恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
+- 代理层级：`subagent_depth: 2`（classic 键；桌面 v2 只认同值的 `experimental.subagent_depth`，两处并存。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.reserved`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），另有每轮请求的 prune 清理旧工具输出；无第三方压缩插件
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.reserved`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），另有每轮请求的 prune 清理旧工具输出（`prune`/`tail_turns` 仅 1.18.4 生效，桌面 v2 忽略；v2 端 `reserved`/`preserve_recent_tokens` 经改名继续生效）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
