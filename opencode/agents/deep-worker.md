@@ -22,6 +22,8 @@ permission:
     diagnosing-bugs: "allow"
     codebase-design: "allow"
     domain-modeling: "allow"
+    test-driven-development: "allow"
+    verification-before-completion: "allow"
 ---
 
 # Deep Worker

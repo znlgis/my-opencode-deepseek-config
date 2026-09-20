@@ -15,15 +15,15 @@
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v6.3.0`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移
+- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.1`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.1（2026-09-19 发布）在 opencode 1.18.x 的 V1 路径上已实测可加载，且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
-唯一保留的插件 **superpowers v6.3.0** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。
+唯一保留的插件 **superpowers v6.4.1** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。v6.4.1 的映射表写在 `AGENTS.md` 的 Plugins 小节（skill → Agent → 档位），并显式标注「本地已有等价 skill 的项不接线」，避免两套流程并存。
 
 > 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`provider.deepseek.models.*.limit.input`）与每轮 `prune` 覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
-因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码，勿重复调研。
+因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v6.4.1 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项），勿重复调研。
 
 ## DeepSeek 模型配置
 
@@ -259,9 +259,9 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 | 优化项 | 变更 | 节省 |
 | --- | --- | --- |
-| `AGENTS.md` 精简（累计两轮） | 15173 → 13938 字节 | 每轮常驻上下文省 **8.1%**（该文件每轮都加载，收益随会话轮数线性放大） |
-| `orchestrator.md` 精简（累计两轮） | 14678 → 12776 字节 | 省 **12.9%**（本轮 −1157 字节：删除与 `AGENTS.md` 重复的 thinking tier / retry cap / reference-paths 规则、10 处 `· ~½ cost` 冗余标注） |
-| 默认入口静态前缀合计 | `AGENTS.md` + `orchestrator.md` 28050 → 26714 字节 | 每轮省 **1336 字节 ≈ 334 tokens**（约占默认入口常驻前缀的 5%） |
+| `AGENTS.md` + `orchestrator.md` 精简（上一轮） | 合计 29851 → 26843 字节（`AGENTS.md` 15173→14067、`orchestrator.md` 14678→12776） | 每轮常驻上下文省 **3008 字节 ≈ 752 tokens（−10.1%）**；该前缀每轮都加载，收益随会话轮数线性放大 |
+| 本轮常驻前缀增量（2026-09-20） | 合计 26843 → 28609 字节（`AGENTS.md` +1383、`orchestrator.md` +383、`planner`/`deep-worker`/`light-orchestrator` 各 +86/+156/+102） | 每轮多 **1766 字节 ≈ 442 tokens**（冷启动按输入价，命中缓存后按 `cache_read` 价）——由下一条抵消 |
+| 插件升到 v6.4.1：子会话不再注入 bootstrap | 每个 task 子会话 −3110 字节 | 每委派 1 个子智能体即省 **≈ 780 tokens**；只要链路里有委派（本仓库默认如此），本轮增量即被抵掉且净赚 |
 | Skills 名册瘦身 | 25 → 23 个（合并 `wait-what`/`grill-with-docs` 进 `grilling`） | 名册 name+description 常驻成本 **10,127 → 9,802 字节**（−325 字节 ≈ −81 tokens），且少两个可能选错的入口 |
 | `subagent_depth` 3 → 2 | 覆盖实际最深链路即可 | 关掉未使用的第 3 层嵌套，避免意外 token 放大 |
 | 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（flash 115K / pro 148K） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K/148K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
@@ -275,14 +275,17 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 opencode run "Reply with exactly: OK" --agent orchestrator --format json
 ```
 
-| 指标 | 实测值 |
-| --- | --- |
-| 首轮 prompt tokens | **14,690**（未命中 8,161 + 命中缓存 6,528） |
-| output tokens | 1 |
-| 单次费用 | **$0.00184**（flash，off-peak 价） |
-| 对比：移除 DCP 前同一命令 | 16,254 tokens（cache read 0）→ 现 **−1,564（≈ −9.6%）** |
+| 指标 | 上一轮实测 | 本轮实测（2026-09-20，最终配置 + v6.4.1） |
+| --- | --- | --- |
+| 首轮 prompt tokens | 14,690（未命中 8,161 + 命中缓存 6,528） | **15,153**（未命中 11,825 + 命中缓存 3,328） |
+| output tokens | 1 | 1 |
+| 单次费用 | $0.00184 | **$0.00263**（flash，off-peak 价） |
+| 插件 A/B（同一配置目录，仅 pin 不同） | — | v6.3.0 **15,159** vs v6.4.1 **15,183** prompt tokens → Δ+24 ≈ 噪声，升级本身不增加常驻成本 |
+| 对比：移除 DCP 前同一命令 | 16,254 tokens（cache read 0）→ **−1,564（≈ −9.6%）** | — |
 
-这 14,690 tokens 里，`AGENTS.md`（13,938 B）+ `orchestrator.md`（12,776 B）≈ 6.7K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
+单次费用受**缓存命中率**支配（同一配置连跑两次，命中部分在 256～6,528 tokens 之间浮动），因此跨轮比较要看总 prompt tokens：**14,690 → 15,153（+463，≈ +3.2%）**，与上面的字节账（+1766 字节 ≈ +442 tokens）吻合。
+
+这 15,153 tokens 里，`AGENTS.md`（15,450 B）+ `orchestrator.md`（13,159 B）≈ 6.9K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
 
 ## Agent 结构
 
@@ -314,7 +317,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`systematic-debugging`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
 > **思考分档（thinking tiers）**：`reasoning_effort` 是按 Agent 经 frontmatter `options` 设置的请求级思考强度（`low`/`high`/`max`），不是模型 ID。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking 关（最省）；`planner`/`light-orchestrator` = flash · thinking 开 + `reasoningEffort: low`；`deep-worker`/`oracle`/`reviewer` = pro · 默认 high；`solo` 无 `model` 字段，跟随会话所选模型（默认 pro），思考档随该模型而定。
 
@@ -388,7 +391,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `codebase-design` | 架构词汇表：module/interface/depth/seam/adapter/leverage/locality，删除测试、深度测试，评估模块边界是否合理 |
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
-> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文（本仓库 23 个本地 + 14 个 superpowers + 1 个内置 ≈ 10KB ≈ 2.5K tokens，对未设白名单的内置 Agent 全量生效）。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。
+> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文（本仓库 23 个本地 + 15 个 superpowers + 1 个内置，name+description 原始字节合计 ≈ 10.6KB ≈ 2.6K tokens，对未设白名单的内置 Agent 全量生效；superpowers v6.4.1 比 v6.3.0 多 1 个 skill、名册 +484 字节）。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。
 
 ## 仓库结构
 
@@ -430,7 +433,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```text
 「帮我排查这个登录接口的报错」     → oracle 分析根因 → 返回诊断报告        （pro high）
 「优化这段循环，性能太差了」         → oracle 分析 → deep-worker 实施优化    （pro high）
-「这个 PR 帮我审查一下」             → reviewer 多维度审查 → 返回分级报告   （pro high）
+「这个 PR 帮我审查一下」             → light-orchestrator flash 初检 → 返回分级报告（命中升级触发条件才走 reviewer，pro high）
 「我想给用户模块加个导出功能」       → planner 制定方案 → deep-worker 实现  （flash low → pro high）
 「React 19 的 use() API 怎么用」    → librarian 查文档 → 返回签名和示例   （flash off）
 ```
@@ -474,6 +477,19 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-09-20：插件升级 + superpowers 接线 + 路由矛盾修正
+
+同样是**最小 diff**：不加 skill、不加依赖、不动模型矩阵；只修插件 pin、把过程技能接到真正需要它的 Agent、修正路由表里两处与「flash 初检」策略矛盾的直连 pro 行。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 插件 pin `#v6.3.0` → `#v6.4.1` | `opencode.jsonc` | v6.4.1（2026-09-19 稳定版）：① **子会话（task subagent）不再注入 bootstrap**（3,110 字节 ≈ 780 tokens/子会话）——opencode 1.18.x 的 V1 路径已在插件源码中显式实现（`firstUser.info.sessionID` + `parentID` 判定）；② 技能内容修复（TDD 改为跑项目测试命令、`executing-plans` 重写为 Native 内联执行、code-review 的 `BASE_SHA` 修正为 `git merge-base`）。已用临时配置目录做受控 A/B：prompt tokens 15,159 → 15,183（Δ+24 ≈ 噪声），确认升级本身不增加常驻成本 |
+| superpowers 最小接线 | `agents/{planner,deep-worker,light-orchestrator}.md` | 只接**没有本地等价物**的 4 项：`writing-plans` → `planner`；`test-driven-development`、`verification-before-completion` → `deep-worker`；`verification-before-completion` → `light-orchestrator`。`systematic-debugging` ↔ `diagnosing-bugs`、`brainstorming` ↔ `spec-workflow`/`grilling`、`requesting-`/`receiving-code-review` ↔ `code-review` 等**不接线**，避免两套流程并存 |
+| 插件 → 模型映射表 | `AGENTS.md` Plugins 小节 | 插件无模型配置项（源码复核），故在 Agent 层写明映射，并列出「本地已有等价物、不接线」清单，顺带标出每个 skill 的档位 |
+| 路由表矛盾修正 | `agents/orchestrator.md` | `"review X"` 原先直连 `reviewer`（pro），与既有「flash 初检、命中触发条件才升级」策略矛盾 → 改为 `light-orchestrator` 初检 → 按需升级；`"add tests for X"` 原先直连 `deep-worker`（pro）→ 单文件走 flash、测试套件跨文件才走 pro |
+
+### 上一轮：压缩层收敛（移除 DCP、skill 合并）
 
 面向「省 token + 少 API 调用」的一次收敛：**只做减法与显式化，不引入任何新模型、新依赖、新工具**。
 

@@ -20,6 +20,7 @@ permission:
     spec-workflow: "allow"
     code-review: "allow"
     gh-cli: "allow"
+    verification-before-completion: "allow"
 ---
 
 # Light Orchestrator

@@ -45,12 +45,13 @@ work before escalating; pro = deep tasks only.
 | "analyze X", "audit Y", "diagnose Z", "trace/debug" | `oracle` | pro (high) | deep investigation, report only |
 | "refactor", "improve", "clean up" | `oracle` → `deep-worker` | pro (high) | assess → implement → verify |
 | "optimize X", "make Y faster" | `oracle` → `deep-worker` | pro (high) | profile → implement |
-| "review X", "audit security of Y" | `reviewer` | pro (high) | report findings |
+| "review X" | `light-orchestrator` (code-review) → `reviewer` | flash → pro | flash pre-screen; `reviewer` only when the skill's escalation triggers fire |
+| "audit security of Y" | `reviewer` | pro (high) | trust-boundary changes, full pass |
 | "review and fix X" | `reviewer` → `deep-worker` → `reviewer` | pro (high) | bounded loop ≤ 2 |
 | "simplify X", "clean up Y code" | `light-orchestrator` (simplify) → spawns `oracle` | flash → pro | light-orchestrator spawns oracle (read-only) → applies edits |
 | "what do you think about X?", "help me decide" | `consultant` | flash | propose → wait for confirm |
 | "deploy X", "release Y" | `deep-worker` (git-release) | pro (high) | /release command; for complex deploys: `planner` → `deep-worker` |
-| "add tests for X" | `deep-worker` | pro (high) | implement tests |
+| "add tests for X" | `light-orchestrator` → `deep-worker` | flash → pro | one test file → flash; test suite across files → deep-worker |
 | "write docs for X" | `light-orchestrator` | flash | generate docs |
 | "research X", "what library for Y" | `librarian` | flash | findings with citations |
 | UI / frontend / CSS / layout work | `ui-builder` | flash | preserve design handoffs |

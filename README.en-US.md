@@ -15,15 +15,15 @@
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v6.3.0`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates
+- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.1`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.1 (released 2026-09-19) was smoke-tested on OpenCode 1.18.x's V1 path, and **task sub-sessions no longer receive the bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
-The single remaining plugin, **superpowers v6.3.0**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin.
+The single remaining plugin, **superpowers v6.4.1**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v6.4.1 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
 
 > `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`provider.deepseek.models.*.limit.input`) plus per-request `prune`; one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
 
-So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source — do not re-investigate.
+So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v6.4.1: it still only registers the skills path and injects the bootstrap — no model config keys) — do not re-investigate.
 
 ## DeepSeek Model Configuration
 
@@ -259,9 +259,9 @@ Other optimizations (byte counts are LF-normalized, i.e. how the repo stores the
 
 | Change | What changed | Savings |
 | --- | --- | --- |
-| `AGENTS.md` trim (two passes cumulative) | 15173 → 13938 bytes | **8.1%** off the always-loaded context every turn (this file loads on every turn, so the gain scales with session length) |
-| `orchestrator.md` trim (two passes cumulative) | 14678 → 12776 bytes | **12.9%** (−1157 bytes this pass: dropped thinking-tier / retry-cap / reference-paths rules duplicating `AGENTS.md`, plus 10 redundant `· ~½ cost` labels) |
-| Default entry static prefix | `AGENTS.md` + `orchestrator.md` 28050 → 26714 bytes | **1336 bytes ≈ 334 tokens per turn** (~5% of the default entry's always-loaded prefix) |
+| `AGENTS.md` + `orchestrator.md` trim (previous pass) | 29851 → 26843 bytes combined (`AGENTS.md` 15173→14067, `orchestrator.md` 14678→12776) | **3008 bytes ≈ 752 tokens per turn (−10.1%)** off the always-loaded context; this prefix loads on every turn, so the gain scales with session length |
+| This pass's prefix increase (2026-09-20) | 26843 → 28609 bytes combined (`AGENTS.md` +1383, `orchestrator.md` +383, `planner`/`deep-worker`/`light-orchestrator` +86/+156/+102) | **+1766 bytes ≈ +442 tokens per turn** (input price on a cold cache, `cache_read` price on hits) — cancelled by the row below |
+| Plugin v6.4.1: no bootstrap in child sessions | −3110 bytes per task sub-session | **≈ 780 tokens saved per delegated subagent**; with any delegation in the chain (the default here) this pass's increase is more than paid back |
 | Skill roster slimming | 25 → 23 (merged `wait-what`/`grill-with-docs` into `grilling`) | Always-on roster name+description **10,127 → 9,802 bytes** (−325 bytes ≈ −81 tokens), and two fewer mis-pickable entries |
 | `subagent_depth` 3 → 2 | Matches the deepest chain actually used | Closes the unused third nesting level, removing an accidental token-amplification surface |
 | DCP removed + compression window made explicit | Plugin and `dcp.jsonc` deleted; `limit.input` now declares the working window (flash 115K / pro 148K) | Cap on context carried per request drops from the implicit **968K** to **115K/148K** (~1/8); cache misses save proportionally, with one fewer third-party plugin |
@@ -275,14 +275,17 @@ Other optimizations (byte counts are LF-normalized, i.e. how the repo stores the
 opencode run "Reply with exactly: OK" --agent orchestrator --format json
 ```
 
-| Metric | Measured |
-| --- | --- |
-| First-request prompt tokens | **14,690** (8,161 uncached + 6,528 cache read) |
-| Output tokens | 1 |
-| Cost for that request | **$0.00184** (flash, off-peak) |
-| Baseline: same command before DCP removal | 16,254 tokens (cache read 0) → now **−1,564 (≈ −9.6%)** |
+| Metric | Previous pass | This pass (2026-09-20, final config + v6.4.1) |
+| --- | --- | --- |
+| First-request prompt tokens | 14,690 (8,161 uncached + 6,528 cache read) | **15,153** (11,825 uncached + 3,328 cache read) |
+| Output tokens | 1 | 1 |
+| Cost for that request | $0.00184 | **$0.00263** (flash, off-peak) |
+| Plugin A/B (same config dir, pin only) | — | v6.3.0 **15,159** vs v6.4.1 **15,183** prompt tokens → Δ+24 ≈ noise; the upgrade itself adds no always-on cost |
+| Baseline: same command before DCP removal | 16,254 tokens (cache read 0) → **−1,564 (≈ −9.6%)** | — |
 
-Of those 14,690 tokens, `AGENTS.md` (13,938 B) + `orchestrator.md` (12,776 B) ≈ 6.7K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
+Per-request cost is dominated by **cache hit rate** (two back-to-back runs of the same config varied between 256 and 6,528 cache-read tokens), so cross-pass comparison should use total prompt tokens: **14,690 → 15,153 (+463, ≈ +3.2%)**, which matches the byte accounting above (+1766 bytes ≈ +442 tokens).
+
+Of those 15,153 tokens, `AGENTS.md` (15,450 B) + `orchestrator.md` (13,159 B) ≈ 6.9K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
 
 ## Agent Structure
 
@@ -314,7 +317,7 @@ Of those 14,690 tokens, `AGENTS.md` (13,938 B) + `orchestrator.md` (12,776 B) �
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
-> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set (the inline executor needs the complete toolchain, still guarded by `"*": deny`). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget.
+> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`/`writing-plans`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set plus `brainstorming`/`systematic-debugging`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans` (the inline executor needs the complete toolchain, still guarded by `"*": deny`). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget. Only 4 superpowers entries are wired (`writing-plans` → `planner`; `test-driven-development`/`verification-before-completion` → `deep-worker`; `verification-before-completion` → `light-orchestrator`); every other superpowers skill has a local equivalent and stays unwired so two competing processes never coexist — the mapping table is in `AGENTS.md`'s Plugins section.
 >
 > **Thinking tiers**: `reasoning_effort` is a request-level thinking-strength control (`low`/`high`/`max`) set per-agent via frontmatter `options` — not a model id. `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator` = flash · thinking off (cheapest); `planner`/`light-orchestrator` = flash · thinking on + `reasoningEffort: low`; `deep-worker`/`oracle`/`reviewer` = pro · default high; `solo` has no `model` field and follows the session's selected model (pro by default), so its thinking tier follows that model.
 
@@ -388,7 +391,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `codebase-design` | Architecture vocabulary: module/interface/depth/seam/adapter/leverage/locality, deletion test, depth test — assess whether module boundaries are sound |
 | `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted; includes the repeated-explanation trigger (pin a term when the same concept keeps being re-explained) |
 
-> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** context (this repo: 23 local + 14 superpowers + 1 built-in ≈ 10KB ≈ 2.5K tokens, fully applied to built-in agents with no allowlist). So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed.
+> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** context (this repo: 23 local + 15 superpowers + 1 built-in, name+description raw bytes ≈ 10.6KB ≈ 2.6K tokens, fully applied to built-in agents with no allowlist; superpowers v6.4.1 has one more skill and +484 roster bytes vs v6.3.0). So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed.
 
 ## Repository Structure
 
@@ -430,7 +433,7 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 ```text
 "Help me debug the login API error"     → oracle analyzes root cause → returns diagnostic report   (pro high)
 "Optimize this loop, performance is poor" → oracle analyzes → deep-worker implements optimization  (pro high)
-"Review this PR for me"                 → reviewer performs multi-dimensional review → returns tiered report  (pro high)
+"Review this PR for me"                 → light-orchestrator flash pre-screen → returns tiered report (escalates to reviewer, pro high, only on a trigger)
 "I want to add an export feature to the user module" → planner drafts plan → deep-worker implements  (flash low → pro high)
 "How to use React 19's use() API"       → librarian checks docs → returns signature and examples  (flash off)
 ```
@@ -474,6 +477,19 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 ```
 
 ## Refactor Change Log
+
+### 2026-09-20: plugin upgrade + superpowers wiring + routing-contradiction fixes
+
+Also a **minimal diff**: no new skill, no new dependency, no change to the model matrix — only the plugin pin, wiring process skills to the agents that actually need them, and fixing two rows in the routing table that contradicted the existing "flash pre-screen" policy.
+
+| Change | Where | Why |
+| --- | --- | --- |
+| Plugin pin `#v6.3.0` → `#v6.4.1` | `opencode.jsonc` | v6.4.1 (stable, released 2026-09-19): (1) **task sub-sessions no longer receive the bootstrap injection** (3,110 bytes ≈ 780 tokens per sub-session) — implemented explicitly for OpenCode 1.18.x's V1 path in the plugin source (`firstUser.info.sessionID` + a `parentID` check); (2) skill content fixes (TDD now runs the project's test command, `executing-plans` rebuilt as Native inline execution, code-review `BASE_SHA` corrected to `git merge-base`). Verified with a controlled A/B in a temp config dir: prompt tokens 15,159 → 15,183 (Δ+24 ≈ noise), so the upgrade itself adds no always-on cost |
+| Minimal superpowers wiring | `agents/{planner,deep-worker,light-orchestrator}.md` | Only the 4 entries with **no local equivalent** are wired: `writing-plans` → `planner`; `test-driven-development`, `verification-before-completion` → `deep-worker`; `verification-before-completion` → `light-orchestrator`. `systematic-debugging` ↔ `diagnosing-bugs`, `brainstorming` ↔ `spec-workflow`/`grilling`, `requesting-`/`receiving-code-review` ↔ `code-review` stay **unwired** so two competing processes never coexist |
+| Plugin → model mapping table | `AGENTS.md` Plugins section | The plugin has no model config keys (re-verified in source), so the mapping is stated at the agent layer, together with the unwired list and each skill's tier |
+| Routing-contradiction fix | `agents/orchestrator.md` | `"review X"` used to jump straight to `reviewer` (pro), contradicting the existing "flash pre-screen, escalate only on a trigger" policy → now `light-orchestrator` pre-screen → escalate as needed; `"add tests for X"` used to jump straight to `deep-worker` (pro) → a single test file goes to flash, a cross-file suite to pro |
+
+### Previous pass: compression-layer convergence (DCP removal, skill merges)
 
 A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and explicit mapping only — no new model, no new dependency, no new tooling.**
 

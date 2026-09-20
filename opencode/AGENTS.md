@@ -280,8 +280,31 @@ change.
 
 ## Plugins
 
-- **superpowers** (obra/superpowers) — process skills (brainstorming, systematic
-  debugging, TDD); skill-first discipline.
+- **superpowers** (obra/superpowers) — process skills (brainstorming, writing
+  plans, TDD, verification); skill-first discipline. Pin lives in
+  `opencode.jsonc`. The plugin exposes **no model-mapping config** (its
+  `superpowers.js` only registers the skills path and injects a ~3 KB bootstrap
+  into the first user message), so superpowers workflows map to models through
+  the agent layer:
+
+| Superpowers skill | Wired on | Tier |
+| --- | --- | --- |
+| `writing-plans` | `planner` | flash-low; deep or architectural design escalates to pro |
+| `test-driven-development` | `deep-worker` | pro |
+| `verification-before-completion` | `deep-worker`, `light-orchestrator` | pro / flash |
+| `brainstorming`, `executing-plans` | `solo` only | session model |
+
+- **Prefer the local distillation when both exist** (these stay unwired on
+  routing agents): `systematic-debugging` → `diagnosing-bugs`, `brainstorming` →
+  `spec-workflow`/`grilling`, `requesting-`/`receiving-code-review` →
+  `code-review`, `subagent-driven-development`/`dispatching-parallel-agents` →
+  the delegation rules above, `using-git-worktrees`/
+  `finishing-a-development-branch` → `git-master`/`git-release`,
+  `writing-skills` → `writing-for-agents`.
+- A roster entry is injected with every request of every agent that allows it, so
+  superpowers entries stay deliberate — only `planner`, `deep-worker`,
+  `light-orchestrator` (and `solo`, which allows the full set) carry any.
+  Routing table: `agents/orchestrator.md`.
 
 Context compression is **built-in only** — there is no DCP plugin. Compaction
 fires at `limit.input - compaction.reserved` (flash ~115K, pro ~148K tokens) and
