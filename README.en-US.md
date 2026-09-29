@@ -15,15 +15,15 @@
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.1`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.1 (released 2026-09-19) was smoke-tested on OpenCode 1.18.x's V1 path, and **task sub-sessions no longer receive the bootstrap injection**
+- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.2`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.2 (released 2026-09-25) was smoke-tested on OpenCode 1.18.x's V1 path, and **task sub-sessions no longer receive the bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
-The single remaining plugin, **superpowers v6.4.1**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v6.4.1 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
+The single remaining plugin, **superpowers v6.4.2**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v6.4.2 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
 
 > `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`provider.deepseek.models.*.limit.input`) plus per-request `prune`; one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
 
-So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v6.4.1: it still only registers the skills path and injects the bootstrap — no model config keys) — do not re-investigate.
+So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v6.4.2: it still only registers the skills path and injects the bootstrap — no model config keys) — do not re-investigate.
 
 ## DeepSeek Model Configuration
 
@@ -477,6 +477,16 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 ```
 
 ## Refactor Change Log
+
+### 2026-09-29: audit pass + plugin pin bumped to v6.4.2 (leaner writing-plans)
+
+A **read-only audit plus one minimal upgrade**: the full structural review found zero violations; the only substantive change is bumping the superpowers pin from `#v6.4.1` to `#v6.4.2`, which rewrites `writing-plans` into a leaner "signature + test anchored" plan format — a direct win for the token budget.
+
+| Change | Where | Why |
+| --- | --- | --- |
+| Plugin pin `#v6.4.1` → `#v6.4.2` | `opencode.jsonc` | v6.4.2 (2026-09-25) is a single commit (`8ca22db`, 17 files +61/−85): **zero runtime change** — `.opencode/plugins/superpowers.js` is byte-identical, so the bootstrap injection and the always-on prefix are unaffected (same skill roster, nothing added or removed); the substance is `writing-plans` now writes only what the implementer cannot decide alone: steps anchored to exact signatures + test assertions instead of pasted implementation bodies ("a plan longer than the code it describes is a transcript, not a plan"). Both the planner's output and the executor's reading get leaner |
+| Full structural audit (read-only, no changes) | `skills/`, `agents/`, `opencode.jsonc`, `scripts/` | All 23 `SKILL.md` files comply: `name` = directory, `description` ≤ 450 chars, no stray files; all 12 agents reference only the two allowed models; `opencode.jsonc` passes `scripts/validate-jsonc.js`; repo ↔ global config show no semantic drift (CRLF/LF only). gh-cli already carries "Create a PR / List issues" examples (371 lines), and code-review already implements the flash pre-screen → pro escalation (`Model tier — flash first, pro on escalation`) |
+| v6.4.2 first-run smoke test | — | Re-ran the baseline command on 2026-09-29 (v1.18.4, global config): prompt tokens **15,177** (12,105 uncached + 3,072 cache read), output 1, $0.00269 per run (flash off-peak) — versus 15,153 on v6.4.1, Δ+24 ≈ noise, confirming the upgrade adds no always-on cost; the `superpowers.git#v6.4.2` package was installed and loaded on this first run |
 
 ### 2026-09-20: plugin upgrade + superpowers wiring + routing-contradiction fixes
 

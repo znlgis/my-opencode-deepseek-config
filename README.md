@@ -15,15 +15,15 @@
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.1`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.1（2026-09-19 发布）在 opencode 1.18.x 的 V1 路径上已实测可加载，且**子会话（task subagent）不再注入 bootstrap**
+- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.2`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.2（2026-09-25 发布）在 opencode 1.18.x 的 V1 路径上已实测可加载，且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
-唯一保留的插件 **superpowers v6.4.1** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。v6.4.1 的映射表写在 `AGENTS.md` 的 Plugins 小节（skill → Agent → 档位），并显式标注「本地已有等价 skill 的项不接线」，避免两套流程并存。
+唯一保留的插件 **superpowers v6.4.2** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。v6.4.2 的映射表写在 `AGENTS.md` 的 Plugins 小节（skill → Agent → 档位），并显式标注「本地已有等价 skill 的项不接线」，避免两套流程并存。
 
 > 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`provider.deepseek.models.*.limit.input`）与每轮 `prune` 覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
-因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v6.4.1 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项），勿重复调研。
+因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v6.4.2 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项），勿重复调研。
 
 ## DeepSeek 模型配置
 
@@ -477,6 +477,16 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-09-29：审计轮 + 插件 pin 升至 v6.4.2（更精简的 writing-plans）
+
+一次**只读审计 + 一处最小升级**：全仓结构化审查零违规；唯一实质变更是把 superpowers pin 从 `#v6.4.1` 升到 `#v6.4.2`——它把 `writing-plans` 重写为「签名 + 测试锚定」的精简计划格式，直接服务 token 预算。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 插件 pin `#v6.4.1` → `#v6.4.2` | `opencode.jsonc` | v6.4.2（2026-09-25）只含 1 个提交（`8ca22db`，17 文件 +61/−85）：**运行时零改动**——`.opencode/plugins/superpowers.js` 字节不变，bootstrap 注入与常驻前缀不受影响（skill 名册不变，无新增/删除）；实质是 `writing-plans` 改为「只写执行者自己无法决定的内容」：步骤以精确签名 + 测试断言锚定，不再整段转抄实现代码（「比它描述的代码还长的计划 = 转录，不是计划」）。planner 的输出与执行者的阅读同时变省 |
+| 全量结构审计（只读，零改动） | `skills/`、`agents/`、`opencode.jsonc`、`scripts/` | 23 个 `SKILL.md` 全部合规：`name` = 目录名、`description` ≤ 450 字符、无多余文件；12 个 agent 仅引用两个允许模型；`opencode.jsonc` 通过 `scripts/validate-jsonc.js`；仓库 ↔ 全局配置无语义漂移（仅 CRLF/LF 差异）。gh-cli 已含「创建 PR / 列 Issue」示例（371 行）、code-review 已实现 flash 初检 → pro 升级（`Model tier — flash first, pro on escalation`） |
+| v6.4.2 首跑复测 | — | 2026-09-29 复跑基线命令（v1.18.4，全局配置）：prompt tokens **15,177**（未命中 12,105 + 缓存读 3,072）、output 1、单次 $0.00269（flash off-peak）——对比 v6.4.1 的 15,153，Δ+24 ≈ 噪声，确认升级不增加常驻成本；插件包 `superpowers.git#v6.4.2` 已安装并随首跑加载 |
 
 ### 2026-09-20：插件升级 + superpowers 接线 + 路由矛盾修正
 
