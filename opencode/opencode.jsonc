@@ -164,13 +164,16 @@
         }
     },
     // Built-in utility agents (no .md file). Flash-first policy: build/plan/
-    // title/summary/compaction all run on flash. Thinking is controlled at the
+    // title/summary/compaction all run on flash — `general` too: it is the
+    // superpowers generic Task dispatch target and, without a model, follows
+    // the session model (pro by default). Thinking is controlled at the
     // provider layer (flash = disabled, pro = default), so no per-agent variant
     // or temperature here. Pro stays the global default; heavy work escalates
     // to deep-worker (pro). `fallback` is not a real schema key — omitted;
     // OpenCode falls back small_model -> model internally.
     "agent": {
         "build": { "model": "deepseek/deepseek-flash" },
+        "general": { "model": "deepseek/deepseek-flash" },
         "plan": { "model": "deepseek/deepseek-flash" },
         "title": { "model": "deepseek/deepseek-flash" },
         "summary": { "model": "deepseek/deepseek-flash" },

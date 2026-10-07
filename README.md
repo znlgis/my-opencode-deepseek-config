@@ -15,7 +15,7 @@
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.2`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.2（2026-09-25 发布）在 opencode 1.18.x 的 V1 路径上已实测可加载，且**子会话（task subagent）不再注入 bootstrap**
+- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.2`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.2（2026-09-25 发布）已在两代运行时实测加载：opencode 1.18.x 的 V1 路径，以及桌面 v2 的 CLI 2.0.24（`plugin list` → version `8ca22db`）；且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
@@ -84,6 +84,25 @@ opencode
 ```
 
 > **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-flash`。
+
+### 双运行时键名兼容（classic ↔ V2 原生）
+
+本配置同时服务两代运行时（desktop v2 为主、1.18.4 为下限），因此**刻意只写 classic 键**：桌面 v2 在加载时自动上转换为原生键；而原生拼写（`plugins`/`providers` 等）在 1.18.4 会被判定为 unsupported 并静默丢弃（`packages/opencode/src/config/v2-compat.ts` 源码可查）。下表右侧是 2026-10-07 用 v2.0.24 `debug config` 实测的归一化结果：
+
+| classic（本仓库写法） | desktop v2 实际读取 | 1.18.x |
+| --- | --- | --- |
+| `plugin` | `plugins` | 原生支持 |
+| `provider.deepseek.models.*.options` | `providers.deepseek.models.*.settings` | 原生支持 |
+| `provider...models.*.modalities` | `...models.*.capabilities` | 原生支持 |
+| `provider...models.*.cost`（平铺 `cache_read`/`cache_write`） | `cost` 数组 + 嵌套 `cache: { read, write }` | 原生支持 |
+| `provider...models.*.limit.input` | 同名保留（压缩触发点） | 原生支持 |
+| `permission` | `permissions`（有序规则数组） | 原生支持 |
+| `agent` / `command` / `attachment` / `autoupdate` | `agents` / `commands` / `media` / `update` | 原生支持 |
+| `subagent_depth`（与 `experimental.subagent_depth` 并存） | 只读 `experimental.subagent_depth` | 读顶层键 |
+| `compaction.reserved` / `preserve_recent_tokens` | `compaction.buffer` / `compaction.keep.tokens`（`prune`/`tail_turns` 被丢弃） | 原样读取 |
+| `small_model` | 展开为 `title` agent 的模型 | 原生支持 |
+
+结论：**不要**把本仓库迁到原生拼写——那只会在 1.18.x 上静默失效；classic 键 + v2 归一化才是双运行时写法。
 
 ## 快速开始
 
@@ -265,7 +284,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | Skills 名册瘦身 | 25 → 23 个（合并 `wait-what`/`grill-with-docs` 进 `grilling`） | 名册 name+description 常驻成本 **10,127 → 9,802 字节**（−325 字节 ≈ −81 tokens），且少两个可能选错的入口 |
 | `subagent_depth` 3 → 2 | 覆盖实际最深链路即可 | 关掉未使用的第 3 层嵌套，避免意外 token 放大 |
 | 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（flash 115K / pro 148K） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K/148K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
-| 内置 utility agent 全走 flash | build/plan/title/summary/compaction | 单次调用成本降至 pro 的 **1/3** |
+| 内置 agent 全走 flash | build/plan/title/summary/compaction + `general`（防手动派发落到 pro） | 单次调用成本降至 pro 的 **1/3** |
 
 > 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.007 / pro 0.022 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
 
@@ -414,7 +433,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 模型清单 / 价格 / thinking / temperature | `opencode.jsonc` | `provider.deepseek.models` |
 | 画像：默认 Agent、小模型、嵌套深度、工具输出上限、压缩参数、附件缩放 | `opencode.jsonc` | 顶层同名键 |
 | 权限（读 / bash / skill / 外部目录） | `opencode.jsonc` | `permission` |
-| 内置 utility agent（build/plan/title/summary/compaction）的模型 | `opencode.jsonc` | `agent` |
+| 内置 agent（build/plan/title/summary/compaction/general）的模型 | `opencode.jsonc` | `agent` |
 | 快捷命令的 Agent 与模板 | `opencode.jsonc` | `command` |
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |
 | 全局行为规则（原则、失败纪律、缓存纪律、反模式） | `opencode/AGENTS.md` | 对应小节 |
@@ -477,6 +496,17 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-10-07：双运行时实测审计 + `general` 一行防漏
+
+一次**实测审计 + 一行配置**（零付费调用）：用本机两代二进制端到端复核现配置，并补上唯一未定型的 subagent 的模型档。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| `general` 固定 flash | `opencode.jsonc` `agent` | 12 个自定义 agent 之外唯一未声明模型的 subagent（superpowers 泛化派发目标）；手动 @ 时会跟随会话模型（默认 pro），固定到 flash 兜底 |
+| desktop v2（CLI 2.0.24）实测（只读） | — | `debug config` 确认 classic → 原生键上转换（完整映射见「双运行时键名兼容」）；`debug agents` 确认 18 个 agent 全部就位（12 自定义 + 6 内置）；`planner`/`light-orchestrator` 思考档落在 `request.body`（`thinking.enabled` + `reasoningEffort: low`）；`plugin list` 确认 superpowers `#v6.4.2`（version `8ca22db`） |
+| 1.18.4 实测（只读） | — | `opencode debug config` 进程内解析通过；`OPENCODE_CONFIG_DIR` 指向仓库 `opencode/` 时按预期加载（marker 文件命中验证）；classic 键原样读取 |
+| 常驻成本影响 | — | +1 行配置**不进入** prompt 前缀，本轮常驻上下文增量 **0**；未重跑付费基线（成本纪律：前缀零变更，重测无信息增量；上次基线 15,177 prompt tokens / $0.00269 不受影响） |
 
 ### 2026-09-29：审计轮 + 插件 pin 升至 v6.4.2（更精简的 writing-plans）
 

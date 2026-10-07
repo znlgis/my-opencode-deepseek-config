@@ -15,7 +15,7 @@
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.2`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.2 (released 2026-09-25) was smoke-tested on OpenCode 1.18.x's V1 path, and **task sub-sessions no longer receive the bootstrap injection**
+- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.2`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.2 (released 2026-09-25) is smoke-tested on both runtimes: OpenCode 1.18.x's V1 path and desktop v2's CLI 2.0.24 (`plugin list` → version `8ca22db`), and **task sub-sessions no longer receive the bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
@@ -84,6 +84,25 @@ This config splits thinking at the `provider` layer: flash disables thinking and
 ```
 
 > **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro` and `deepseek/deepseek-flash`.
+
+### Runtime key compatibility (classic ↔ V2 native)
+
+This config serves two runtime generations (desktop v2 primary, 1.18.4 floor), so it **deliberately writes classic keys only**: desktop v2 up-converts them to native keys on load, while the native spellings (`plugins`/`providers`, …) are marked unsupported and silently dropped by 1.18.4 (see `packages/opencode/src/config/v2-compat.ts`). The right column is the normalized result measured on 2026-10-07 with v2.0.24's `debug config`:
+
+| classic (what this repo writes) | desktop v2 actually reads | 1.18.x |
+| --- | --- | --- |
+| `plugin` | `plugins` | native |
+| `provider.deepseek.models.*.options` | `providers.deepseek.models.*.settings` | native |
+| `provider...models.*.modalities` | `...models.*.capabilities` | native |
+| `provider...models.*.cost` (flat `cache_read`/`cache_write`) | `cost` array + nested `cache: { read, write }` | native |
+| `provider...models.*.limit.input` | kept as-is (compaction trigger) | native |
+| `permission` | `permissions` (ordered rule list) | native |
+| `agent` / `command` / `attachment` / `autoupdate` | `agents` / `commands` / `media` / `update` | native |
+| `subagent_depth` (written alongside `experimental.subagent_depth`) | reads only `experimental.subagent_depth` | reads the top-level key |
+| `compaction.reserved` / `preserve_recent_tokens` | `compaction.buffer` / `compaction.keep.tokens` (`prune`/`tail_turns` dropped) | read as-is |
+| `small_model` | expanded into the `title` agent's model | native |
+
+Bottom line: do **not** migrate this repo to native spellings — that would silently break it on 1.18.x; classic keys + v2 normalization is the dual-runtime way.
 
 ## Quick Start
 
@@ -265,7 +284,7 @@ Other optimizations (byte counts are LF-normalized, i.e. how the repo stores the
 | Skill roster slimming | 25 → 23 (merged `wait-what`/`grill-with-docs` into `grilling`) | Always-on roster name+description **10,127 → 9,802 bytes** (−325 bytes ≈ −81 tokens), and two fewer mis-pickable entries |
 | `subagent_depth` 3 → 2 | Matches the deepest chain actually used | Closes the unused third nesting level, removing an accidental token-amplification surface |
 | DCP removed + compression window made explicit | Plugin and `dcp.jsonc` deleted; `limit.input` now declares the working window (flash 115K / pro 148K) | Cap on context carried per request drops from the implicit **968K** to **115K/148K** (~1/8); cache misses save proportionally, with one fewer third-party plugin |
-| Built-in utility agents on flash | build/plan/title/summary/compaction | Single-call cost drops to **1/3** of pro |
+| Built-in agents on flash | build/plan/title/summary/compaction + `general` (keeps a stray dispatch off pro) | Single-call cost drops to **1/3** of pro |
 
 > Note: a smaller always-loaded prefix is paid back in full on every **cache miss** and at the `cache_read` rate (flash 0.007 / pro 0.022 per 1M) on hits — but a smaller prefix also means a higher hit rate and later compression, and both effects compound.
 
@@ -414,7 +433,7 @@ When editing config, locate "what to change → which file", so you never change
 | Model list / prices / thinking / temperature | `opencode.jsonc` | `provider.deepseek.models` |
 | Global profile: default agent, small model, nesting depth, tool-output caps, compaction, attachment resize | `opencode.jsonc` | top-level keys |
 | Permissions (read / bash / skill / external directories) | `opencode.jsonc` | `permission` |
-| Built-in utility agents (build/plan/title/summary/compaction) model | `opencode.jsonc` | `agent` |
+| Built-in agents (build/plan/title/summary/compaction/general) model | `opencode.jsonc` | `agent` |
 | Shortcut command agents and templates | `opencode.jsonc` | `command` |
 | One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |
 | Global behavior rules (principles, failure discipline, cache discipline, anti-patterns) | `opencode/AGENTS.md` | the matching section |
@@ -477,6 +496,17 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 ```
 
 ## Refactor Change Log
+
+### 2026-10-07: dual-runtime measured audit + one-line `general` hardening
+
+A **measured audit + one config line** (zero paid calls): both local binaries re-verified the config end to end, and the one unpinned subagent got its model tier.
+
+| Change | Location | Notes |
+| --- | --- | --- |
+| `general` pinned to flash | `opencode.jsonc` `agent` | The only subagent without a model besides the custom 12 (superpowers' generic dispatch target); a manual @-mention would follow the session model (pro by default). One line keeps it on flash |
+| desktop v2 (CLI 2.0.24) measured (read-only) | — | `debug config` confirms classic → native up-conversion (full map in "Runtime key compatibility"); `debug agents` confirms 18 agents resolve (12 custom + 6 built-in); `planner`/`light-orchestrator` thinking tier lands in `request.body` (`thinking.enabled` + `reasoningEffort: low`); `plugin list` confirms superpowers `#v6.4.2` (version `8ca22db`) |
+| 1.18.4 measured (read-only) | — | `opencode debug config` parses in-process; `OPENCODE_CONFIG_DIR` pointing at the repo's `opencode/` loads as expected (marker-file hit test); classic keys read as-is |
+| Always-on cost impact | — | +1 config line never enters the prompt prefix; always-on context delta this round = **0**; no paid baseline re-run (cost discipline: zero prefix change, no information gain; the 15,177-prompt-token / $0.00269 baseline is unaffected) |
 
 ### 2026-09-29: audit pass + plugin pin bumped to v6.4.2 (leaner writing-plans)
 
