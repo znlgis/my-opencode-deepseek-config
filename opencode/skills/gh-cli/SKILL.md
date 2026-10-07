@@ -309,6 +309,7 @@ gh run view <id> --log-failed
 gh run watch <id> --exit-status --compact
 
 # Releases
+gh release view v1.2.0 --json tagName,isLatest,isImmutable,publishedAt,assets
 gh release create v1.2.0 --generate-notes
 gh release download <tag>              # no auth for public repos
 gh release verify -R owner/repo        # verify latest release attestation

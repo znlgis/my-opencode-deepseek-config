@@ -213,7 +213,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 | 高（deep） | pro · 默认 high | `deep-worker`/`oracle`/`reviewer` |
 | 跟随会话 | 会话所选模型（默认 pro） | `solo`（无 `model` 字段，思考档随该模型） |
 
-成本比：pro 输入价 3× flash（0.66 vs 0.22 / 1M tokens），故 trivial 任务绝不落到 pro。
+成本比：pro 输入价 4.4× flash（0.66 vs 0.15 / 1M tokens）、输出价 3.3×，故 trivial 任务绝不落到 pro。
 
 ### 路由策略
 
@@ -223,6 +223,8 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 - **代码审查 → flash 初检，pro 升级**：`/review` 默认走 flash 初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（pro）；`/deep-review` 强制 pro 全量审查
 - **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
 - **自动升级**：flash agent 无法胜任时自动升级到 pro（带完整上下文）
+
+**模型解析链（v2.0.24 源码核验 + 本机实测）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→pro、`/quick`→flash，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（pro）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——要 flash 必须显式加 `-m deepseek/deepseek-flash`（实测：不加 = pro ×2，加了 = flash）。
 
 用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）；`/review` → flash 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ flash 初检后升级 pro。
 
@@ -239,26 +241,26 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，2026-08-16 生效的 off-peak 价；peak 时段翻倍）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，2026-10-07 官方页核验的 off-peak 价；peak 时段翻倍）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
 | --- | --- | --- | --- | --- | --- |
-| `deepseek-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
-| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
+| `deepseek-flash` | 0.15 | 0.60 | 0.003 | 0.15 | 1× |
+| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 4.4× |
 
 两个成本杠杆：
 
-- **模型档位**：pro 输入/输出价均为 flash 的 3×，故 trivial 任务绝不落到 pro（见上文路由策略）。
-- **提示词缓存**：`cache_read` 比输入价便宜约 **30×**（flash 0.007 vs 0.22；pro 0.022 vs 0.66）。本配置的字节稳定前缀 + 易变区纪律（见 `AGENTS.md`）正是为了最大化缓存命中率。
+- **模型档位**：pro 输入价 4.4× flash、输出价 3.3×，故 trivial 任务绝不落到 pro（见上文路由策略）。
+- **提示词缓存**：`cache_read` 比输入价便宜 **50×（flash 0.003 vs 0.15）/ 30×（pro 0.022 vs 0.66）**。本配置的字节稳定前缀 + 易变区纪律（见 `AGENTS.md`）正是为了最大化缓存命中率。
 
 **典型会话成本估算**（假设 200K 输入 tokens，其中 150K 命中缓存，30K 输出）：
 
 | 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
 | --- | --- | --- | --- | --- |
-| flash | 150K × 0.007 = $0.001 | 50K × 0.22 = $0.011 | 30K × 0.66 = $0.020 | **≈ $0.032** |
+| flash | 150K × 0.003 = $0.0005 | 50K × 0.15 = $0.0075 | 30K × 0.60 = $0.018 | **≈ $0.026** |
 | pro | 150K × 0.022 = $0.003 | 50K × 0.66 = $0.033 | 30K × 1.98 = $0.059 | **≈ $0.096** |
 
-同一 token 量下 pro ≈ 3× flash。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
+同一 token 量下 pro ≈ 3.7× flash。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
 
 #### 优化前后成本对比
 
@@ -267,10 +269,10 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | 方案 | 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
 | --- | --- | --- | --- | --- | --- |
 | 优化前（`/review` 固定 pro） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
-| 优化后（`/review` flash 初检） | flash | 45K × 0.007 = $0.0003 | 15K × 0.22 = $0.003 | 8K × 0.66 = $0.005 | **≈ $0.009** |
+| 优化后（`/review` flash 初检） | flash | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
 | 优化后（升级到 pro 全量） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
 
-**节省比例**：小 diff 走 flash 初检约省 **67%**（$0.027 → $0.009）；只有命中升级触发条件时才付 pro 全价，且升级时传递未验证线索避免重复推导。
+**节省比例**：小 diff 走 flash 初检约省 **73%**（$0.027 → $0.007）；只有命中升级触发条件时才付 pro 全价，且升级时传递未验证线索避免重复推导。
 
 其他优化项的 token 节省（字节均为 LF 计数，即仓库实际存储大小）：
 
@@ -282,9 +284,9 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | Skills 名册瘦身 | 25 → 23 个（合并 `wait-what`/`grill-with-docs` 进 `grilling`） | 名册 name+description 常驻成本 **10,127 → 9,802 字节**（−325 字节 ≈ −81 tokens），且少两个可能选错的入口 |
 | `subagent_depth` 3 → 2 | 覆盖实际最深链路即可 | 关掉未使用的第 3 层嵌套，避免意外 token 放大 |
 | 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（flash 115K / pro 148K） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K/148K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
-| 内置 agent 全走 flash | build/plan/title/summary/compaction + `general`（防手动派发落到 pro） | 单次调用成本降至 pro 的 **1/3** |
+| 内置 agent 档位固定 | title/summary/compaction + `general` 等 subagent 目标固定 flash；桌面 App 新会话的 build/plan/orchestrator 默认选中 flash 档 | 高频路径单次调用输入价降至 pro 的 **1/4.4**（0.15 vs 0.66）；headless `run` 需显式 `-m deepseek/deepseek-flash`（见「模型解析链」） |
 
-> 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.007 / pro 0.022 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
+> 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.003 / pro 0.022 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
 
 **实测基线**（本机 2026-09-20，精简后配置）：
 
@@ -313,7 +315,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `orchestrator` | flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
 | `solo` | v4-pro（默认） | 单模型内联执行器：零委派、不用后台助手，全程在当前会话所选模型内完成 |
 
-> `solo` 是第二个 primary agent：`permission.task: "*": "deny"`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话默认模型 pro）、不用 build/plan 等后台助手（它们跑在内置 flash 上，会破坏全程单模型的保证），分析、规划、实现、验证全部在当前会话内联完成。
+> `solo` 是第二个 primary agent：`permission.task: "*": "deny"`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话所选模型，默认 pro）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
 
 ### Subagents
 
@@ -330,7 +332,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `light-orchestrator` | flash | 读写 | 轻量任务、单文件编辑 |
 | `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
 
-> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 是 3× flash）。
+> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 输入价 4.4× flash）。
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
 >
@@ -430,9 +432,9 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | --- | --- | --- |
 | 模型清单 / 价格 / thinking / temperature | `opencode.jsonc` | `providers.deepseek.models` |
 | 画像：默认 Agent、小模型、嵌套深度、工具输出上限、压缩参数、附件缩放 | `opencode.jsonc` | 顶层同名键 |
-| 权限（读 / bash / skill / 外部目录） | `opencode.jsonc` | `permission` |
-| 内置 agent（build/plan/title/summary/compaction/general）的模型 | `opencode.jsonc` | `agent` |
-| 快捷命令的 Agent 与模板 | `opencode.jsonc` | `command` |
+| 权限（读 / bash / skill / 外部目录） | `opencode.jsonc` | `permissions` |
+| 内置 agent（build/plan/title/summary/compaction/general）的模型 | `opencode.jsonc` | `agents` |
+| 快捷命令的 Agent 与模板 | `opencode.jsonc` | `commands` |
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |
 | 全局行为规则（原则、失败纪律、缓存纪律、反模式） | `opencode/AGENTS.md` | 对应小节 |
 | 插件版本（pin） | `opencode/opencode.jsonc` | `plugins` |
@@ -494,6 +496,18 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-10-07（三）：价格核正 + 模型解析链实测修正
+
+以「核价 + 修文档」为主的一轮：更新 flash 官方价，用 3 组真实调用钉死模型解析链，并把 README 中与实测不符的路由表述改对（不改模型矩阵与路由行为）。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| flash 价格核正 | `opencode.jsonc` `providers` | off-peak：in 0.22→**0.15**、out 0.66→**0.60**、cache_read 0.007→**0.003**，补 `cache.write: 0.15`（2026-10-07 官方页核验；peak 时段翻倍）；pro 不变。所有比率/示例按新价重算（pro/flash：输入 4.4×、输出 3.3×；cache_read 命中省 50×/30×；200K/30K 示例 flash ≈ $0.026 vs pro ≈ $0.096） |
+| 模型解析链实测 | — | `opencode run --agent build`（不加 `-m`）连跑 2 次均落 **pro**（ses_eeaf576b、ses_eeaf6bb4）；加 `-m deepseek/deepseek-flash` 落 **flash**（ses_eeaec3aa，$0.00215 与 flash 新价一致）→ `agent.model` 不约束 run 主会话。源码同批核验（v2.0.24）：主会话 = `-m` > 会话模型 > 全局 `model`；`/` 命令绑定 subagent agent 时创建子会话并按该 agent 档运行；桌面 App 新会话按「草稿选择 > 会话已存模型 > 当前 agent 档 > 全局默认（pro）」解析 |
+| 路由表述修正 | `README.md`/`README.en-US.md`/`opencode.jsonc` 注释 | 删除「build/plan 主会话跑 flash」的过强表述，改为逐面写明的「模型解析链」小节；`solo` 注记同步修正 |
+| gh-cli 增例 | `skills/gh-cli/SKILL.md` | Quick reference 增加 `gh release view <tag> --json ...`（查 release 元数据） |
+| 验证 | — | `validate-jsonc.js` 通过；`sync-config.ps1` 无陈旧文件、全局配置哈希与仓库一致；`reload` + `debug config`/`debug agents` 复核新价与 18 个 agent 档位；flash 覆盖运行计费 $0.00215 与离线估算一致 |
 
 ### 2026-10-07（二）：v2 专属升级 —— 全量切换 v2 原生键（移除 1.18.x 支持）
 
@@ -569,10 +583,10 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 | 模型 | 触发条件 | 承担角色 | 计费（USD/1M，off-peak） |
 | --- | --- | --- | --- |
-| `deepseek/deepseek-flash` | **默认**；绝大部分高频任务 | 编排/路由、规划、常规实现、单文件编辑、咨询、UI、探索、文档检索、标题/摘要/压缩、批量生成；**唯一**的视觉理解入口（仅在用户提供图像时启用） | in 0.22 / out 0.66 / cache 0.007 |
+| `deepseek/deepseek-flash` | **默认**；绝大部分高频任务 | 编排/路由、规划、常规实现、单文件编辑、咨询、UI、探索、文档检索、标题/摘要/压缩、批量生成；**唯一**的视觉理解入口（仅在用户提供图像时启用） | in 0.15 / out 0.60 / cache 0.003 |
 | `deepseek/deepseek-v4-pro` | 任务复杂度高、需深层逻辑分析时（自动或手动 `/deep`、`/oracle`、`/deep-review`） | 复杂推理、根因分析、代码审查升级层、架构设计、疑难调试、重型多文件实现 | in 0.66 / out 1.98 / cache 0.022 |
 
-切换方式：自动——`orchestrator` 按意图分类路由，flash agent 无法胜任时自升级；手动——`/deep`、`/oracle`、`/deep-review` 直达 pro，其余默认 flash。
+切换方式：自动——`orchestrator` 按意图分类路由，flash agent 无法胜任时自升级；手动——`/deep`、`/oracle`、`/deep-review` 直达 pro，其余命令/subagent 按其 agent 档位走 flash（命令创建子会话，不改当前会话模型）；headless `opencode run` 默认按全局 `model`（pro），需 `-m deepseek/deepseek-flash` 显式切 flash。
 
 ## 借鉴来源
 
@@ -596,4 +610,4 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **名册即预算** —— 每个 Agent 的 `permission.skill` 白名单同时决定 skill 名册大小；被 deny 的 skill 不进名册，也就不进每轮的常驻上下文
 - **视觉 opt-in** —— 图像只在用户提供时进入 payload；非视觉任务不传图、不生成图
 - **持续改进** —— reflect 机制化发现摩擦、code-review 证据门控保证质量
-- **审查成本分级** —— 代码审查默认 flash 初检（省约 67%），仅在升级触发条件命中时付 pro 全价；升级时传递未验证线索，避免重复推导
+- **审查成本分级** —— 代码审查默认 flash 初检（省约 73%），仅在升级触发条件命中时付 pro 全价；升级时传递未验证线索，避免重复推导

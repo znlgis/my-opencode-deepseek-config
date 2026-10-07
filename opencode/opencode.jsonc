@@ -103,13 +103,15 @@
                         "input": ["text", "image"],
                         "output": ["text"]
                     },
-                    // `cost` is USD per 1M tokens, off-peak rates effective
-                    // with the 2026-08-16 peak/off-peak pricing; peak hours
-                    // charge double these values. DeepSeek publishes no
-                    // standalone cache-write price — cache writes bill at the
+                    // `cost` is USD per 1M tokens — official off-peak rates,
+                    // verified 2026-10-07. Peak hours (UTC 01-04 & 06-10
+                    // Mon-Fri = Beijing 09-12 & 14-18) charge double, so this
+                    // table under-reports peak-time spend by ~2x; it drives
+                    // OpenCode's own cost display only. DeepSeek publishes no
+                    // standalone cache-write price — writes bill at the
                     // cache-miss input rate, so `cache.write` mirrors input.
                     "cost": [
-                        { "input": 0.22, "output": 0.66, "cache": { "read": 0.007, "write": 0.22 } }
+                        { "input": 0.15, "output": 0.60, "cache": { "read": 0.003, "write": 0.15 } }
                     ],
                     // `limit.input` is the ONE knob that decides when built-in
                     // compaction fires. Overflow computes:
@@ -150,12 +152,15 @@
             "description": "Official DeepSeek model config guidance: thinking toggle, temperature, prompt-caching, context-window handling, OpenAI-compatible API setup"
         }
     },
-    // Built-in agents (no .md file). Flash-first policy: build/plan/title/
-    // summary/compaction all run on flash — `general` too: it is the
-    // superpowers generic Task dispatch target and, without a model, follows
-    // the session model (pro by default). Thinking is controlled at the
-    // provider layer (flash = disabled, pro = default), so no per-agent
-    // variant or temperature here. Pro stays the global default; heavy work
+    // Built-in agents (no .md file). `model` here binds only three surfaces
+    // (verified against v2.0.24 + live runs): subagent/child sessions — incl.
+    // `general` (the superpowers Task dispatch target) and `/` commands bound
+    // to subagent-mode agents — the title/summary/compaction one-shots, and
+    // the desktop composer's per-agent default for new sessions (build/plan
+    // -> flash). The main `opencode run` session ignores it: `-m` > stored
+    // session model > root `model` (pro), so pass `-m deepseek/deepseek-flash`
+    // there. Thinking is controlled at the provider layer (flash = disabled,
+    // pro = default), so no per-agent variant or temperature here. Heavy work
     // escalates to deep-worker (pro).
     "agents": {
         "build": { "model": "deepseek/deepseek-flash" },

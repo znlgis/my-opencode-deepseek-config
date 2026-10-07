@@ -213,7 +213,7 @@ Thinking strength is controlled by **`reasoning_effort`** — a **request-level*
 | Deep | pro · default high | `deep-worker`/`oracle`/`reviewer` |
 | Session | session's selected model (pro by default) | `solo` (no `model` field; thinking tier follows that model) |
 
-Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivial work never lands on pro.
+Cost ratio: pro input price is 4.4× flash (0.66 vs 0.15 per 1M tokens) and output 3.3×, so trivial work never lands on pro.
 
 ### Routing Strategy
 
@@ -223,6 +223,8 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 - **Code review → flash first pass, pro escalation**: `/review` runs a flash first pass (Abbreviated path) by default and delegates to `reviewer` (pro) only when an escalation trigger fires; `/deep-review` forces a full pro review
 - **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `media.image` to 1600px / 2MiB to avoid wasting base64 bytes
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
+
+**Model resolution chain (v2.0.24 source + live-verified)**: `agent.model` decides the actual model in exactly three places — ① subagent/child sessions (including `/` commands: a command bound to a subagent-mode agent **spawns a child session** running at that agent's tier, e.g. `/deep`→pro, `/quick`→flash, and the current session model is untouched); ② the title/summary/compaction one-shot calls; ③ the desktop App's per-agent default for new sessions (build/plan/orchestrator → flash). The main session itself resolves `-m` > stored session model > global `model` (pro): in the desktop App you switch via the model picker (your pick is remembered); headless `opencode run` **does not read** `agent.model` — pass `-m deepseek/deepseek-flash` to get flash (verified: without it = pro ×2, with it = flash).
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle); `/review` → flash first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → flash first pass then pro escalation.
 
@@ -239,26 +241,26 @@ A Tier-1 report is a **complete review**, not a preview — a clean result is ne
 
 ### Cost Comparison
 
-Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens, off-peak rates effective 2026-08-16; peak hours double). `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens, off-peak rates verified 2026-10-07; peak hours double). `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
 | --- | --- | --- | --- | --- | --- |
-| `deepseek-flash` | 0.22 | 0.66 | 0.007 | 0.22 | 1× |
-| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 3× |
+| `deepseek-flash` | 0.15 | 0.60 | 0.003 | 0.15 | 1× |
+| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 4.4× |
 
 Two cost levers:
 
-- **Model tier**: pro's input/output prices are 3× flash, so trivial work never lands on pro (see the routing strategy above).
-- **Prompt cache**: `cache_read` is ~**30×** cheaper than the input price (flash 0.007 vs 0.22; pro 0.022 vs 0.66). This config's byte-stable prefix + volatile-zone discipline (see `AGENTS.md`) exists precisely to maximize the cache-hit rate.
+- **Model tier**: pro's input price is 4.4× flash (output 3.3×), so trivial work never lands on pro (see the routing strategy above).
+- **Prompt cache**: `cache_read` is **50×** cheaper than the input price on flash (0.003 vs 0.15) and **30×** on pro (0.022 vs 0.66). This config's byte-stable prefix + volatile-zone discipline (see `AGENTS.md`) exists precisely to maximize the cache-hit rate.
 
 **Typical session cost estimate** (assume 200K input tokens, 150K cache hits, 30K output):
 
 | Model | Cache hit | Input miss | Output | Total |
 | --- | --- | --- | --- | --- |
-| flash | 150K × 0.007 = $0.001 | 50K × 0.22 = $0.011 | 30K × 0.66 = $0.020 | **≈ $0.032** |
+| flash | 150K × 0.003 = $0.0005 | 50K × 0.15 = $0.0075 | 30K × 0.60 = $0.018 | **≈ $0.026** |
 | pro | 150K × 0.022 = $0.003 | 50K × 0.66 = $0.033 | 30K × 1.98 = $0.059 | **≈ $0.096** |
 
-At the same token volume, pro ≈ 3× flash. Use `scripts/estimate-cost.js` to estimate from actual token counts.
+At the same token volume, pro ≈ 3.7× flash. Use `scripts/estimate-cost.js` to estimate from actual token counts.
 
 #### Before/After Cost Comparison
 
@@ -267,10 +269,10 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | Approach | Model | Cache hit | Input miss | Output | Total |
 | --- | --- | --- | --- | --- | --- |
 | Before (`/review` always pro) | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
-| After (`/review` flash first pass) | flash | 45K × 0.007 = $0.0003 | 15K × 0.22 = $0.003 | 8K × 0.66 = $0.005 | **≈ $0.009** |
+| After (`/review` flash first pass) | flash | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
 | After (escalated to full pro) | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
 
-**Savings**: a small diff on the flash first pass saves about **67%** ($0.027 → $0.009); the full pro price is paid only when an escalation trigger fires, and escalation passes unverified leads to avoid re-derivation.
+**Savings**: a small diff on the flash first pass saves about **73%** ($0.027 → $0.007); the full pro price is paid only when an escalation trigger fires, and escalation passes unverified leads to avoid re-derivation.
 
 Other optimizations (byte counts are LF-normalized, i.e. how the repo stores them):
 
@@ -282,9 +284,9 @@ Other optimizations (byte counts are LF-normalized, i.e. how the repo stores the
 | Skill roster slimming | 25 → 23 (merged `wait-what`/`grill-with-docs` into `grilling`) | Always-on roster name+description **10,127 → 9,802 bytes** (−325 bytes ≈ −81 tokens), and two fewer mis-pickable entries |
 | `subagent_depth` 3 → 2 | Matches the deepest chain actually used | Closes the unused third nesting level, removing an accidental token-amplification surface |
 | DCP removed + compression window made explicit | Plugin and `dcp.jsonc` deleted; `limit.input` now declares the working window (flash 115K / pro 148K) | Cap on context carried per request drops from the implicit **968K** to **115K/148K** (~1/8); cache misses save proportionally, with one fewer third-party plugin |
-| Built-in agents on flash | build/plan/title/summary/compaction + `general` (keeps a stray dispatch off pro) | Single-call cost drops to **1/3** of pro |
+| Built-in agent tiers fixed | title/summary/compaction + `general` and all subagent targets fixed to flash; desktop App new sessions default to the flash tier for build/plan/orchestrator | High-frequency single-call input price drops to **1/4.4** of pro (0.15 vs 0.66); the headless `run` path needs an explicit `-m deepseek/deepseek-flash` (see "Model resolution chain") |
 
-> Note: a smaller always-loaded prefix is paid back in full on every **cache miss** and at the `cache_read` rate (flash 0.007 / pro 0.022 per 1M) on hits — but a smaller prefix also means a higher hit rate and later compression, and both effects compound.
+> Note: a smaller always-loaded prefix is paid back in full on every **cache miss** and at the `cache_read` rate (flash 0.003 / pro 0.022 per 1M) on hits — but a smaller prefix also means a higher hit rate and later compression, and both effects compound.
 
 **Measured baseline** (this machine, 2026-09-20, after the trims):
 
@@ -313,7 +315,7 @@ Of those 15,153 tokens, `AGENTS.md` (15,450 B) + `orchestrator.md` (13,020 B) �
 | `orchestrator` | flash | Default entry point: intent gate + model-aware routing + fallback chains |
 | `solo` | v4-pro (default) | Single-model inline executor: zero delegation, no background helpers, all work done inline in the current session |
 
-> `solo` is the second primary agent: `permission.task: "*": "deny"` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's default model, pro), and no build/plan background helpers (they run on built-in flash and would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
+> `solo` is the second primary agent: `permission.task: "*": "deny"` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's selected model, pro by default), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
 
 ### Subagents
 
@@ -330,7 +332,7 @@ Of those 15,153 tokens, `AGENTS.md` (15,450 B) + `orchestrator.md` (13,020 B) �
 | `light-orchestrator` | flash | read-write | Lightweight tasks, single-file edits |
 | `vision` | flash | read-write | Multimodal: images/screenshots/charts/UI mockups |
 
-> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro is 3× flash).
+> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro input is 4.4× flash).
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
@@ -495,6 +497,18 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 
 ## Refactor Change Log
 
+### 2026-10-07 (3): price correction + model-resolution chain verified
+
+A pricing + documentation round: refreshed the flash official prices, pinned the model-resolution chain with 3 live runs, and corrected the README routing claims that did not match measured behavior (no change to the model matrix or routing behavior).
+
+| Change | Location | Notes |
+| --- | --- | --- |
+| flash prices corrected | `opencode.jsonc` `providers` | off-peak: in 0.22→**0.15**, out 0.66→**0.60**, cache_read 0.007→**0.003**, added `cache.write: 0.15` (verified on the official page 2026-10-07; peak hours double); pro unchanged. All ratios/examples recomputed (pro/flash: input 4.4×, output 3.3×; cache_read saves 50×/30×; the 200K/30K example: flash ≈ $0.026 vs pro ≈ $0.096) |
+| Model-resolution chain measured | — | `opencode run --agent build` (no `-m`) landed on **pro** twice (ses_eeaf576b, ses_eeaf6bb4); adding `-m deepseek/deepseek-flash` landed on **flash** (ses_eeaec3aa, $0.00215, matching the new flash prices) → `agent.model` does not bind the `run` main session. Source verified in the same pass (v2.0.24): main session = `-m` > session model > global `model`; `/` commands bound to subagent-mode agents spawn a child session at that agent's tier; desktop App new sessions resolve draft pick > stored session model > current agent tier > global default (pro) |
+| Routing claims corrected | `README.md`/`README.en-US.md`/`opencode.jsonc` comment | Removed the overstrong "build/plan main session runs on flash" wording, replaced with a per-surface "Model resolution chain" paragraph; the `solo` note corrected as well |
+| gh-cli example added | `skills/gh-cli/SKILL.md` | Quick reference now includes `gh release view <tag> --json ...` (release metadata) |
+| Verification | — | `validate-jsonc.js` passes; `sync-config.ps1` reports no stale files and the global config hash matches the repo; `reload` + `debug config`/`debug agents` confirm the new prices and all 18 agent tiers; the flash override run cost $0.00215, matching the offline estimate |
+
 ### 2026-10-07 (2): v2-only upgrade — full switch to v2-native keys (1.18.x support removed)
 
 Structural upgrade per the "v2-only" requirement: **every v1 trigger key was removed**, so the config now takes v2's native decode path instead of the V1→V2 migration path; 1.18.x is no longer supported.
@@ -569,10 +583,10 @@ A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and 
 
 | Model | Trigger | Role | Price (USD/1M, off-peak) |
 | --- | --- | --- | --- |
-| `deepseek/deepseek-flash` | **Default**; the vast majority of high-frequency work | Orchestration/routing, planning, routine implementation, single-file edits, consultation, UI, exploration, doc retrieval, title/summary/compaction, batch generation; the **only** vision entry point (enabled only when the user supplies an image) | in 0.22 / out 0.66 / cache 0.007 |
+| `deepseek/deepseek-flash` | **Default**; the vast majority of high-frequency work | Orchestration/routing, planning, routine implementation, single-file edits, consultation, UI, exploration, doc retrieval, title/summary/compaction, batch generation; the **only** vision entry point (enabled only when the user supplies an image) | in 0.15 / out 0.60 / cache 0.003 |
 | `deepseek/deepseek-v4-pro` | Tasks complex enough to need deep logical analysis (automatic, or manual via `/deep`, `/oracle`, `/deep-review`) | Complex reasoning, root-cause analysis, code-review escalation, architecture design, hard debugging, heavy multi-file implementation | in 0.66 / out 1.98 / cache 0.022 |
 
-Switching: automatic — `orchestrator` classifies by intent and routes, and a flash agent self-escalates when it can't finish; manual — `/deep`, `/oracle`, `/deep-review` go straight to pro, everything else defaults to flash.
+Switching: automatic — `orchestrator` classifies by intent and routes, and a flash agent self-escalates when it can't finish; manual — `/deep`, `/oracle`, `/deep-review` go straight to pro, all other commands/subagents run at their agent's tier on flash (commands spawn child sessions and do not change the current session model); headless `opencode run` defaults to the global `model` (pro) — add `-m deepseek/deepseek-flash` to switch it to flash.
 
 ## Sources
 
@@ -596,4 +610,4 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change
 - **Volatile-zone discipline** — volatile content (timestamps, random IDs, dynamic file lists) sits at the payload tail to protect DeepSeek's prompt-cache prefix
 - **Continuous improvement** — reflect mechanizes friction discovery, code-review's evidence gating guards quality
-- **Tiered review cost** — code review defaults to a flash first pass (about 67% cheaper), paying full pro price only when an escalation trigger fires; escalation passes unverified leads to avoid re-derivation
+- **Tiered review cost** — code review defaults to a flash first pass (about 73% cheaper), paying full pro price only when an escalation trigger fires; escalation passes unverified leads to avoid re-derivation
