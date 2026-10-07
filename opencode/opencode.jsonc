@@ -8,7 +8,7 @@
     "$schema": "https://opencode.ai/config.json",
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
-    "autoupdate": "notify",
+    "update": "notify",
     "share": "disabled",
     "lsp": true,
     "formatter": true,
@@ -26,8 +26,10 @@
     // The catch-all `*` goes FIRST — every specific rule below overrides it.
     // The allow list covers high-frequency read-only or local operations
     // (git status/diff/log/show, git add/commit, npm run/test, rg, node
-    // scripts/*); anything else, including unlisted destructive variants,
-    // falls through to ask.
+    // scripts/*); anything else, destructive variants included, falls through
+    // to ask. Known danger patterns are deliberately NOT listed as extra
+    // `ask` rules: the catch-all already sends them to a human, and under
+    // last-match-wins any later `ask` rule would be a dead rule.
     "permissions": [
         { "action": "read", "resource": "*", "effect": "allow" },
         { "action": "read", "resource": ".env", "effect": "deny" },
@@ -48,25 +50,6 @@
         { "action": "shell", "resource": "npm run *", "effect": "allow" },
         { "action": "shell", "resource": "npm test*", "effect": "allow" },
         { "action": "shell", "resource": "rg *", "effect": "allow" },
-        { "action": "shell", "resource": "rm -rf*", "effect": "ask" },
-        { "action": "shell", "resource": "rm -fr*", "effect": "ask" },
-        { "action": "shell", "resource": "Remove-Item -Recurse -Force*", "effect": "ask" },
-        { "action": "shell", "resource": "rd /s*", "effect": "ask" },
-        { "action": "shell", "resource": "del /f /s*", "effect": "ask" },
-        { "action": "shell", "resource": "del /f /q*", "effect": "ask" },
-        { "action": "shell", "resource": "format *", "effect": "ask" },
-        { "action": "shell", "resource": "git push --force*", "effect": "ask" },
-        { "action": "shell", "resource": "git push -f *", "effect": "ask" },
-        { "action": "shell", "resource": "git push --force-with-lease*", "effect": "ask" },
-        { "action": "shell", "resource": "git reset --hard*", "effect": "ask" },
-        { "action": "shell", "resource": "git clean -fd*", "effect": "ask" },
-        { "action": "shell", "resource": "git checkout .*", "effect": "ask" },
-        { "action": "shell", "resource": "git checkout --*", "effect": "ask" },
-        { "action": "shell", "resource": "git branch -D*", "effect": "ask" },
-        { "action": "shell", "resource": "git stash clear*", "effect": "ask" },
-        { "action": "shell", "resource": "git stash drop*", "effect": "ask" },
-        { "action": "shell", "resource": "gh repo delete*", "effect": "ask" },
-        { "action": "shell", "resource": "gh pr close*", "effect": "ask" },
         { "action": "skill", "resource": "*", "effect": "allow" },
         { "action": "external_directory", "resource": "*", "effect": "ask" }
     ],

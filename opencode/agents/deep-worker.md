@@ -72,4 +72,4 @@ Follow AGENTS.md Self-Verification: re-read every modified file, grep for broken
 Reject the task immediately — do not attempt a degraded version — when:
 - **Trivial single-file edit**: refuse, route to `light-orchestrator` (flash)
 - **Pure research / lookups**: refuse, route to `oracle`/`explore`
-- **Anything a flash agent can finish**: refuse — pro is 3× flash, so trivial work must not land on pro
+- **Anything a flash agent can finish**: refuse — pro is 4.4× flash on input, so trivial work must not land on pro

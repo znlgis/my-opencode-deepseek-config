@@ -304,7 +304,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 单次费用受**缓存命中率**支配（同一配置连跑两次，命中部分在 256～6,528 tokens 之间浮动），因此跨轮比较要看总 prompt tokens：**14,690 → 15,153（+463，≈ +3.2%）**，与上面的字节账（+1627 字节 ≈ +407 tokens）吻合。
 
-这 15,153 tokens 里，`AGENTS.md`（15,450 B）+ `orchestrator.md`（13,020 B）≈ 6.9K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
+这 15,153 tokens 里，`AGENTS.md`（15,420 B）+ `orchestrator.md`（13,020 B）≈ 6.9K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
 
 ## Agent 结构
 
@@ -332,7 +332,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `light-orchestrator` | flash | 读写 | 轻量任务、单文件编辑 |
 | `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
 
-> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 输入价 4.4× flash）。
+> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（pro 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 输入价 4.4× flash）。
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
 >
@@ -410,7 +410,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `codebase-design` | 架构词汇表：module/interface/depth/seam/adapter/leverage/locality，删除测试、深度测试，评估模块边界是否合理 |
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
-> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文（本仓库 23 个本地 + 15 个 superpowers + 1 个内置，name+description 原始字节合计 ≈ 10.3KB ≈ 2.6K tokens，对未设白名单的内置 Agent 全量生效；superpowers v6.4.1 比 v6.3.0 多 1 个 skill、名册 +484 字节）。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。
+> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文（本仓库 23 个本地 + 15 个 superpowers + 1 个内置，name+description 原始字节合计 ≈ 10.3KB ≈ 2.6K tokens，对未设白名单的内置 Agent 全量生效；superpowers v6.4.2 比 v6.3.0 多 1 个 skill、名册 +484 字节）。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。
 
 ## 仓库结构
 
@@ -496,6 +496,19 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-10-07（四）：全面审计轮（比例/字节/死规则/委托例外）
+
+全仓交叉核对 + 最小修复：3 处过时成本比率、2 处过期字节数、19 条死权限规则、1 处委托例外，外加一个 v1 残留键名。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 成本比率校正 ×3 | `agents/orchestrator.md`、`agents/deep-worker.md` | 「pro is 3× flash」→ **4.4×（输入价）**——flash 核价后过时，与 README 的 4.4×/3.3× 对齐 |
+| 字节数校正 ×2 | `README.md`、`README.en-US.md` | `AGENTS.md` 15,450 → **15,420 B**（v2 迁移轮缩短 30B 未同步；「≈ 6.9K tokens」不变） |
+| 死权限规则清理 | `opencode.jsonc` | 删除 19 条显式 `ask` 规则（40 → 21 条）：catch-all `ask` 在前 + 后匹配优先 ⇒ 删除后任何输入的结果不变；注释写明不枚举已知危险模式的原因 |
+| v1 键名残留 | `opencode.jsonc` | `autoupdate: "notify"` → **`update: "notify"`**（v2 原生键；updater 与 normalize 均原生支持） |
+| 委托例外修正 | `agents/light-orchestrator.md`、`README.md`、`README.en-US.md` | 正文「仅可 spawn `oracle`」与 frontmatter（`oracle`+`reviewer`）及 `/review` 设计矛盾 → 明确两种定向升级：`oracle`（只读分析）、`reviewer`（pro 审查） |
+| 版本措辞同步 | `README.md`、`README.en-US.md` | 名册脚注 superpowers v6.4.1 → **v6.4.2**（与 pin 一致；名册数字不变） |
 
 ### 2026-10-07（三）：价格核正 + 模型解析链实测修正
 

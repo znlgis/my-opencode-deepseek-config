@@ -304,7 +304,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 Per-request cost is dominated by **cache hit rate** (two back-to-back runs of the same config varied between 256 and 6,528 cache-read tokens), so cross-pass comparison should use total prompt tokens: **14,690 → 15,153 (+463, ≈ +3.2%)**, which matches the byte accounting above (+1627 bytes ≈ +407 tokens).
 
-Of those 15,153 tokens, `AGENTS.md` (15,450 B) + `orchestrator.md` (13,020 B) ≈ 6.9K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
+Of those 15,153 tokens, `AGENTS.md` (15,420 B) + `orchestrator.md` (13,020 B) ≈ 6.9K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
 
 ## Agent Structure
 
@@ -332,7 +332,7 @@ Of those 15,153 tokens, `AGENTS.md` (15,450 B) + `orchestrator.md` (13,020 B) �
 | `light-orchestrator` | flash | read-write | Lightweight tasks, single-file edits |
 | `vision` | flash | read-write | Multimodal: images/screenshots/charts/UI mockups |
 
-> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro input is 4.4× flash).
+> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (pro review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro input is 4.4× flash).
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
 >
@@ -410,7 +410,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `codebase-design` | Architecture vocabulary: module/interface/depth/seam/adapter/leverage/locality, deletion test, depth test — assess whether module boundaries are sound |
 | `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted; includes the repeated-explanation trigger (pin a term when the same concept keeps being re-explained) |
 
-> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** context (this repo: 23 local + 15 superpowers + 1 built-in, name+description raw bytes ≈ 10.3KB ≈ 2.6K tokens, fully applied to built-in agents with no allowlist; superpowers v6.4.1 has one more skill and +484 roster bytes vs v6.3.0). So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed.
+> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** context (this repo: 23 local + 15 superpowers + 1 built-in, name+description raw bytes ≈ 10.3KB ≈ 2.6K tokens, fully applied to built-in agents with no allowlist; superpowers v6.4.2 has one more skill and +484 roster bytes vs v6.3.0). So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed.
 
 ## Repository Structure
 
@@ -496,6 +496,19 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 ```
 
 ## Refactor Change Log
+
+### 2026-10-07 (4): full-audit pass (ratios / bytes / dead rules / delegation exception)
+
+A full cross-check plus minimal fixes: three stale cost ratios, two stale byte counts, 19 dead permission rules, one delegation exception — plus a leftover v1 key name.
+
+| Change | Location | Notes |
+| --- | --- | --- |
+| Cost ratios corrected ×3 | `agents/orchestrator.md`, `agents/deep-worker.md` | "pro is 3× flash" → **4.4× (input price)** — stale after the flash price fix; now matches the README's 4.4×/3.3× |
+| Byte counts corrected ×2 | `README.md`, `README.en-US.md` | `AGENTS.md` 15,450 → **15,420 B** (shrank 30B in the v2-migration pass, never synced; the "≈ 6.9K tokens" claim is unchanged) |
+| Dead permission rules removed | `opencode.jsonc` | 19 explicit `ask` rules deleted (40 → 21): with the catch-all `ask` first + last-match-wins, removal provably changes no outcome; the comment now states why known danger patterns are not enumerated |
+| v1 key left over | `opencode.jsonc` | `autoupdate: "notify"` → **`update: "notify"`** (the v2-native key; both the updater and the normalizer support it) |
+| Delegation exception fixed | `agents/light-orchestrator.md`, `README.md`, `README.en-US.md` | the body said "only `oracle` may be spawned" — contradicting the frontmatter (`oracle`+`reviewer`) and the `/review` design; now names both escalation paths |
+| Version wording synced | `README.md`, `README.en-US.md` | roster footnote superpowers v6.4.1 → **v6.4.2** (matches the pin; the roster numbers are unchanged) |
 
 ### 2026-10-07 (3): price correction + model-resolution chain verified
 
