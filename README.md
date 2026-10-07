@@ -2,26 +2,26 @@
 
 **简体中文** | [English](README.en-US.md)
 
-**OpenCode × DeepSeek 最优配置** —— 在 OpenCode 多 Agent 框架下，将 DeepSeek V4 模型族（Pro + Flash）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
+**OpenCode v2 × DeepSeek 最优配置** —— 在 OpenCode v2 多 Agent 框架下，将 DeepSeek V4 模型族（Pro + Flash）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
 
 ## 当前配置概览
 
 - 默认主 Agent：`orchestrator`
 - 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
-- 代理层级：`subagent_depth: 2`（classic 键；桌面 v2 只认同值的 `experimental.subagent_depth`，两处并存。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
+- 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.reserved`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），另有每轮请求的 prune 清理旧工具输出（`prune`/`tail_turns` 仅 1.18.4 生效，桌面 v2 忽略；v2 端 `reserved`/`preserve_recent_tokens` 经改名继续生效）；无第三方压缩插件
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.2`，过程型技能）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.2（2026-09-25 发布）已在两代运行时实测加载：opencode 1.18.x 的 V1 路径，以及桌面 v2 的 CLI 2.0.24（`plugin list` → version `8ca22db`）；且**子会话（task subagent）不再注入 bootstrap**
+- 插件：仅 `superpowers`（git URL 固定 tag `#v6.4.2`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v6.4.2（2026-09-25 发布）已在桌面 v2 的 CLI 2.0.24 实测加载（`plugin list` → version `8ca22db`）；且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
 唯一保留的插件 **superpowers v6.4.2** 是纯 skill 注入插件（`.opencode/plugins/superpowers.js`），**不提供模型映射能力**，模型路由只能在 Agent 层完成——本配置已如此实现，无需也无法在插件内指定模型。v6.4.2 的映射表写在 `AGENTS.md` 的 Plugins 小节（skill → Agent → 档位），并显式标注「本地已有等价 skill 的项不接线」，避免两套流程并存。
 
-> 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`provider.deepseek.models.*.limit.input`）与每轮 `prune` 覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
+> 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`providers.deepseek.models.*.limit.input` + `buffer`）覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
 因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v6.4.2 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项），勿重复调研。
 
@@ -29,7 +29,7 @@
 
 ### 前置条件
 
-- OpenCode ≥ v1.18.x（DeepSeek provider 为内置）
+- OpenCode v2（桌面版内置 CLI 2.0.24 实测通过；1.18.x 及更早版本**不再支持**）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
 
@@ -57,25 +57,25 @@ opencode
 
 ```jsonc
 {
-  "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-flash"
+  "model": "deepseek/deepseek-v4-pro"
 }
 ```
 
-本配置在 `provider` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `modalities`（图像输入）。示例（flash）：
+本配置在 `providers` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `capabilities`（图像输入）。示例（flash，v2 原生键）：
 
 ```jsonc
-"provider": {
+"providers": {
   "deepseek": {
     "models": {
       "deepseek-flash": {
-        "modalities": {
-          "input": ["text", "image"],
-          "output": ["text"]
-        },
-        "options": {
+        "settings": {
           "temperature": 0,
           "thinking": { "type": "disabled" }
+        },
+        "capabilities": {
+          "tools": true,
+          "input": ["text", "image"],
+          "output": ["text"]
         }
       }
     }
@@ -85,24 +85,22 @@ opencode
 
 > **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-flash`。
 
-### 双运行时键名兼容（classic ↔ V2 原生）
+### v2 原生键名（本仓库唯一写法）
 
-本配置同时服务两代运行时（desktop v2 为主、1.18.4 为下限），因此**刻意只写 classic 键**：桌面 v2 在加载时自动上转换为原生键；而原生拼写（`plugins`/`providers` 等）在 1.18.4 会被判定为 unsupported 并静默丢弃（`packages/opencode/src/config/v2-compat.ts` 源码可查）。下表右侧是 2026-10-07 用 v2.0.24 `debug config` 实测的归一化结果：
+本仓库为 **OpenCode v2 专属配置**（1.18.x 不再支持）。v2 加载配置文件有两条路径：**原生解码**，或——当文件含任一 v1 触发键时——官方的 **V1→V2 迁移路径**（`isV1` 触发键：`logLevel`/`server`/`command`/`reference`/`snapshot`/`plugin`/`autoshare`/`disabled_providers`/`enabled_providers`/`small_model`/`mode`/`agent`/`provider`/`permission`/`tools`/`attachment`/`layout`；源码 `packages/core/src/v1/config/migrate.ts`）。本仓库**统一走原生路径**——上述键一个都不写：
 
-| classic（本仓库写法） | desktop v2 实际读取 | 1.18.x |
+| 关注点 | 本仓库写法（v2 原生） | 要点 |
 | --- | --- | --- |
-| `plugin` | `plugins` | 原生支持 |
-| `provider.deepseek.models.*.options` | `providers.deepseek.models.*.settings` | 原生支持 |
-| `provider...models.*.modalities` | `...models.*.capabilities` | 原生支持 |
-| `provider...models.*.cost`（平铺 `cache_read`/`cache_write`） | `cost` 数组 + 嵌套 `cache: { read, write }` | 原生支持 |
-| `provider...models.*.limit.input` | 同名保留（压缩触发点） | 原生支持 |
-| `permission` | `permissions`（有序规则数组） | 原生支持 |
-| `agent` / `command` / `attachment` / `autoupdate` | `agents` / `commands` / `media` / `update` | 原生支持 |
-| `subagent_depth`（与 `experimental.subagent_depth` 并存） | 只读 `experimental.subagent_depth` | 读顶层键 |
-| `compaction.reserved` / `preserve_recent_tokens` | `compaction.buffer` / `compaction.keep.tokens`（`prune`/`tail_turns` 被丢弃） | 原样读取 |
-| `small_model` | 展开为 `title` agent 的模型 | 原生支持 |
+| 插件 | `plugins`（字符串或 `{package, options}`） | superpowers 使用字符串形式 |
+| Provider/模型 | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = 请求透传（temperature/thinking）；`capabilities` = `{tools, input[], output[]}`；`cost` 为**数组** + 嵌套 `cache: {read, write}`；`limit.input` 驱动压缩触发点 |
+| Agent / 命令 | `agents` / `commands` | 内联覆盖内置 agent；文件型 agent 保持 `agents/*.md` |
+| 权限 | `permissions`（有序 `{action, resource, effect}` 列表） | last-match-wins；v2 action 名：`shell`（非 `bash`）、`subagent`（非 `task`） |
+| 附件 | `media.image` | 原 `attachment` |
+| 压缩 | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` 为 v1 拼写，v2 不读，已移除 |
+| 嵌套深度 | `experimental.subagent_depth` | 顶层 `subagent_depth` 已被 v2 丢弃 |
+| small_model | —（不写） | v2 将其展开为 `title` agent 模型；本仓库直接钉 `title` |
 
-结论：**不要**把本仓库迁到原生拼写——那只会在 1.18.x 上静默失效；classic 键 + v2 归一化才是双运行时写法。
+迁移验证（2026-10-07）：迁移前后用 v2.0.24 `debug config`/`debug agents` 做逐字段 A/B——归一化输出完全等价（详见「本次重构变更记录」）。注意：`$schema` 保持 `https://opencode.ai/config.json`（v2 应用自身写入的就是该 URL）。
 
 ## 快速开始
 
@@ -223,7 +221,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 - **Routine-nontrivial → flash low**：规划、常规多文件实现等稍有难度的任务走 flash + `reasoningEffort: low`
 - **Deep/uncertain → pro high**：深度推理、根因分析、重型多文件实现——只用 pro
 - **代码审查 → flash 初检，pro 升级**：`/review` 默认走 flash 初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（pro）；`/deep-review` 强制 pro 全量审查
-- **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `attachment.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
+- **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
 - **自动升级**：flash agent 无法胜任时自动升级到 pro（带完整上下文）
 
 用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash low（planner）；`「排查登录接口报错的根因」` → pro high（oracle）；`/review` → flash 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ flash 初检后升级 pro。
@@ -241,7 +239,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `provider.deepseek.models`（USD / 1M tokens，2026-08-16 生效的 off-peak 价；peak 时段翻倍）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，2026-08-16 生效的 off-peak 价；peak 时段翻倍）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
 | --- | --- | --- | --- | --- | --- |
@@ -430,18 +428,18 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 | 想改的东西 | 文件 | 位置 |
 | --- | --- | --- |
-| 模型清单 / 价格 / thinking / temperature | `opencode.jsonc` | `provider.deepseek.models` |
+| 模型清单 / 价格 / thinking / temperature | `opencode.jsonc` | `providers.deepseek.models` |
 | 画像：默认 Agent、小模型、嵌套深度、工具输出上限、压缩参数、附件缩放 | `opencode.jsonc` | 顶层同名键 |
 | 权限（读 / bash / skill / 外部目录） | `opencode.jsonc` | `permission` |
 | 内置 agent（build/plan/title/summary/compaction/general）的模型 | `opencode.jsonc` | `agent` |
 | 快捷命令的 Agent 与模板 | `opencode.jsonc` | `command` |
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |
 | 全局行为规则（原则、失败纪律、缓存纪律、反模式） | `opencode/AGENTS.md` | 对应小节 |
-| 插件版本（pin） | `opencode/opencode.jsonc` | `plugin` |
-| 压缩触发窗口（按模型）/ prune / 保留尾部 | `opencode/opencode.jsonc` | `provider.deepseek.models.<id>.limit.input` + `compaction` |
+| 插件版本（pin） | `opencode/opencode.jsonc` | `plugins` |
+| 压缩触发窗口（按模型）/ buffer / 保留尾部 | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction`（`buffer`/`keep`） |
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
-> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，并重启 opencode（配置只在启动时加载一次）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode debug config`。
+> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`opencode-cli.exe reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode-cli.exe debug config`。
 
 ## 使用指南
 
@@ -497,6 +495,19 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 ## 本次重构变更记录
 
+### 2026-10-07（二）：v2 专属升级 —— 全量切换 v2 原生键（移除 1.18.x 支持）
+
+按「v2 专属」要求完成结构性升级：**删除全部 v1 触发键**，配置文件此后走 v2 的原生解码路径而非 V1→V2 迁移路径；1.18.x 不再受支持。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 7 个 v1 键 → v2 原生键 | `opencode.jsonc` | `plugin`→`plugins`、`provider`→`providers`（`options`→`settings`、`modalities`→`capabilities`、平铺 `cost`→数组 + 嵌套 `cache`）、`agent`→`agents`、`command`→`commands`、`permission`→有序 `permissions` 列表（40 条，顺序与语义不变）、`attachment`→`media` |
+| v1 死配置清理 | `opencode.jsonc` | 顶层 `subagent_depth`（v2 丢弃）、`compaction.prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`（v2 不读）、`small_model`（由显式 `title` agent 模型取代）全部移除；`compaction` 写为 `{auto, keep:{tokens}, buffer}` |
+| 技能重写 | `skills/opencode-config/SKILL.md` | 目标运行时改述为 desktop v2（2.0.24 实测）；新增 `isV1` 触发键清单（17 个）、原生键映射表与「未知键静默丢弃 → 必须实测验证」纪律 |
+| 脚本适配 | `scripts/estimate-cost.js` | 读取 `providers.deepseek.models` 的原生 cost 数组 + 嵌套 `cache:{read,write}`；实跑输出与 README 示例一致 |
+| 验证（A/B） | — | 迁移前/后 `debug config` + `debug agents` 逐字段等价（命令/引用/数值/权限顺序全等）；`plugin list` 仍解析 superpowers `8ca22db`；`validate-jsonc.js` 通过 |
+| 有意不迁移 | `agents/*.md` | frontmatter 保持 v1 风格 `permission`/`options`（v2 接受且 12 个 agent 全部实测可用）；如未来采用原生 frontmatter，须一次性全量迁移并实测 |
+
 ### 2026-10-07：双运行时实测审计 + `general` 一行防漏
 
 一次**实测审计 + 一行配置**（零付费调用）：用本机两代二进制端到端复核现配置，并补上唯一未定型的 subagent 的模型档。
@@ -504,7 +515,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 变更 | 位置 | 说明 |
 | --- | --- | --- |
 | `general` 固定 flash | `opencode.jsonc` `agent` | 12 个自定义 agent 之外唯一未声明模型的 subagent（superpowers 泛化派发目标）；手动 @ 时会跟随会话模型（默认 pro），固定到 flash 兜底 |
-| desktop v2（CLI 2.0.24）实测（只读） | — | `debug config` 确认 classic → 原生键上转换（完整映射见「双运行时键名兼容」）；`debug agents` 确认 18 个 agent 全部就位（12 自定义 + 6 内置）；`planner`/`light-orchestrator` 思考档落在 `request.body`（`thinking.enabled` + `reasoningEffort: low`）；`plugin list` 确认 superpowers `#v6.4.2`（version `8ca22db`） |
+| desktop v2（CLI 2.0.24）实测（只读） | — | `debug config` 确认 classic → 原生键上转换（完整映射见「v2 原生键名」）；`debug agents` 确认 18 个 agent 全部就位（12 自定义 + 6 内置）；`planner`/`light-orchestrator` 思考档落在 `request.body`（`thinking.enabled` + `reasoningEffort: low`）；`plugin list` 确认 superpowers `#v6.4.2`（version `8ca22db`） |
 | 1.18.4 实测（只读） | — | `opencode debug config` 进程内解析通过；`OPENCODE_CONFIG_DIR` 指向仓库 `opencode/` 时按预期加载（marker 文件命中验证）；classic 键原样读取 |
 | 常驻成本影响 | — | +1 行配置**不进入** prompt 前缀，本轮常驻上下文增量 **0**；未重跑付费基线（成本纪律：前缀零变更，重测无信息增量；上次基线 15,177 prompt tokens / $0.00269 不受影响） |
 
@@ -542,7 +553,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `orchestrator.md` 中重复 `AGENTS.md` 的 4 条规则 | thinking tier / retry cap / reference-paths 等已由 `AGENTS.md` 单点定义，重复表述只增加常驻 token |
 | `orchestrator.md` 路由表中 10 处 `· ~½ cost` 标注 | 同一信息在表头已声明一次，逐行重复属于噪音 |
 | `subagent_depth: 3` 的第 3 层 | 实际最深链路只有 2 层，第 3 层无人使用，只提供意外嵌套放大的可能 |
-| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + 插件缓存 | 其价值（绝对值阈值提前压缩、工具调用去重）已由内置 compaction 的显式模型窗口 + 每轮 `prune` 覆盖；少一个插件 = 少一份常驻注入、少一条前缀漂移路径 |
+| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + 插件缓存 | 其价值（绝对值阈值提前压缩、工具调用去重）已由内置 compaction 的显式模型窗口（`limit.input` + `buffer`）覆盖；少一个插件 = 少一份常驻注入、少一条前缀漂移路径 |
 
 **新增 / 强化**
 
@@ -550,7 +561,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | --- | --- |
 | `AGENTS.md` 硬约束「Vision input is opt-in」 | 从规则层保证非视觉任务不传图/不生成图，只有用户提供图像时才走 `vision`（flash 多模态） |
 | 压缩触发点从隐式默认改为显式声明 | 不写 `limit.input` 时触发点 = `context − maxOutputTokens` = **968K**，且 `compaction.reserved` 是**死配置**（只有 `input` 路径才读它）。现在 flash 115K / pro 148K，读配置即可确认 |
-| `vision-prep` 修正附件上限陈述 | 原文档写「2000×2000 / 5MiB（opencode 默认）」，与本仓 `attachment.image`（1600px / 2MiB）矛盾，会误导预处理 |
+| `vision-prep` 修正附件上限陈述 | 原文档写「2000×2000 / 5MiB（opencode 默认）」，与本仓 `media.image`（1600px / 2MiB）矛盾，会误导预处理 |
 | README「配置变更点速查」表 | 维护时一次定位到文件与小节，减少试错（试错本身就是 token 消耗） |
 | README「快速开始」四步 TL;DR | 新机器上手从「读完全文」变成「照抄四行」 |
 
@@ -574,12 +585,12 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **Token 效率优先** —— 路径引用替代粘贴文件、技能按需加载、压缩分级管理
 - **插件增效但不喧宾夺主** —— 唯一插件 superpowers 只提供过程纪律（固定 pin 以保字节稳定前缀）；上下文压缩 100% 交给内置 compaction，不引入第三方压缩层
 - **执行与探索分离** —— deep-worker/light-orchestrator 禁止研究/委托，explore/librarian 禁止修改
-- **缓存与 thinking 纪律** —— 静态前缀稳定以命中 DeepSeek 提示词缓存；flash 关 thinking + temperature 0（provider 层），pro 默认 thinking 开
+- **缓存与 thinking 纪律** —— 静态前缀稳定以命中 DeepSeek 提示词缓存；flash 关 thinking + temperature 0（providers 模型层），pro 默认 thinking 开
 - **Scope First + Delegate Always** —— 先定范围（2+ 步/多文件/架构变更先走 planner），再委派执行，顶层 token 只留给路由与难题
 - **原子 TODO** —— 多步任务先写有序 TODO，逐条 in_progress→completed；格式 `path: action for scenario — verify by check`
 - **进度可控 + 失败隔离** —— 每个 TODO 带可验证完成判据，阶段边界汇报 `[done/total]`；错误分 transient/recoverable/fatal 三类，同一操作最多重试 3 次且每次必须换策略；大任务拆成独立单元，单元失败不阻塞其余，最终汇总 `succeeded / failed / skipped`
 - **按模型成本分级压缩** —— 用 `limit.input` 给两个模型分别声明工作窗口：flash `131072−16000=115,072`（高频路径，窗口更紧）、pro `163840−16000=147,840`（深度任务，留更多余量以减少有损压缩次数）；触发点是算出来的，不是继承来的
-- **视觉输入成本封顶** —— `attachment.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
+- **视觉输入成本封顶** —— `media.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
 - **名册即预算** —— 每个 Agent 的 `permission.skill` 白名单同时决定 skill 名册大小；被 deny 的 skill 不进名册，也就不进每轮的常驻上下文

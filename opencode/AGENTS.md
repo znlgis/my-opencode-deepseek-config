@@ -307,5 +307,5 @@ change.
   Routing table: `agents/orchestrator.md`.
 
 Context compression is **built-in only** — there is no DCP plugin. Compaction
-fires at `limit.input - compaction.reserved` (flash ~115K, pro ~148K tokens) and
-prunes old tool output per request; both are configured in `opencode.jsonc`.
+fires at `limit.input - compaction.buffer` (flash ~115K, pro ~148K tokens),
+configured with v2-native keys in `opencode.jsonc`.

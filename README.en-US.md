@@ -2,26 +2,26 @@
 
 [简体中文](README.md) | **English**
 
-**OpenCode × DeepSeek Optimal Config** — a configuration scheme that pushes the DeepSeek V4 model family (Pro + Flash) to its full potential within OpenCode's multi-agent framework. Core philosophy: **token efficiency first — the best development results at the lowest context cost**.
+**OpenCode v2 × DeepSeek Optimal Config** — a configuration scheme that pushes the DeepSeek V4 model family (Pro + Flash) to its full potential within OpenCode v2's multi-agent framework. Core philosophy: **token efficiency first — the best development results at the lowest context cost**.
 
 ## Current Configuration Overview
 
 - Default primary agent: `orchestrator`
 - Primary model: `deepseek/deepseek-v4-pro`; lightweight/multimodal model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal)
-- Agent nesting: `subagent_depth: 2` (classic key; desktop v2 reads only the identical `experimental.subagent_depth`, both written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
+- Agent nesting: `experimental.subagent_depth: 2` (v2-native key; the v1 top-level `subagent_depth` is dropped by v2 and no longer written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
-- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.reserved` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), plus per-request `prune` of stale tool output (`prune`/`tail_turns` take effect on 1.18.4 only — desktop v2 ignores them, while `reserved`/`preserve_recent_tokens` carry over renamed); no third-party compression plugin
+- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), keeping a verbatim tail of `keep.tokens: 12000`; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed; no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.2`, process skills); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.2 (released 2026-09-25) is smoke-tested on both runtimes: OpenCode 1.18.x's V1 path and desktop v2's CLI 2.0.24 (`plugin list` → version `8ca22db`), and **task sub-sessions no longer receive the bootstrap injection**
+- Plugins: `superpowers` only (git URL pinned to tag `#v6.4.2`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v6.4.2 (released 2026-09-25) is smoke-tested on desktop v2's CLI 2.0.24 (`plugin list` → version `8ca22db`), and **task sub-sessions no longer receive the bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
 The single remaining plugin, **superpowers v6.4.2**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v6.4.2 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
 
-> `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`provider.deepseek.models.*.limit.input`) plus per-request `prune`; one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
+> `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`providers.deepseek.models.*.limit.input` + `buffer`); one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
 
 So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v6.4.2: it still only registers the skills path and injects the bootstrap — no model config keys) — do not re-investigate.
 
@@ -29,7 +29,7 @@ So the split "planning/architecture/complex review on pro; execution/first-pass/
 
 ### Prerequisites
 
-- OpenCode ≥ v1.18.x (the DeepSeek provider is built in)
+- OpenCode v2 (measured against the desktop app's bundled CLI 2.0.24; 1.18.x and older are **no longer supported**)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
 - Background subagents (delegation with `background: true`) require the environment variable `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` (PowerShell: `$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`); when unset, background delegation errors out and should fall back to foreground/serial dispatch
 
@@ -57,25 +57,25 @@ Permanent setup: add `DEEPSEEK_API_KEY` to your system environment variables.
 
 ```jsonc
 {
-  "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-flash"
+  "model": "deepseek/deepseek-v4-pro"
 }
 ```
 
-This config splits thinking at the `provider` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). `deepseek-flash` is the merged V4.1 Flash model — the former text-only and vision variants are now one natively multimodal model, so it declares `modalities` (image input). Example (flash):
+This config splits thinking at the `providers` layer: flash disables thinking and pins `temperature: 0` (fastest, cheapest), while pro keeps the default (thinking on). `deepseek-flash` is the merged V4.1 Flash model — the former text-only and vision variants are now one natively multimodal model, so it declares `capabilities` (image input). Example (flash, v2-native keys):
 
 ```jsonc
-"provider": {
+"providers": {
   "deepseek": {
     "models": {
       "deepseek-flash": {
-        "modalities": {
-          "input": ["text", "image"],
-          "output": ["text"]
-        },
-        "options": {
+        "settings": {
           "temperature": 0,
           "thinking": { "type": "disabled" }
+        },
+        "capabilities": {
+          "tools": true,
+          "input": ["text", "image"],
+          "output": ["text"]
         }
       }
     }
@@ -85,24 +85,22 @@ This config splits thinking at the `provider` layer: flash disables thinking and
 
 > **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro` and `deepseek/deepseek-flash`.
 
-### Runtime key compatibility (classic ↔ V2 native)
+### v2-native keys (the only dialect this repo writes)
 
-This config serves two runtime generations (desktop v2 primary, 1.18.4 floor), so it **deliberately writes classic keys only**: desktop v2 up-converts them to native keys on load, while the native spellings (`plugins`/`providers`, …) are marked unsupported and silently dropped by 1.18.4 (see `packages/opencode/src/config/v2-compat.ts`). The right column is the normalized result measured on 2026-10-07 with v2.0.24's `debug config`:
+This repo is an **OpenCode v2-only config** (1.18.x is no longer supported). v2 loads a config file through **two paths**: native decode, or — when the file contains ANY v1 trigger key — the official **V1→V2 migration** (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`, `plugin`, `autoshare`, `disabled_providers`, `enabled_providers`, `small_model`, `mode`, `agent`, `provider`, `permission`, `tools`, `attachment`, `layout`; source: `packages/core/src/v1/config/migrate.ts`). This repo **always takes the native path** — none of those keys appear:
 
-| classic (what this repo writes) | desktop v2 actually reads | 1.18.x |
+| Concern | What this repo writes (v2-native) | Notes |
 | --- | --- | --- |
-| `plugin` | `plugins` | native |
-| `provider.deepseek.models.*.options` | `providers.deepseek.models.*.settings` | native |
-| `provider...models.*.modalities` | `...models.*.capabilities` | native |
-| `provider...models.*.cost` (flat `cache_read`/`cache_write`) | `cost` array + nested `cache: { read, write }` | native |
-| `provider...models.*.limit.input` | kept as-is (compaction trigger) | native |
-| `permission` | `permissions` (ordered rule list) | native |
-| `agent` / `command` / `attachment` / `autoupdate` | `agents` / `commands` / `media` / `update` | native |
-| `subagent_depth` (written alongside `experimental.subagent_depth`) | reads only `experimental.subagent_depth` | reads the top-level key |
-| `compaction.reserved` / `preserve_recent_tokens` | `compaction.buffer` / `compaction.keep.tokens` (`prune`/`tail_turns` dropped) | read as-is |
-| `small_model` | expanded into the `title` agent's model | native |
+| Plugins | `plugins` (string or `{package, options}`) | superpowers uses the string form |
+| Providers/models | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = request passthrough (temperature/thinking); `capabilities` = `{tools, input[], output[]}`; `cost` = **array** + nested `cache: {read, write}`; `limit.input` drives the compaction trigger |
+| Agents / commands | `agents` / `commands` | inline overrides; file-based agents stay in `agents/*.md` |
+| Permissions | `permissions` (ordered `{action, resource, effect}` list) | last-match-wins; v2 action names: `shell` (not `bash`), `subagent` (not `task`) |
+| Attachments | `media.image` | the former `attachment` |
+| Compaction | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1 spellings v2 does not read; removed |
+| Nesting depth | `experimental.subagent_depth` | the top-level `subagent_depth` is dropped by v2 |
+| small_model | — (not written) | v2 expands it into the `title` agent; this repo pins `title` directly |
 
-Bottom line: do **not** migrate this repo to native spellings — that would silently break it on 1.18.x; classic keys + v2 normalization is the dual-runtime way.
+Migration verification (2026-10-07): a field-by-field A/B with v2.0.24's `debug config`/`debug agents` before vs after — the normalized output is fully equivalent (see the Refactor Change Log). Note: `$schema` stays `https://opencode.ai/config.json` (the URL the v2 app itself writes).
 
 ## Quick Start
 
@@ -223,7 +221,7 @@ Cost ratio: pro input price is 3× flash (0.66 vs 0.22 per 1M tokens), so trivia
 - **Routine-nontrivial → flash low**: planning and routine multi-file work use flash + `reasoningEffort: low`
 - **Deep/uncertain → pro high**: deep reasoning, root-cause analysis, heavy multi-file implementation — pro only
 - **Code review → flash first pass, pro escalation**: `/review` runs a flash first pass (Abbreviated path) by default and delegates to `reviewer` (pro) only when an escalation trigger fires; `/deep-review` forces a full pro review
-- **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `attachment.image` to 1600px / 2MiB to avoid wasting base64 bytes
+- **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `media.image` to 1600px / 2MiB to avoid wasting base64 bytes
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash low (planner); "what's the root cause of this login error?" → pro high (oracle); `/review` → flash first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → flash first pass then pro escalation.
@@ -241,7 +239,7 @@ A Tier-1 report is a **complete review**, not a preview — a clean result is ne
 
 ### Cost Comparison
 
-Prices are taken from `provider.deepseek.models` in `opencode.jsonc` (USD per 1M tokens, off-peak rates effective 2026-08-16; peak hours double). `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens, off-peak rates effective 2026-08-16; peak hours double). `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
 | --- | --- | --- | --- | --- | --- |
@@ -430,18 +428,18 @@ When editing config, locate "what to change → which file", so you never change
 
 | What you want to change | File | Location |
 | --- | --- | --- |
-| Model list / prices / thinking / temperature | `opencode.jsonc` | `provider.deepseek.models` |
-| Global profile: default agent, small model, nesting depth, tool-output caps, compaction, attachment resize | `opencode.jsonc` | top-level keys |
-| Permissions (read / bash / skill / external directories) | `opencode.jsonc` | `permission` |
-| Built-in agents (build/plan/title/summary/compaction/general) model | `opencode.jsonc` | `agent` |
-| Shortcut command agents and templates | `opencode.jsonc` | `command` |
+| Model list / prices / thinking / temperature | `opencode.jsonc` | `providers.deepseek.models` |
+| Global profile: default agent, nesting depth, tool-output caps, compaction, media resize | `opencode.jsonc` | top-level keys |
+| Permissions (read / shell / skill / external directories) | `opencode.jsonc` | `permissions` |
+| Built-in agents (build/plan/title/summary/compaction/general) model | `opencode.jsonc` | `agents` |
+| Shortcut command agents and templates | `opencode.jsonc` | `commands` |
 | One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |
 | Global behavior rules (principles, failure discipline, cache discipline, anti-patterns) | `opencode/AGENTS.md` | the matching section |
-| Plugin versions (pins) | `opencode/opencode.jsonc` | `plugin` |
-| Compression trigger window (per model) / prune / preserved tail | `opencode/opencode.jsonc` | `provider.deepseek.models.<id>.limit.input` + `compaction` |
+| Plugin versions (pins) | `opencode/opencode.jsonc` | `plugins` |
+| Compression trigger window (per model) / buffer / preserved tail | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction` (`buffer`/`keep`) |
 | A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
 
-> After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode` and restart opencode (config is loaded once at startup). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode debug config`.
+> After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode`, then reload (desktop v2: `opencode-cli.exe reload`; or restart opencode). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode-cli.exe debug config`.
 
 ## Usage Guide
 
@@ -497,6 +495,19 @@ Describe your needs in natural language; the Orchestrator analyzes intent and pi
 
 ## Refactor Change Log
 
+### 2026-10-07 (2): v2-only upgrade — full switch to v2-native keys (1.18.x support removed)
+
+Structural upgrade per the "v2-only" requirement: **every v1 trigger key was removed**, so the config now takes v2's native decode path instead of the V1→V2 migration path; 1.18.x is no longer supported.
+
+| Change | Location | Notes |
+| --- | --- | --- |
+| 7 v1 keys → v2-native keys | `opencode.jsonc` | `plugin`→`plugins`, `provider`→`providers` (`options`→`settings`, `modalities`→`capabilities`, flat `cost`→array + nested `cache`), `agent`→`agents`, `command`→`commands`, `permission`→ordered `permissions` list (40 rules, order and semantics unchanged), `attachment`→`media` |
+| v1 dead config removed | `opencode.jsonc` | top-level `subagent_depth` (dropped by v2), `compaction.prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` (unread by v2), `small_model` (replaced by the explicit `title` agent model); `compaction` is now `{auto, keep:{tokens}, buffer}` |
+| Skill rewritten | `skills/opencode-config/SKILL.md` | target runtime restated as desktop v2 (2.0.24 measured); added the `isV1` trigger-key list (17 keys), the native key map, and the "unknown keys are silently dropped → verify against the live service" discipline |
+| Script adapted | `scripts/estimate-cost.js` | reads the native cost array + nested `cache:{read,write}` under `providers.deepseek.models`; a default-args run matches the README example |
+| Verification (A/B) | — | before/after `debug config` + `debug agents` are field-by-field equivalent (commands/references/values/permission order all equal); `plugin list` still resolves superpowers `8ca22db`; `validate-jsonc.js` passes |
+| Deliberately not migrated | `agents/*.md` | frontmatter keeps the v1-style `permission`/`options` (accepted by v2; all 12 agents verified working); if native frontmatter is adopted later, migrate all agents in one verified pass |
+
 ### 2026-10-07: dual-runtime measured audit + one-line `general` hardening
 
 A **measured audit + one config line** (zero paid calls): both local binaries re-verified the config end to end, and the one unpinned subagent got its model tier.
@@ -504,7 +515,7 @@ A **measured audit + one config line** (zero paid calls): both local binaries re
 | Change | Location | Notes |
 | --- | --- | --- |
 | `general` pinned to flash | `opencode.jsonc` `agent` | The only subagent without a model besides the custom 12 (superpowers' generic dispatch target); a manual @-mention would follow the session model (pro by default). One line keeps it on flash |
-| desktop v2 (CLI 2.0.24) measured (read-only) | — | `debug config` confirms classic → native up-conversion (full map in "Runtime key compatibility"); `debug agents` confirms 18 agents resolve (12 custom + 6 built-in); `planner`/`light-orchestrator` thinking tier lands in `request.body` (`thinking.enabled` + `reasoningEffort: low`); `plugin list` confirms superpowers `#v6.4.2` (version `8ca22db`) |
+| desktop v2 (CLI 2.0.24) measured (read-only) | — | `debug config` confirms classic → native up-conversion (full map in "v2-native keys"); `debug agents` confirms 18 agents resolve (12 custom + 6 built-in); `planner`/`light-orchestrator` thinking tier lands in `request.body` (`thinking.enabled` + `reasoningEffort: low`); `plugin list` confirms superpowers `#v6.4.2` (version `8ca22db`) |
 | 1.18.4 measured (read-only) | — | `opencode debug config` parses in-process; `OPENCODE_CONFIG_DIR` pointing at the repo's `opencode/` loads as expected (marker-file hit test); classic keys read as-is |
 | Always-on cost impact | — | +1 config line never enters the prompt prefix; always-on context delta this round = **0**; no paid baseline re-run (cost discipline: zero prefix change, no information gain; the 15,177-prompt-token / $0.00269 baseline is unaffected) |
 
@@ -542,7 +553,7 @@ A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and 
 | 4 rules in `orchestrator.md` that duplicated `AGENTS.md` | thinking tiers / retry cap / reference-paths etc. are defined once in `AGENTS.md`; restating them only adds always-loaded tokens |
 | 10 `· ~½ cost` labels in the `orchestrator.md` routing table | The same information is declared once in the table header; per-row repetition is noise |
 | The third level of `subagent_depth: 3` | The deepest chain in use is 2 levels; nobody used level 3, which only offered accidental nesting amplification |
-| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + plugin cache | Its value (absolute-threshold early compression, tool-call dedup) is covered by built-in compaction's explicit per-model windows + per-request `prune`; one plugin fewer means less always-on injection and one less prefix-drift path |
+| `@tarquinen/opencode-dcp` + `opencode/dcp.jsonc` + plugin cache | Its value (absolute-threshold early compression, tool-call dedup) is covered by built-in compaction's explicit per-model windows (`limit.input` + `buffer`); one plugin fewer means less always-on injection and one less prefix-drift path |
 
 **Added / strengthened**
 
@@ -550,7 +561,7 @@ A convergence pass aimed at "fewer tokens + fewer API calls": **subtraction and 
 | --- | --- |
 | Hard constraint "Vision input is opt-in" in `AGENTS.md` | Guarantees at the rule layer that non-visual tasks never attach or generate images; only user-supplied images reach `vision` (flash multimodal) |
 | Compression trigger changed from an implicit default to an explicit declaration | Without `limit.input` the trigger is `context − maxOutputTokens` = **968K**, and `compaction.reserved` is **dead config** (only the `input` path reads it). Now flash 115K / pro 148K — the split is readable from the config alone |
-| Corrected attachment limits in `vision-prep` | It claimed "2000×2000 / 5MiB (opencode default)", contradicting this repo's `attachment.image` (1600px / 2MiB) and misleading preprocessing |
+| Corrected attachment limits in `vision-prep` | It claimed "2000×2000 / 5MiB (opencode default)", contradicting this repo's `media.image` (1600px / 2MiB) and misleading preprocessing |
 | "Configuration Change Points" table | Locate the right file and section in one step; trial-and-error is itself token spend |
 | "Quick Start" four-step TL;DR | New machines go from "read the whole doc" to "copy four lines" |
 
@@ -574,12 +585,12 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Token efficiency first** — path references instead of pasted files, skills loaded on demand, tiered compression management
 - **Plugins add value without stealing the spotlight** — the only plugin, superpowers, provides process discipline and nothing else (version-pinned to keep the prefix byte-stable); context compression is 100% built-in compaction, with no third-party compression layer
 - **Execution separated from exploration** — deep-worker/light-orchestrator must not research or delegate; explore/librarian must not modify
-- **Cache + thinking discipline** — stable static prefixes to hit DeepSeek's prompt cache; flash disables thinking + temperature 0 (provider layer), pro keeps thinking on by default
+- **Cache + thinking discipline** — stable static prefixes to hit DeepSeek's prompt cache; flash disables thinking + temperature 0 (providers layer), pro keeps thinking on by default
 - **Scope First + Delegate Always** — define scope first (2+ steps / multi-file / architecture changes go through planner), then delegate execution; top-level tokens are reserved for routing and hard problems
 - **Atomic TODOs** — multi-step tasks start with an ordered TODO list, one item in_progress → completed at a time; format `path: action for scenario — verify by check`
 - **Controllable progress + failure isolation** — every TODO carries a verifiable completion criterion and reports `[done/total]` at phase boundaries; errors are classified transient/recoverable/fatal, with at most 3 attempts per operation and a mandatory strategy change on each retry; large tasks split into independent units so one failure never blocks the rest, closing with a `succeeded / failed / skipped` tally
 - **Per-model cost-tiered compression** — `limit.input` declares a separate working window per model: flash `131072−16000=115,072` (high-frequency path, tighter window), pro `163840−16000=147,840` (deep tasks, more headroom to reduce lossy compactions); the trigger point is computed, not inherited
-- **Vision input cost cap** — `attachment.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
+- **Vision input cost cap** — `media.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
 - **The roster is the budget** — each agent's `permission.skill` allowlist also decides its skill roster size; a denied skill never enters the roster and therefore never enters the always-loaded context
 - **Vision is opt-in** — images enter the payload only when the user supplies them; non-visual tasks never attach or generate images
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change

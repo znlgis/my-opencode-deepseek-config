@@ -3,7 +3,8 @@
  * estimate-cost.js — Estimate a session's DeepSeek API cost from token counts.
  *
  * Reads the USD-per-1M-token cost table from opencode/opencode.jsonc
- * (provider.deepseek.models) and prints the estimated cost for each model.
+ * (providers.deepseek.models, v2-native cost shape) and prints the estimated
+ * cost for each model.
  * Plain Node, zero dependencies — mirrors validate-jsonc.js.
  *
  * Usage:
@@ -131,12 +132,13 @@ function loadCostTable(configPath) {
   const abs = path.resolve(configPath);
   const raw = fs.readFileSync(abs, 'utf-8');
   const parsed = JSON.parse(stripJsonc(raw));
-  const models = parsed.provider && parsed.provider.deepseek
-    ? parsed.provider.deepseek.models
+  const models = parsed.providers && parsed.providers.deepseek
+    ? parsed.providers.deepseek.models
     : {};
   return Object.entries(models).map(([id, cfg]) => ({
     id,
-    cost: cfg.cost || {},
+    // v2-native cost is an array of tiers; this config uses a single tier.
+    cost: (Array.isArray(cfg.cost) ? cfg.cost[0] : cfg.cost) || {},
   }));
 }
 
@@ -153,9 +155,10 @@ function main() {
   }
 
   const rows = table.map(({ id, cost }) => {
+    const cache = cost.cache || {};
     const inputCost = Math.max(0, input - cacheRead) * (cost.input || 0) / 1e6;
-    const cacheCost = cacheRead * (cost.cache_read || 0) / 1e6;
-    const writeCost = cacheWrite * (cost.cache_write || 0) / 1e6;
+    const cacheCost = cacheRead * (cache.read || 0) / 1e6;
+    const writeCost = cacheWrite * (cache.write || 0) / 1e6;
     const outputCost = output * (cost.output || 0) / 1e6;
     const total = inputCost + cacheCost + writeCost + outputCost;
     return { id, inputCost, cacheCost, writeCost, outputCost, total };

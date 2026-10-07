@@ -1,8 +1,13 @@
 {
+    // OpenCode v2-native config — v2-only; 1.18.x is NOT supported. Every key
+    // is the v2 dialect (plugins / providers / agents / commands / permissions
+    // / media). The v1 spellings (plugin, provider, agent, command, permission,
+    // attachment, small_model, top-level subagent_depth) are never written:
+    // any one of them flips v2's loader onto its V1→V2 migration path. See
+    // README「v2 原生键名」for the key map and the verification method.
     "$schema": "https://opencode.ai/config.json",
     "default_agent": "orchestrator",
     "model": "deepseek/deepseek-v4-pro",
-    "small_model": "deepseek/deepseek-flash",
     "autoupdate": "notify",
     "share": "disabled",
     "lsp": true,
@@ -10,71 +15,62 @@
     // Nesting cap = the deepest chain the agent graph actually uses:
     // orchestrator → light-orchestrator → oracle (2 spawn levels). Every other
     // subagent is denied `task`, so a third level is dead headroom that only
-    // enables accidental token amplification.
-    "subagent_depth": 2,
-    // Desktop v2 reads only `experimental.subagent_depth` (top-level is
-    // dropped); the classic line reads `subagent_depth` above. Both carry
-    // the same value.
+    // enables accidental token amplification. `experimental.subagent_depth` is
+    // the v2 key; the v1 top-level spelling is dropped and not written.
     "experimental": {
         "subagent_depth": 2
     },
-    "permission": {
-        "read": {
-            "*": "allow",
-            ".env": "deny",
-            "*.env": "deny",
-            "*.env.*": "deny",
-            ".envrc": "deny",
-            "*.envrc": "deny",
-            "*.env.example": "allow"
-        },
-        // Default-ask instead of default-allow: an unrecognized destructive
-        // variant (e.g. `rm -rf` spelled or spaced differently) matches only `*`
-        // and is put to a human. Resolution is last-match-wins, so the catch-all
-        // `*` goes FIRST — every specific rule below overrides it. The
-        // allow list covers high-frequency read-only or local operations
-        // (git status/diff/log/show, git add/commit, npm run/test, rg, node
-        // scripts/*); anything else, including unlisted destructive variants,
-        // falls through to ask.
-        "bash": {
-            "*": "ask",
-            "git status*": "allow",
-            "git diff*": "allow",
-            "git log*": "allow",
-            "git show*": "allow",
-            "git stash list*": "allow",
-            "git add *": "allow",
-            "git commit*": "allow",
-            "node scripts/*": "allow",
-            "npm run *": "allow",
-            "npm test*": "allow",
-            "rg *": "allow",
-            "rm -rf*": "ask",
-            "rm -fr*": "ask",
-            "Remove-Item -Recurse -Force*": "ask",
-            "rd /s*": "ask",
-            "del /f /s*": "ask",
-            "del /f /q*": "ask",
-            "format *": "ask",
-            "git push --force*": "ask",
-            "git push -f *": "ask",
-            "git push --force-with-lease*": "ask",
-            "git reset --hard*": "ask",
-            "git clean -fd*": "ask",
-            "git checkout .*": "ask",
-            "git checkout --*": "ask",
-            "git branch -D*": "ask",
-            "git stash clear*": "ask",
-            "git stash drop*": "ask",
-            "gh repo delete*": "ask",
-            "gh pr close*": "ask"
-        },
-        "skill": {
-            "*": "allow"
-        },
-        "external_directory": "ask"
-    },
-    "plugin": [
+    // Ordered permission ruleset, last-match-wins. Default-ask instead of
+    // default-allow: an unrecognized destructive variant (e.g. `rm -rf`
+    // spelled or spaced differently) matches only `*` and is put to a human.
+    // The catch-all `*` goes FIRST — every specific rule below overrides it.
+    // The allow list covers high-frequency read-only or local operations
+    // (git status/diff/log/show, git add/commit, npm run/test, rg, node
+    // scripts/*); anything else, including unlisted destructive variants,
+    // falls through to ask.
+    "permissions": [
+        { "action": "read", "resource": "*", "effect": "allow" },
+        { "action": "read", "resource": ".env", "effect": "deny" },
+        { "action": "read", "resource": "*.env", "effect": "deny" },
+        { "action": "read", "resource": "*.env.*", "effect": "deny" },
+        { "action": "read", "resource": ".envrc", "effect": "deny" },
+        { "action": "read", "resource": "*.envrc", "effect": "deny" },
+        { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        { "action": "shell", "resource": "*", "effect": "ask" },
+        { "action": "shell", "resource": "git status*", "effect": "allow" },
+        { "action": "shell", "resource": "git diff*", "effect": "allow" },
+        { "action": "shell", "resource": "git log*", "effect": "allow" },
+        { "action": "shell", "resource": "git show*", "effect": "allow" },
+        { "action": "shell", "resource": "git stash list*", "effect": "allow" },
+        { "action": "shell", "resource": "git add *", "effect": "allow" },
+        { "action": "shell", "resource": "git commit*", "effect": "allow" },
+        { "action": "shell", "resource": "node scripts/*", "effect": "allow" },
+        { "action": "shell", "resource": "npm run *", "effect": "allow" },
+        { "action": "shell", "resource": "npm test*", "effect": "allow" },
+        { "action": "shell", "resource": "rg *", "effect": "allow" },
+        { "action": "shell", "resource": "rm -rf*", "effect": "ask" },
+        { "action": "shell", "resource": "rm -fr*", "effect": "ask" },
+        { "action": "shell", "resource": "Remove-Item -Recurse -Force*", "effect": "ask" },
+        { "action": "shell", "resource": "rd /s*", "effect": "ask" },
+        { "action": "shell", "resource": "del /f /s*", "effect": "ask" },
+        { "action": "shell", "resource": "del /f /q*", "effect": "ask" },
+        { "action": "shell", "resource": "format *", "effect": "ask" },
+        { "action": "shell", "resource": "git push --force*", "effect": "ask" },
+        { "action": "shell", "resource": "git push -f *", "effect": "ask" },
+        { "action": "shell", "resource": "git push --force-with-lease*", "effect": "ask" },
+        { "action": "shell", "resource": "git reset --hard*", "effect": "ask" },
+        { "action": "shell", "resource": "git clean -fd*", "effect": "ask" },
+        { "action": "shell", "resource": "git checkout .*", "effect": "ask" },
+        { "action": "shell", "resource": "git checkout --*", "effect": "ask" },
+        { "action": "shell", "resource": "git branch -D*", "effect": "ask" },
+        { "action": "shell", "resource": "git stash clear*", "effect": "ask" },
+        { "action": "shell", "resource": "git stash drop*", "effect": "ask" },
+        { "action": "shell", "resource": "gh repo delete*", "effect": "ask" },
+        { "action": "shell", "resource": "gh pr close*", "effect": "ask" },
+        { "action": "skill", "resource": "*", "effect": "allow" },
+        { "action": "external_directory", "resource": "*", "effect": "ask" }
+    ],
+    "plugins": [
         "superpowers@git+https://github.com/obra/superpowers.git#v6.4.2"
     ],
     "instructions": [
@@ -82,71 +78,62 @@
     ],
     // DeepSeek thinking split (deepseek-harness official): flash disables
     // thinking for cheapest+fastest runs; pro keeps the default (thinking on).
-    // `deepseek-flash` is the merged V4.1 Flash model — the former text-only and
-    // vision variants are now one natively-multimodal model, so it carries the
-    // modalities block (image input). Without it OpenCode treats the model as
-    // text-only and rejects read_image calls.
-    // `options.thinking` is a provider passthrough, not a native schema field:
-    // OpenCode forwards it verbatim to the DeepSeek API (OpenAI-format thinking
-    // toggle — {"type":"enabled"|"disabled"}).
-    // `reasoning_effort` (camelCase `reasoningEffort`, lowered to snake_case in
-    // the request body) is a REQUEST-LEVEL thinking-strength control
-    // (low/high/max), NOT a model id. OpenCode does not auto-generate
-    // reasoning-effort variants for DeepSeek, so it is set per-AGENT via
-    // `agent.options` (deep-merged over `model.options`), never at the model
-    // level — that keeps the 2-model matrix (pro / flash) intact.
-    "provider": {
+    // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
+    // and vision variants are now one natively-multimodal model, so it carries
+    // the `capabilities` block (image input). Without it OpenCode treats the
+    // model as text-only and rejects read_image calls.
+    // `settings.thinking` / `settings.temperature` are provider passthroughs,
+    // not native schema fields: OpenCode forwards them verbatim to the
+    // DeepSeek API (thinking toggle — {"type":"enabled"|"disabled"}).
+    // `reasoning_effort` (camelCase `reasoningEffort`) is a REQUEST-LEVEL
+    // thinking-strength control (low/high/max), NOT a model id. OpenCode does
+    // not auto-generate reasoning-effort variants for DeepSeek, so it is set
+    // per-AGENT via frontmatter `options`, never at the model level — that
+    // keeps the 2-model matrix (pro / flash) intact.
+    "providers": {
         "deepseek": {
-            // `cost` is USD per 1M tokens, off-peak rates effective with the
-            // 2026-08-16 peak/off-peak pricing; peak hours charge double these
-            // values. DeepSeek publishes no standalone cache-write price —
-            // cache writes bill at the cache-miss input rate, so cache_write
-            // is mapped from input.
-            //
-            // `limit` mirrors the models.dev catalog (context 1M / output 384K)
-            // and adds `input` — the ONE knob that decides when built-in
-            // compaction fires. overflow.ts computes:
-            //     usable = limit.input - compaction.reserved
-            //     isOverflow: session tokens >= usable
-            // Without `input`, usable falls back to `context - maxOutputTokens`
-            // = 1,000,000 - 32,000 = 968,000, i.e. a session could grow to ~968K
-            // tokens before anything is compressed, and `compaction.reserved`
-            // would be silently ignored (it is only read on the `input` path).
-            // Declaring `input` turns the cap into an explicit working budget:
-            // flash 115K / pro 148K (see the compaction block below).
             "models": {
                 "deepseek-flash": {
-                    "modalities": {
+                    "settings": {
+                        "temperature": 0,
+                        "thinking": { "type": "disabled" }
+                    },
+                    "capabilities": {
+                        "tools": true,
                         "input": ["text", "image"],
                         "output": ["text"]
                     },
+                    // `cost` is USD per 1M tokens, off-peak rates effective
+                    // with the 2026-08-16 peak/off-peak pricing; peak hours
+                    // charge double these values. DeepSeek publishes no
+                    // standalone cache-write price — cache writes bill at the
+                    // cache-miss input rate, so `cache.write` mirrors input.
+                    "cost": [
+                        { "input": 0.22, "output": 0.66, "cache": { "read": 0.007, "write": 0.22 } }
+                    ],
+                    // `limit.input` is the ONE knob that decides when built-in
+                    // compaction fires. Overflow computes:
+                    //     usable = limit.input - compaction.buffer
+                    // Without `input`, usable falls back to
+                    // `context - maxOutputTokens` = 968,000, i.e. a session
+                    // could grow to ~968K tokens before anything is
+                    // compressed. Declaring `input` turns the cap into an
+                    // explicit working budget: flash 115K / pro 148K (see the
+                    // compaction block below).
                     "limit": {
                         "context": 1000000,
                         "input": 131072,
                         "output": 384000
-                    },
-                    "cost": {
-                        "input": 0.22,
-                        "output": 0.66,
-                        "cache_read": 0.007,
-                        "cache_write": 0.22
-                    },
-                    "options": {
-                        "temperature": 0,
-                        "thinking": { "type": "disabled" }
                     }
                 },
                 "deepseek-v4-pro": {
+                    "cost": [
+                        { "input": 0.66, "output": 1.98, "cache": { "read": 0.022, "write": 0.66 } }
+                    ],
                     "limit": {
                         "context": 1000000,
                         "input": 163840,
                         "output": 384000
-                    },
-                    "cost": {
-                        "input": 0.66,
-                        "output": 1.98,
-                        "cache_read": 0.022,
-                        "cache_write": 0.66
                     }
                 }
             }
@@ -163,15 +150,14 @@
             "description": "Official DeepSeek model config guidance: thinking toggle, temperature, prompt-caching, context-window handling, OpenAI-compatible API setup"
         }
     },
-    // Built-in utility agents (no .md file). Flash-first policy: build/plan/
-    // title/summary/compaction all run on flash — `general` too: it is the
+    // Built-in agents (no .md file). Flash-first policy: build/plan/title/
+    // summary/compaction all run on flash — `general` too: it is the
     // superpowers generic Task dispatch target and, without a model, follows
     // the session model (pro by default). Thinking is controlled at the
-    // provider layer (flash = disabled, pro = default), so no per-agent variant
-    // or temperature here. Pro stays the global default; heavy work escalates
-    // to deep-worker (pro). `fallback` is not a real schema key — omitted;
-    // OpenCode falls back small_model -> model internally.
-    "agent": {
+    // provider layer (flash = disabled, pro = default), so no per-agent
+    // variant or temperature here. Pro stays the global default; heavy work
+    // escalates to deep-worker (pro).
+    "agents": {
         "build": { "model": "deepseek/deepseek-flash" },
         "general": { "model": "deepseek/deepseek-flash" },
         "plan": { "model": "deepseek/deepseek-flash" },
@@ -189,10 +175,10 @@
         "max_bytes": 20480
     },
     // Built-in context compaction is the ONLY compression layer (no DCP): it
-    // runs the `compaction` agent (flash — see the agent block) over the head
-    // of the session, keeps a verbatim tail, and prunes old tool output.
+    // runs the `compaction` agent (flash — see the agents block) over the head
+    // of the session and keeps a verbatim tail.
     //
-    // When it fires: session tokens >= limit.input - reserved.
+    // When it fires: session tokens >= limit.input - buffer.
     //     flash: 131072 - 16000 = 115,072
     //     pro:   163840 - 16000 = 147,840
     // Both windows sit far below the 1M hard limit on purpose: every request
@@ -201,29 +187,20 @@
     // ~8x more on cache reads too. Compacting early is the cheapest lever
     // available in a pure-config setup.
     //
-    // `reserved` is the overflow buffer during compaction — it is read ONLY
-    // when the model declares `limit.input` (see the provider block).
+    // `keep.tokens` is the verbatim tail kept across a compaction; everything
+    // older is replaced by the summary the compaction agent writes. `buffer`
+    // is the overflow headroom during compaction. The v1 spellings (`reserved`,
+    // `preserve_recent_tokens`, `prune`, `tail_turns`) are not read by v2 and
+    // were removed.
     "compaction": {
         "auto": true,
-        // Clears the output of old tool calls (keeps the newest ~40K tokens of
-        // tool output, protects `skill` output, and only acts when it can free
-        // >20K tokens). Runs per request, forked off the request path. Classic-only: v2 drops `prune`.
-        "prune": true,
-        "reserved": 16000,
-        // Verbatim tail kept across a compaction: up to 8 recent user turns
-        // capped by a 12K-token budget (the budget usually binds first).
-        // Everything older is replaced by the summary the compaction agent
-        // writes, so this number is the "working memory" left after a squeeze.
-        // Desktop v2 drops `tail_turns` and maps `reserved`→`buffer`,
-        // `preserve_recent_tokens`→`keep.tokens`.
-        "tail_turns": 8,
-        "preserve_recent_tokens": 12000
+        "keep": { "tokens": 12000 },
+        "buffer": 16000
     },
     // Bound image token cost for the multimodal flash model. DeepSeek downscales
     // images to ~800x800 internally, so oversized uploads only waste base64
     // bytes. Resize anything above 1600px / 2MB before it reaches the API.
-    // Classic spelling is singular `attachment`; desktop v2 reads its own `media` and up-converts it.
-    "attachment": {
+    "media": {
         "image": {
             "auto_resize": true,
             "max_width": 1600,
@@ -231,7 +208,7 @@
             "max_base64_bytes": 2097152
         }
     },
-    "command": {
+    "commands": {
         "deep": {
             "description": "Route to deep-worker for heavy implementation",
             "agent": "deep-worker",

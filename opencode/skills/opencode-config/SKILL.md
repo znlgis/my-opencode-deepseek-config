@@ -1,9 +1,9 @@
 ---
 name: opencode-config
-description: Author and modify OpenCode config in this repository — opencode.json, agents, skills, commands, permissions. Use when editing opencode.json, adding or changing an agent, writing a skill or command, adjusting model routing/permissions, or the task mentions "opencode config", "agent prompt", "SKILL.md", "command", or "permission".
+description: Author and modify this repository's OpenCode v2 config — opencode.jsonc, agents, skills, commands, permissions. Use when editing opencode.jsonc, adding or changing an agent, writing a skill or command, adjusting model routing/permissions, or the task mentions "opencode config", "agent prompt", "SKILL.md", "command", or "permission".
 ---
 
-# OpenCode Config Authoring
+# OpenCode Config Authoring (v2)
 For generic opencode config shapes, see the built-in `customize-opencode` skill;
 this file only covers this repository's local conventions.
 
@@ -17,49 +17,51 @@ this file only covers this repository's local conventions.
 
 ## Hard constraints
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input.
-- Write the classic singular keys (`plugin`, `snapshot`, `attachment`, `permission`); desktop v2 up-converts them. Do not switch to v2-native spellings (`plugins`, `snapshots`, `media`, `permissions`) — 1.18.4 silently ignores those.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on 2.0.24). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
 
-## Runtime compatibility: desktop v2 (primary) + 1.18.4 (floor)
-Two generations read this repo's config: **desktop v2** — the app's bundled
-`opencode-cli.exe` (2.0.x), used daily — and the **1.18.4 CLI**, the minimum
-supported version (classic line). Write the classic spellings; v2's compat
-layer up-converts them (`agent`→`agents`, `command`→`commands`,
-`plugin`→`plugins`, `attachment`→`media`, `snapshot`→`snapshots`,
-`permission`→an ordered `permissions` list, `small_model`→the `title` agent's
-model, `skills.paths`/`urls`→a flat array). Two keys diverge (see the table):
-`subagent_depth` needs both spellings written, and `compaction` maps
-`reserved`/`preserve_recent_tokens` while dropping `prune`/`tail_turns`. Agent
-frontmatter `options` (thinking, `reasoningEffort`) survives on v2 — it lands
-in the request body. Verify against **both** binaries (`debug config` on
-each); unknown keys are silently dropped by both, so a config can look valid
-while a key does nothing.
+## Target runtime: desktop v2 (CLI 2.0.24 measured)
+v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
+or — if the file contains ANY v1 key — the official **V1→V2 migration**
+(`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
+`plugin`, `autoshare`, `disabled_providers`, `enabled_providers`, `small_model`,
+`mode`, `agent`, `provider`, `permission`, `tools`, `attachment`, `layout`).
+This repo standardizes on the native path: keep every v1 key out of the file,
+so the loader never takes the migration branch.
 
-| Concern | 1.18.4 (floor) | desktop v2 (primary) |
+### Native key map
+| Concern | v2-native shape | Notes |
 | --- | --- | --- |
-| Key spellings | classic: `agent`, `command`, `plugin`, `snapshot`, `permission`, `attachment` | v2-native: `agents`, `commands`, `plugins`, `snapshots`, `permissions`, `media` (the compat layer converts) |
-| `small_model` | present | expanded into the `title` agent's `model` |
-| `subagent_depth` | top-level, read as-is | only `experimental.subagent_depth`; top-level is dropped — write both |
-| `skills` | object (`paths`/`urls`) | flat array of path/URL strings |
-| `compaction` | `prune`, `tail_turns`, `preserve_recent_tokens`, `reserved` | `keep.tokens` (from `preserve_recent_tokens`), `buffer` (from `reserved`); `prune`/`tail_turns` dropped |
-| Model `cost` | flat `cache_read` / `cache_write` | nested `cache: { read, write }` |
-| Agent `options` (thinking, `reasoningEffort`) | supported | supported — lands in the agent's request body |
+| plugins | `plugins: [string \| {package, options}]` | string form in use |
+| providers | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = request passthrough (temperature, thinking); `capabilities` = `{tools, input[], output[]}` (image input lives here); `cost` = ARRAY of `{input, output, cache: {read, write}}`; `limit.input` drives compaction |
+| agents / commands | `agents`, `commands` | inline overrides; file-based agents stay in `agents/*.md` |
+| permissions | `permissions: [{action, resource, effect}]`, ordered, last-match-wins | v2 action names: `shell` (not `bash`), `subagent` (not `task`); `write`/`patch` normalize to `edit` |
+| media | `media.image.{auto_resize, max_width, max_height, max_base64_bytes}` | former `attachment` |
+| compaction | `{auto: bool, keep: {tokens}, buffer: int}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1-only — do not add |
+| subagent_depth | `experimental.subagent_depth` | top-level `subagent_depth` is dropped by v2 — never write it |
+| skills | flat `string[]` of paths/URLs | not used here (config-dir skills are auto-discovered) |
+| small_model | — | v2 expands it into the `title` agent; this repo pins `title` explicitly instead |
 
-### Two silent-failure traps (both bit this repo)
-1. **YAML strictness (v2 only).** v2's frontmatter parser is strict YAML; an
-   unquoted `: ` in `description` aborts the parse, and v2 falls back to
-   "whole file as system prompt + default agent" (no model, no steps, no
-   permissions, `mode: primary`). 1.18.4's parser tolerates it, so the break
-   is invisible on the classic line. Quote any description containing `: `.
-2. **Permission order (both lines).** Resolution is last-match-wins over the
-   merged list [v2 defaults → global config → agent]: put the catch-all `*`
-   FIRST and every specific rule after it. A trailing catch-all silently
-   shadows all rules above it.
+`$schema` stays `https://opencode.ai/config.json` — the app itself writes that
+URL even though the published schema only documents the v1 keys (observed
+2026-10-07).
+
+### Silent-failure traps
+1. **Unknown keys are silently dropped.** Config and frontmatter loaders both
+   drop keys they do not recognize — a file can look valid while a key does
+   nothing. Every change gets verified against the live service (see below).
+2. **YAML strictness (frontmatter).** v2's frontmatter parser is strict YAML;
+   an unquoted `: ` in `description` aborts the parse, and the agent silently
+   degrades to "whole file as system prompt + defaults" (no model, no steps,
+   no permissions). Quote any description containing `: `.
+3. **Permission order (last match wins).** Over the merged list
+   [v2 defaults → global config → agent], put the catch-all `*` FIRST and
+   every specific rule after it. A trailing catch-all silently shadows all
+   rules above it.
 
 ## Config key shapes (authoritative)
-- **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it. String shorthand (`"alias": "../docs"`) allowed.
-- **skills.paths** — extra skill dirs: `"skills": { "paths": ["../shared-skills"] }`; supports `~/` and relative paths; `skills.urls` pulls remote skills. (classic shape; desktop v2 up-converts it to a flat string array.)
-- **agent (inline)** — override built-ins or define agents inline in `opencode.jsonc`: `"agent": { "build": { "model": "…", "mode": "subagent" } }`. Inline keys override file-based `agents/<name>.md`.
-- **compaction** — `{ "auto": bool, "prune": bool, "tail_turns": number, "preserve_recent_tokens": number, "reserved": number }` (defaults: `auto` true, `prune` false). `tail_turns` caps how many recent user turns (plus their assistant/tool responses) stay verbatim; `preserve_recent_tokens` caps the verbatim token budget for recent turns; `reserved` is the token buffer kept to avoid overflow during compaction. Desktop v2 maps `reserved`→`buffer` and `preserve_recent_tokens`→`keep.tokens`, and drops `prune`/`tail_turns`.
+- **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it.
+- **agents (inline)** — `"agents": { "build": { "model": "…" } }`; inline keys override file-based `agents/<name>.md`.
+- **compaction** — `{ "auto": bool, "keep": { "tokens": n }, "buffer": n }`. `keep.tokens` is the verbatim tail kept across a compaction; `buffer` is the overflow headroom. Do NOT write the v1 names (`reserved`, `preserve_recent_tokens`, `prune`, `tail_turns`).
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)
@@ -74,6 +76,11 @@ while a key does nothing.
 | `hidden` | optional: hide from @-menu |
 | `permission` | optional tool locks; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) must set `edit: deny` + read-only bash whitelist |
 
+- Frontmatter deliberately keeps the v1-style `permission` map and `options`
+  (thinking, `reasoningEffort`) — v2 accepts both (they migrate onto its
+  `permissions` list / request body) and all 12 agents are verified with them.
+  Do not migrate single files to native frontmatter piecemeal; if adopted, do
+  all agents in one verified pass.
 - Each prompt references `AGENTS.md` (not restating it) plus a short Model Leverage (pro) / Model Awareness (flash) note.
 
 ## Skill file format (`skills/<name>/SKILL.md`)
@@ -81,9 +88,9 @@ while a key does nothing.
 - Frontmatter requires `name` (kebab-case, matches folder) and `description` stating **what** and **when**, front-loading trigger keywords.
 - Names must be unique across all sources (this repo + `superpowers`); check collisions before naming.
 
-## Commands (`opencode.json` → `command`)
+## Commands (`opencode.jsonc` → `commands`)
 ```jsonc
-"command": {
+"commands": {
   "name": {
     "description": "Shown in the command menu",
     "agent": "<agent name>",
@@ -97,12 +104,17 @@ while a key does nothing.
   "template": "Current status:\n!`git status --short`\nNow stage and commit."
   ```
 
-## Permissions (`opencode.json` → `permission`)
+## Permissions (`opencode.jsonc` → `permissions`)
+- Root config writes the native ordered list; agent frontmatter keeps the map form (see above). Both resolve with last-match-wins semantics.
 - Default-allow, deny the dangerous: `deny` `.env*` reads (except `.env.example`); `ask` on destructive bash (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
-- **Order: last match wins.** Put the catch-all `*` first; every specific rule after it overrides. Applies to the JSONC blocks and to agent `permission` blocks (v2 normalizes everything into one ordered rule list per action). v2 action names: `bash`→`shell`, `task`→`subagent`.
+
+## Verification (desktop v2)
+- `opencode-cli.exe debug config` / `debug agents` / `plugin list` are **service-bound**: they read the running desktop service, NOT the CLI process env — a temp-dir experiment won't show up there.
+- Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → `opencode-cli.exe reload` → re-run `debug config`/`debug agents` and compare. Unknown keys are dropped silently, so a diff is the only honest evidence.
+- The 1.18.x line is out of scope; do not verify against it.
 
 ## Before you finish
 1. Re-read every changed file end-to-end.
-2. Run `node scripts/validate-jsonc.js` to validate JSONC syntax (strips comments + trailing commas, parses as JSON).
+2. Run `node scripts/validate-jsonc.js`.
 3. Keep `README.md` in sync — agent, skills, and command tables, repo-structure tree.
-4. Confirm no third model slipped in and no new dependency/plugin without justification.
+4. Confirm no third model and no v1 key (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`) slipped into `opencode.jsonc`.
