@@ -17,9 +17,9 @@ this file only covers this repository's local conventions.
 
 ## Hard constraints
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on 2.0.24). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on 2.0.27). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
 
-## Target runtime: desktop v2 (CLI 2.0.24 measured)
+## Target runtime: desktop v2 (CLI 2.0.27 measured)
 v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
 or — if the file contains ANY v1 key — the official **V1→V2 migration**
 (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
@@ -57,6 +57,17 @@ URL even though the published schema only documents the v1 keys (observed
    [v2 defaults → global config → agent], put the catch-all `*` FIRST and
    every specific rule after it. A trailing catch-all silently shadows all
    rules above it.
+4. **Inline `agents.<id>.permissions` are appended, never merged.** The config
+   plugin pushes them onto the agent's list *after* the built-in agent rules
+   and *after* the global `permissions` list, so they win — and a built-in
+   lock-down can be silently defeated by the global list sitting under it
+   (shipped bug: `title`/`summary` push `*:* deny`, but the global
+   `skill:* allow` below re-opened the always-on skill roster). Re-assert any
+   built-in deny you actually depend on.
+5. **Skill frontmatter can take a skill off the roster.** `disable-model-invocation: true`
+   (+ `metadata: { "opencode/autoinvoke": false }`) keeps the skill loadable by
+   ID but drops it from `<available_skills>` — the way to stop paying a skill's
+   name+description on every request while a command template still calls it.
 
 ## Config key shapes (authoritative)
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it.
@@ -110,7 +121,12 @@ URL even though the published schema only documents the v1 keys (observed
 
 ## Verification (desktop v2)
 - `opencode-cli.exe debug config` / `debug agents` / `plugin list` are **service-bound**: they read the running desktop service, NOT the CLI process env — a temp-dir experiment won't show up there.
-- Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → `opencode-cli.exe reload` → re-run `debug config`/`debug agents` and compare. Unknown keys are dropped silently, so a diff is the only honest evidence.
+- `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
+- Capture both as UTF-8 or the multi-byte content corrupts the JSON:
+  `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
+- There is **no `reload` subcommand** in 2.0.27. The config watcher reloads on file change by itself (verified live); only force it with `opencode-cli.exe service restart`.
+- Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
+- `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
 - The 1.18.x line is out of scope; do not verify against it.
 
 ## Before you finish
