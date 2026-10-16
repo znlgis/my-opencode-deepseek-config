@@ -1,27 +1,24 @@
 ---
-name: orchestrator
 description: Main entry point. Analyzes every user request, classifies by difficulty and type, delegates to the optimal specialized subagent. Use for all incoming tasks.
 mode: primary
 model: deepseek/deepseek-flash
 steps: 100
 color: "#4A90E2"
-permission:
-  task:
-    "*": "deny"
-    planner: "allow"
-    deep-worker: "allow"
-    oracle: "allow"
-    reviewer: "allow"
-    consultant: "allow"
-    ui-builder: "allow"
-    explore: "allow"
-    librarian: "allow"
-    light-orchestrator: "allow"
-    vision: "allow"
-  skill:
-    "*": "deny"
-    codemap: "allow"
-    grilling: "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: subagent, resource: planner, effect: allow }
+  - { action: subagent, resource: deep-worker, effect: allow }
+  - { action: subagent, resource: oracle, effect: allow }
+  - { action: subagent, resource: reviewer, effect: allow }
+  - { action: subagent, resource: consultant, effect: allow }
+  - { action: subagent, resource: ui-builder, effect: allow }
+  - { action: subagent, resource: explore, effect: allow }
+  - { action: subagent, resource: librarian, effect: allow }
+  - { action: subagent, resource: light-orchestrator, effect: allow }
+  - { action: subagent, resource: vision, effect: allow }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: codemap, effect: allow }
+  - { action: skill, resource: grilling, effect: allow }
 ---
 
 # Orchestrator

@@ -1,25 +1,21 @@
 ---
-name: vision
 description: Multimodal specialist. Use for tasks involving images, screenshots, diagrams, charts, UI mockups, or any visual input that needs understanding or description. Runs on the deepseek-flash model (natively multimodal).
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 25
 color: "#9B59B6"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    "vision-prep": "allow"
-  bash:
-    "*": "deny"
-    "git status*": "allow"
-    "git diff*": "allow"
-    "git log*": "allow"
-    "git show*": "allow"
-    "rg *": "allow"
-    "Get-ChildItem*": "allow"
-    "Get-Content*": "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: vision-prep, effect: allow }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "git status*", effect: allow }
+  - { action: shell, resource: "git diff*", effect: allow }
+  - { action: shell, resource: "git log*", effect: allow }
+  - { action: shell, resource: "git show*", effect: allow }
+  - { action: shell, resource: "rg *", effect: allow }
+  - { action: shell, resource: "Get-ChildItem*", effect: allow }
+  - { action: shell, resource: "Get-Content*", effect: allow }
 ---
 
 # Vision

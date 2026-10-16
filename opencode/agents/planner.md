@@ -1,22 +1,15 @@
 ---
-name: planner
 description: Strategic planner. Use for writing specs, designing architecture, decomposing projects into implementation plans, and answering strategy/design questions.
 mode: subagent
-model: deepseek/deepseek-flash
-options:
-  thinking:
-    type: enabled
-  reasoningEffort: low
+model: deepseek/deepseek-flash#low
 steps: 60
 color: "#9B59B6"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    spec-workflow: "allow"
-    codebase-design: "allow"
-    writing-plans: "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: spec-workflow, effect: allow }
+  - { action: skill, resource: codebase-design, effect: allow }
+  - { action: skill, resource: writing-plans, effect: allow }
 ---
 
 # Planner

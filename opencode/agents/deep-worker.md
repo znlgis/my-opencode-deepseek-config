@@ -1,29 +1,26 @@
 ---
-name: deep-worker
 description: Heavy-lift implementer. Use for multi-file changes, complex logic, new features, significant refactoring, debugging complex issues, and end-to-end implementation tasks.
 mode: subagent
 model: deepseek/deepseek-v4-pro
 steps: 100
 color: "#E24A4A"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    remove-deadcode: "allow"
-    spec-workflow: "allow"
-    git-release: "allow"
-    to-tickets: "allow"
-    triage: "allow"
-    git-master: "allow"
-    resolving-merge-conflicts: "allow"
-    opencode-config: "allow"
-    writing-for-agents: "allow"
-    diagnosing-bugs: "allow"
-    codebase-design: "allow"
-    domain-modeling: "allow"
-    test-driven-development: "allow"
-    verification-before-completion: "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: remove-deadcode, effect: allow }
+  - { action: skill, resource: spec-workflow, effect: allow }
+  - { action: skill, resource: git-release, effect: allow }
+  - { action: skill, resource: to-tickets, effect: allow }
+  - { action: skill, resource: triage, effect: allow }
+  - { action: skill, resource: git-master, effect: allow }
+  - { action: skill, resource: resolving-merge-conflicts, effect: allow }
+  - { action: skill, resource: opencode-config, effect: allow }
+  - { action: skill, resource: writing-for-agents, effect: allow }
+  - { action: skill, resource: diagnosing-bugs, effect: allow }
+  - { action: skill, resource: codebase-design, effect: allow }
+  - { action: skill, resource: domain-modeling, effect: allow }
+  - { action: skill, resource: test-driven-development, effect: allow }
+  - { action: skill, resource: verification-before-completion, effect: allow }
 ---
 
 # Deep Worker

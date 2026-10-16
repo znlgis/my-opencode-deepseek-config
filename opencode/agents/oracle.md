@@ -1,31 +1,28 @@
 ---
-name: oracle
 description: Deep code analyst and debugger. Use for root cause analysis, understanding complex code, reading and interpreting diffs, tracing bugs, and deep comprehension tasks. Avoid for simple lookups or first-attempt fixes.
 mode: subagent
 model: deepseek/deepseek-v4-pro
 steps: 40
 color: "#F39C12"
-permission:
-  edit: "deny"
-  task: "deny"
-  bash:
-    "*": "deny"
-    "git status*": "allow"
-    "git diff*": "allow"
-    "git log*": "allow"
-    "git show*": "allow"
-    "git blame*": "allow"
-    "git grep*": "allow"
-    "rg *": "allow"
-    "gh pr view*": "allow"
-    "gh pr diff*": "allow"
-    "gh issue view*": "allow"
-    "gh api*": "allow"
-  skill:
-    "*": "deny"
-    reflect: "allow"
-    simplify: "allow"
-    diagnosing-bugs: "allow"
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "git status*", effect: allow }
+  - { action: shell, resource: "git diff*", effect: allow }
+  - { action: shell, resource: "git log*", effect: allow }
+  - { action: shell, resource: "git show*", effect: allow }
+  - { action: shell, resource: "git blame*", effect: allow }
+  - { action: shell, resource: "git grep*", effect: allow }
+  - { action: shell, resource: "rg *", effect: allow }
+  - { action: shell, resource: "gh pr view*", effect: allow }
+  - { action: shell, resource: "gh pr diff*", effect: allow }
+  - { action: shell, resource: "gh issue view*", effect: allow }
+  - { action: shell, resource: "gh api*", effect: allow }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: reflect, effect: allow }
+  - { action: skill, resource: simplify, effect: allow }
+  - { action: skill, resource: diagnosing-bugs, effect: allow }
 ---
 
 # Oracle

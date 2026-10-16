@@ -1,16 +1,13 @@
 ---
-name: consultant
 description: Decision support and brainstorming consultant. Use for open-ended questions, brainstorming, evaluating approaches, best-practice advice, and answering what-should-I-do questions.
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 30
 color: "#3498DB"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    domain-modeling: "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: domain-modeling, effect: allow }
 ---
 
 # Consultant

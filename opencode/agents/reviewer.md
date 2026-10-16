@@ -1,31 +1,28 @@
 ---
-name: reviewer
 description: Code reviewer (escalation, not a default step). Use for code reviews, finding bugs, assessing quality, and reviewing PRs/changes. Never modifies code.
 mode: subagent
 model: deepseek/deepseek-v4-pro
 steps: 40
 color: "#27AE60"
-permission:
-  edit: "deny"
-  task: "deny"
-  bash:
-    "*": "deny"
-    "git status*": "allow"
-    "git diff*": "allow"
-    "git log*": "allow"
-    "git show*": "allow"
-    "git blame*": "allow"
-    "git grep*": "allow"
-    "rg *": "allow"
-    "gh pr view*": "allow"
-    "gh pr diff*": "allow"
-    "gh issue view*": "allow"
-    "gh api*": "allow"
-  skill:
-    "*": "deny"
-    code-review: "allow"
-    security-review: "allow"
-    gh-cli: "allow"
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "git status*", effect: allow }
+  - { action: shell, resource: "git diff*", effect: allow }
+  - { action: shell, resource: "git log*", effect: allow }
+  - { action: shell, resource: "git show*", effect: allow }
+  - { action: shell, resource: "git blame*", effect: allow }
+  - { action: shell, resource: "git grep*", effect: allow }
+  - { action: shell, resource: "rg *", effect: allow }
+  - { action: shell, resource: "gh pr view*", effect: allow }
+  - { action: shell, resource: "gh pr diff*", effect: allow }
+  - { action: shell, resource: "gh issue view*", effect: allow }
+  - { action: shell, resource: "gh api*", effect: allow }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: code-review, effect: allow }
+  - { action: skill, resource: security-review, effect: allow }
+  - { action: skill, resource: gh-cli, effect: allow }
 ---
 
 # Reviewer

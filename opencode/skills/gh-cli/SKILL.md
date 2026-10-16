@@ -369,3 +369,29 @@ gh issue list --state open --no-assignee --no-milestone -L 30 \
 `gh issue list` defaults to open issues and `-L 30`; always pass `-L` explicitly
 when scripting so the result count is deterministic. Use `--json` + a field list
 for parsing — never scrape the human-readable table.
+
+### Inspect a release
+
+```bash
+# Newest releases first — cheap overview, no per-tag round-trip
+gh release list -L 10
+
+# The latest release (no tag argument reads "latest"), machine-readable
+gh release view --json tagName,name,isLatest,publishedAt,url,assets
+
+# A specific tag
+gh release view v1.2.0 --json tagName,url,assets
+
+# Release notes only
+gh release view v1.2.0 --json body --jq .body
+
+# Asset names and download URLs
+gh release view v1.2.0 --json assets --jq '.assets[] | "\(.name)\t\(.url)"'
+```
+
+`gh release view` without a tag reads the latest release; on a repo with no
+releases it exits non-zero with "release not found" — read that as "no
+release", not as an auth failure. `--json body` is the stored notes; to preview
+notes for a tag that has no release yet, use
+`gh api repos/{owner}/{repo}/releases/generate-notes -f tag_name=v1.2.0`
+(POST; it previews and does not create anything).

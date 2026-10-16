@@ -70,34 +70,66 @@
     // and vision variants are now one natively-multimodal model, so it carries
     // the `capabilities` block (image input). Without it OpenCode treats the
     // model as text-only and rejects read_image calls.
-    // `settings.thinking` / `settings.temperature` are provider passthroughs,
-    // not native schema fields: OpenCode forwards them verbatim to the
-    // DeepSeek API (thinking toggle — {"type":"enabled"|"disabled"}).
-    // `reasoning_effort` (camelCase `reasoningEffort`) is a REQUEST-LEVEL
-    // thinking-strength control (low/high/max), NOT a model id. OpenCode does
-    // not auto-generate reasoning-effort variants for DeepSeek, so it is set
-    // per-AGENT via frontmatter `options`, never at the model level — that
-    // keeps the 2-model matrix (pro / flash) intact.
+    // Two distinct mechanisms, deliberately kept apart:
+    //   toggle — `{"thinking":{"type":"enabled"|"disabled"}}`, a BODY field;
+    //   effort — `{"reasoning_effort":"low"|"high"|"max"}`, driven from the
+    //            `settings.reasoningEffort` provider setting (camelCase in
+    //            config, snake_case on the wire). Neither is a native schema
+    //            field; both are DeepSeek API request parameters.
+    // Effort is expressed as a model VARIANT rather than a per-agent option:
+    // an agent cannot carry provider settings (`request` overlays only
+    // `headers`/`body`), and OpenCode's own DeepSeek mapping resolves effort
+    // through `settings`. A variant is a mode of flash, not a third model, so
+    // the 2-model matrix (pro / flash) stays intact.
     "providers": {
         "deepseek": {
             "models": {
                 "deepseek-flash": {
-                    "settings": {
-                        "temperature": 0,
-                        "thinking": { "type": "disabled" }
+                    // The thinking toggle and temperature are REQUEST BODY
+                    // fields, not provider options. `settings` reaches the
+                    // provider package as options, and the openai-chat protocol
+                    // implements no `thinking` or `temperature` option, so both
+                    // keys were inert while they sat under `settings`: flash ran
+                    // with thinking at its default (ON) and paid reasoning
+                    // tokens on every step of every flash task. `body` is
+                    // provably merged into the serialized request, which is also
+                    // where opencode's own DeepSeek mapping writes the toggle
+                    // (core/variant.ts — the `deepseekChat` protocol emits
+                    // `body: {thinking: {type: "disabled"}}` for a non-thinking
+                    // run).
+                    "body": {
+                        "thinking": { "type": "disabled" },
+                        "temperature": 0
                     },
                     "capabilities": {
                         "tools": true,
                         "input": ["text", "image"],
                         "output": ["text"]
                     },
+                    // The mid tier (planner, light-orchestrator) wants thinking
+                    // ON at low effort — the one combination flash does not get
+                    // by default. Effort is a provider setting, not a body key:
+                    // `settings.reasoningEffort` is what the aisdk layer
+                    // forwards as the API's `reasoning_effort` (core/aisdk.ts
+                    // reads it; ai/protocols/openai-chat.ts maps it into the
+                    // body). Agents select this variant with
+                    // `model: deepseek/deepseek-flash#low`.
+                    "variants": [
+                        {
+                            "id": "low",
+                            "settings": { "reasoningEffort": "low" },
+                            "body": { "thinking": { "type": "enabled" } }
+                        }
+                    ],
                     // `cost` is USD per 1M tokens — official off-peak rates,
-                    // verified 2026-10-07. Peak hours (UTC 01-04 & 06-10
-                    // Mon-Fri = Beijing 09-12 & 14-18) charge double, so this
-                    // table under-reports peak-time spend by ~2x; it drives
-                    // OpenCode's own cost display only. DeepSeek publishes no
-                    // standalone cache-write price — writes bill at the
-                    // cache-miss input rate, so `cache.write` mirrors input.
+                    // re-verified against the pricing page 2026-10-16. Peak
+                    // hours (UTC 01-04 & 06-10 Mon-Fri, excluding Chinese
+                    // public holidays = Beijing 09-12 & 14-18) charge double,
+                    // so this table under-reports peak-time spend by ~2x; it
+                    // drives OpenCode's own cost display only. DeepSeek
+                    // publishes no standalone cache-write price — writes bill
+                    // at the cache-miss input rate, so `cache.write` mirrors
+                    // input. Off-peak is exactly half of peak.
                     "cost": [
                         { "input": 0.15, "output": 0.60, "cache": { "read": 0.003, "write": 0.15 } }
                     ],
@@ -155,10 +187,16 @@
     // built-in rules and after the global `permissions` list above, so under
     // last-match-wins they always win. The three hidden one-shot agents never
     // load a skill, and denying the skill action strips the whole
-    // `<available_skills>` roster (39 entries, ~14.1 KB ≈ 3.6K tokens) out of
-    // every title / summary / compaction request. This also repairs a real
-    // defect: title and summary ship a built-in `*:* deny` lock, but the
-    // global `skill:* allow` below it was silently re-opening the roster.
+    // `<available_skills>` roster (30 entries, ~11.8 KB ≈ 3.3K tokens,
+    // measured 2026-10-16) out of every title / summary / compaction request.
+    // This also repairs a real defect: title and summary ship a built-in
+    // `*:* deny` lock, but the global `skill:* allow` below it was silently
+    // re-opening the roster.
+    //
+    // Skill permissions are the ONLY roster filter that scales: core builds
+    // the roster from the skills a ruleset does not deny
+    // (core/skill/instructions.ts), so each agent's `skill` allowlist in
+    // `agents/*.md` sets exactly what that agent sees on every request.
     "agents": {
         "build": { "model": "deepseek/deepseek-flash" },
         "general": { "model": "deepseek/deepseek-flash" },

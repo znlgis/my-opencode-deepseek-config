@@ -1,44 +1,41 @@
 ---
-name: solo
 description: Single-model inline executor. Zero delegation — no subagents, no background helpers; all analysis, planning, implementation, and verification run inline on the current session's model. Use when the whole task must run on a single model.
 mode: primary
 steps: 100
 color: "#607D8B"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    "brainstorming": "allow"
-    "systematic-debugging": "allow"
-    "test-driven-development": "allow"
-    "verification-before-completion": "allow"
-    "writing-plans": "allow"
-    "executing-plans": "allow"
-    "code-review": "allow"
-    "security-review": "allow"
-    "diagnosing-bugs": "allow"
-    "codebase-design": "allow"
-    "domain-modeling": "allow"
-    "remove-deadcode": "allow"
-    "simplify": "allow"
-    "git-master": "allow"
-    "git-release": "allow"
-    "resolving-merge-conflicts": "allow"
-    "spec-workflow": "allow"
-    "to-tickets": "allow"
-    "triage": "allow"
-    "gh-cli": "allow"
-    "opencode-config": "allow"
-    "writing-for-agents": "allow"
-    "writing-skills": "allow"
-    "verify-with-docs": "allow"
-    "codemap": "allow"
-    "grilling": "allow"
-    "office-docs": "allow"
-    "handoff": "allow"
-    "reflect": "allow"
-    "vision-prep": "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: brainstorming, effect: allow }
+  - { action: skill, resource: systematic-debugging, effect: allow }
+  - { action: skill, resource: test-driven-development, effect: allow }
+  - { action: skill, resource: verification-before-completion, effect: allow }
+  - { action: skill, resource: writing-plans, effect: allow }
+  - { action: skill, resource: executing-plans, effect: allow }
+  - { action: skill, resource: code-review, effect: allow }
+  - { action: skill, resource: security-review, effect: allow }
+  - { action: skill, resource: diagnosing-bugs, effect: allow }
+  - { action: skill, resource: codebase-design, effect: allow }
+  - { action: skill, resource: domain-modeling, effect: allow }
+  - { action: skill, resource: remove-deadcode, effect: allow }
+  - { action: skill, resource: simplify, effect: allow }
+  - { action: skill, resource: git-master, effect: allow }
+  - { action: skill, resource: git-release, effect: allow }
+  - { action: skill, resource: resolving-merge-conflicts, effect: allow }
+  - { action: skill, resource: spec-workflow, effect: allow }
+  - { action: skill, resource: to-tickets, effect: allow }
+  - { action: skill, resource: triage, effect: allow }
+  - { action: skill, resource: gh-cli, effect: allow }
+  - { action: skill, resource: opencode-config, effect: allow }
+  - { action: skill, resource: writing-for-agents, effect: allow }
+  - { action: skill, resource: writing-skills, effect: allow }
+  - { action: skill, resource: verify-with-docs, effect: allow }
+  - { action: skill, resource: codemap, effect: allow }
+  - { action: skill, resource: grilling, effect: allow }
+  - { action: skill, resource: office-docs, effect: allow }
+  - { action: skill, resource: handoff, effect: allow }
+  - { action: skill, resource: reflect, effect: allow }
+  - { action: skill, resource: vision-prep, effect: allow }
 ---
 
 # Solo

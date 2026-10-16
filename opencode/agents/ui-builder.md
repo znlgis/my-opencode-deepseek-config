@@ -1,16 +1,13 @@
 ---
-name: ui-builder
 description: Frontend and UI specialist. Use for building UI components, styling, layouts, CSS/HTML, frontend frameworks, visual design, and any user-facing interface work.
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 60
 color: "#E91E63"
-permission:
-  task:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    "codebase-design": "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: codebase-design, effect: allow }
 ---
 
 # UI Builder

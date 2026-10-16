@@ -4,8 +4,12 @@ description: Author and modify this repository's OpenCode v2 config — opencode
 ---
 
 # OpenCode Config Authoring (v2)
-For generic opencode config shapes, see the built-in `customize-opencode` skill;
-this file only covers this repository's local conventions.
+For the authoritative v2 shapes, read the schema in the local docs repo rather
+than reconstructing them from memory — `packages/schema/src/config*.ts` is the
+loader's own contract:
+`C:\Users\Administrator\.local\share\opencode\repos\github.com\anomalyco\opencode@dev`.
+This file only covers this repository's local conventions plus the traps already
+paid for.
 
 ## Repository layout
 | Path | Role |
@@ -16,10 +20,11 @@ this file only covers this repository's local conventions.
 | `skills/<name>/SKILL.md` | On-demand skills, auto-discovered from the config dir |
 
 ## Hard constraints
-- Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on 2.0.27). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
+- Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input. A model **variant** (`deepseek/deepseek-flash#low`) is a mode of an allowed model, not a third model.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.0.30**). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
+- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.0.30**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
-## Target runtime: desktop v2 (CLI 2.0.27 measured)
+## Target runtime: desktop v2 (CLI 2.0.30 measured)
 v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
 or — if the file contains ANY v1 key — the official **V1→V2 migration**
 (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
@@ -32,7 +37,7 @@ so the loader never takes the migration branch.
 | Concern | v2-native shape | Notes |
 | --- | --- | --- |
 | plugins | `plugins: [string \| {package, options}]` | string form in use |
-| providers | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = request passthrough (temperature, thinking); `capabilities` = `{tools, input[], output[]}` (image input lives here); `cost` = ARRAY of `{input, output, cache: {read, write}}`; `limit.input` drives compaction |
+| providers | `providers.<id>.models.<mid>.{settings, body, capabilities, cost, limit, variants}` | `settings` = **provider options** only (`timeout`, `chunkTimeout`, `compaction`, `encoding`, and provider-specific ones like `reasoningEffort`) — it is NOT a raw request body and NOT a place for DeepSeek's `thinking`/`temperature`; use `body` for those; `capabilities` = `{tools, input[], output[]}` (image input lives here); `cost` = ARRAY of `{input, output, cache: {read, write}}`; `limit.input` drives compaction; `variants` = `[{id, settings?, headers?, body?}]` selected as `model: <provider>/<model>#<id>` |
 | agents / commands | `agents`, `commands` | inline overrides; file-based agents stay in `agents/*.md` |
 | permissions | `permissions: [{action, resource, effect}]`, ordered, last-match-wins | v2 action names: `shell` (not `bash`), `subagent` (not `task`); `write`/`patch` normalize to `edit` |
 | media | `media.image.{auto_resize, max_width, max_height, max_base64_bytes}` | former `attachment` |
@@ -68,6 +73,22 @@ URL even though the published schema only documents the v1 keys (observed
    (+ `metadata: { "opencode/autoinvoke": false }`) keeps the skill loadable by
    ID but drops it from `<available_skills>` — the way to stop paying a skill's
    name+description on every request while a command template still calls it.
+6. **Agent overlays cannot carry provider settings.** An agent's `request` is
+   `{headers, body}` only — there is no `settings` field. Provider settings
+   resolve from the provider/model config, and a model **variant** is the only
+   per-agent way to change one (`model: provider/model#variant-id`). For
+   DeepSeek: the thinking toggle is a request **`body`** field
+   (`{"thinking":{"type":"disabled"}}`), while effort belongs in
+   **`settings.reasoningEffort`** — the only key the aisdk layer turns into the
+   API's `reasoning_effort`. Writing `thinking`/`temperature` under `settings`,
+   or `reasoningEffort` under an agent's `options`, is silently inert (the
+   openai-chat protocol implements no such option). Shipped that way in 2026-10,
+   fixed 2026-10-16 — do not reintroduce it.
+7. **What `settings` *is* for.** Real provider settings: `timeout`,
+   `headerTimeout`, `chunkTimeout` (defaults 300s / 900s — DeepSeek has asked
+   clients for the long chunk timeout because it can stream nothing for minutes
+   while reasoning), `compaction`, `encoding`, plus provider-specific options.
+   Anything else you put there is dropped by the protocol layer.
 
 ## Config key shapes (authoritative)
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it.
@@ -76,22 +97,31 @@ URL even though the published schema only documents the v1 keys (observed
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)
+Only these keys are native. **Any other key sets `legacy = true` and routes the whole file through the V1→V2 migration path** (`core/config/plugin/agent.ts`), so this list is a hard whitelist, not a suggestion:
+
 | Key | Convention |
 | --- | --- |
-| `name` | kebab-case, matches filename |
 | `description` | When to use this agent (drives routing + @-menu) |
 | `mode` | `primary` \| `subagent` |
-| `model` | `deepseek/deepseek-v4-pro` \| `deepseek/deepseek-flash` (natively multimodal) |
+| `model` | `deepseek/deepseek-v4-pro` \| `deepseek/deepseek-flash` (natively multimodal) \| `deepseek/deepseek-flash#low` (variant) |
 | `steps` | step budget; heavier agents get more |
 | `color` | "#RRGGBB" |
 | `hidden` | optional: hide from @-menu |
-| `permission` | optional tool locks; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) must set `edit: deny` + read-only bash whitelist |
+| `disabled` | optional: remove the agent |
+| `permissions` | optional ordered ARRAY `[{action, resource, effect}]`; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) set `{action: edit, resource: "*", effect: deny}` + a read-only `shell` allowlist |
+| `request` | optional `{headers, body}` overlay — **no `settings`**, so no provider setting can live here |
+| `system`, `variant` | supported but not used here (the prompt body *is* the system prompt) |
 
-- Frontmatter deliberately keeps the v1-style `permission` map and `options`
-  (thinking, `reasoningEffort`) — v2 accepts both (they migrate onto its
-  `permissions` list / request body) and all 12 agents are verified with them.
-  Do not migrate single files to native frontmatter piecemeal; if adopted, do
-  all agents in one verified pass.
+- **Never write** `name`, `options`, or `permission` (the v1 spellings). `name`
+  is not needed (the id comes from the filename) and all three flip the file
+  onto the migration path — `options` additionally ends up in `request.body`,
+  where a camelCase `reasoningEffort` is not the `reasoning_effort` DeepSeek
+  reads. This is the 2026-10-16 fix; all 12 agents are native now (verified
+  rule-identical to the pre-migration map form).
+- `permissions` order **is** the policy (last match wins). Put the `"*"` deny
+  first, then the allowlist. v2 action names are `shell`/`subagent`/`edit`
+  (not `bash`/`task`/`write`); `subagent` rules are matched against the target
+  agent id (`subagent.ts` evaluates `Permission.evaluate("subagent", agent.id, …)`).
 - Each prompt references `AGENTS.md` (not restating it) plus a short Model Leverage (pro) / Model Awareness (flash) note.
 
 ## Skill file format (`skills/<name>/SKILL.md`)
@@ -116,15 +146,16 @@ URL even though the published schema only documents the v1 keys (observed
   ```
 
 ## Permissions (`opencode.jsonc` → `permissions`)
-- Root config writes the native ordered list; agent frontmatter keeps the map form (see above). Both resolve with last-match-wins semantics.
-- Default-allow, deny the dangerous: `deny` `.env*` reads (except `.env.example`); `ask` on destructive bash (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
+- Both the root config and agent frontmatter write the native ordered array of `{action, resource, effect}`; they resolve with last-match-wins semantics.
+- Default-ask, not default-allow: keep the `"*"` `ask` catch-all FIRST so an unrecognized destructive variant is put to a human. Never append a catch-all — a trailing one silently shadows every rule above it.
+- `deny` `.env*` reads (except `.env.example`); `ask` on destructive shell (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
 
 ## Verification (desktop v2)
 - `opencode-cli.exe debug config` / `debug agents` / `plugin list` are **service-bound**: they read the running desktop service, NOT the CLI process env — a temp-dir experiment won't show up there.
 - `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
 - Capture both as UTF-8 or the multi-byte content corrupts the JSON:
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
-- There is **no `reload` subcommand** in 2.0.27. The config watcher reloads on file change by itself (verified live); only force it with `opencode-cli.exe service restart`.
+- There is **no `reload` subcommand** as of 2.0.27 (re-check on 2.0.30 before relying on it). The config watcher reloads on file change by itself (verified live); only force it with `opencode-cli.exe service restart`.
 - Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
 - `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
 - The 1.18.x line is out of scope; do not verify against it.

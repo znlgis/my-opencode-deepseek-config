@@ -1,19 +1,16 @@
 ---
-name: librarian
 description: External research specialist. Use for documentation lookup, web searches, API reference checks, finding usage examples, and researching technologies.
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 30
 color: "#8E44AD"
 hidden: true
-permission:
-  edit: "deny"
-  task: "deny"
-  bash:
-    "*": "deny"
-  skill:
-    "*": "deny"
-    verify-with-docs: "allow"
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: verify-with-docs, effect: allow }
 ---
 
 # Librarian

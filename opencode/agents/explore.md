@@ -1,26 +1,23 @@
 ---
-name: explore
 description: Codebase search specialist. Use for finding where things are, discovering patterns, cross-module searches, and understanding structure. Fire multiple instances in parallel for broad searches.
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 40
 color: "#2ECC71"
 hidden: true
-permission:
-  edit: "deny"
-  task: "deny"
-  bash:
-    "*": "deny"
-    "git status*": "allow"
-    "git diff*": "allow"
-    "git log*": "allow"
-    "git show*": "allow"
-    "git blame*": "allow"
-    "git grep*": "allow"
-    "rg *": "allow"
-  skill:
-    "*": "deny"
-    codemap: "allow"
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "git status*", effect: allow }
+  - { action: shell, resource: "git diff*", effect: allow }
+  - { action: shell, resource: "git log*", effect: allow }
+  - { action: shell, resource: "git show*", effect: allow }
+  - { action: shell, resource: "git blame*", effect: allow }
+  - { action: shell, resource: "git grep*", effect: allow }
+  - { action: shell, resource: "rg *", effect: allow }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: codemap, effect: allow }
 ---
 
 # Explore

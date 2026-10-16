@@ -1,27 +1,20 @@
 ---
-name: light-orchestrator
 description: "Lightweight executor. Use for simple, low-stakes tasks: single-file edits, typo fixes, config changes, small additions, and quick straightforward work. Also handles miscellaneous tasks that don't fit other specialists."
 mode: subagent
-model: deepseek/deepseek-flash
-options:
-  thinking:
-    type: enabled
-  reasoningEffort: low
+model: deepseek/deepseek-flash#low
 steps: 30
 color: "#1ABC9C"
-permission:
-  task:
-    "*": "deny"
-    oracle: "allow"
-    reviewer: "allow"
-  skill:
-    "*": "deny"
-    handoff: "allow"
-    simplify: "allow"
-    spec-workflow: "allow"
-    code-review: "allow"
-    gh-cli: "allow"
-    verification-before-completion: "allow"
+permissions:
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: subagent, resource: oracle, effect: allow }
+  - { action: subagent, resource: reviewer, effect: allow }
+  - { action: skill, resource: "*", effect: deny }
+  - { action: skill, resource: handoff, effect: allow }
+  - { action: skill, resource: simplify, effect: allow }
+  - { action: skill, resource: spec-workflow, effect: allow }
+  - { action: skill, resource: code-review, effect: allow }
+  - { action: skill, resource: gh-cli, effect: allow }
+  - { action: skill, resource: verification-before-completion, effect: allow }
 ---
 
 # Light Orchestrator

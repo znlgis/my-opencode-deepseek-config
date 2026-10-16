@@ -40,12 +40,15 @@ in `agents/orchestrator.md` — do not restate them here.
   cost. Volatile content (timestamps, random IDs, per-request tokens, dynamic
   file lists) goes near the END of the payload, never the head.
 - **Freeze toolsets.** Never reorder tool schemas or injected rules mid-session.
-- **Temperature.** flash: 0 (thinking off). pro: unset — thinking is on and
-  temperature/top_p are silently ignored.
-- **Thinking.** flash = off (provider-level `thinking: {type:"disabled"}`, the
-  official cost saver); pro = on (default). An agent may override per-agent via
-  frontmatter `options.thinking` (e.g. `planner`/`light-orchestrator` re-enable
-  thinking over flash's disabled default).
+- **Temperature.** flash: 0 (a body field, alongside thinking off). pro: unset
+  — thinking is on and DeepSeek silently ignores temperature/top_p.
+- **Thinking.** flash = off, pro = on (the API default). Both knobs are
+  REQUEST BODY fields under `providers.deepseek.models.<id>.body`: a
+  `settings.thinking`/`settings.temperature` entry is inert, because the
+  openai-chat protocol implements no such option. To re-enable thinking over
+  flash's disabled default, select the `#low` variant — never an agent-level
+  override: an agent's `request` overlay carries only `headers`/`body`, and
+  effort is resolved as a provider setting.
 - **One-shot requests ride flash.** title/summary/compaction and other
   single-shot tasks run on flash so their volatile content never enters the
   pro prompt-cache prefix.
@@ -54,17 +57,21 @@ in `agents/orchestrator.md` — do not restate them here.
 
 ### Thinking tiers
 
-- **`reasoning_effort`** is a request-level thinking-strength control
-  (`low`/`high`/`max`), NOT a model id — set per-agent via frontmatter
-  `options` (camelCase `reasoningEffort`, deep-merged over `model.options`).
-  The 2-model matrix is inviolate.
+- **Thinking is set at the model layer, not the agent layer.** The toggle is a
+  body field; effort (`low`/`high`/`max`) is the provider setting
+  `settings.reasoningEffort`, which the aisdk layer forwards as the API's
+  `reasoning_effort`. Both live in `opencode.jsonc`, so agents only choose a
+  model reference.
 - **Tiers:** trivial (explore/librarian/consultant/ui-builder) = flash, thinking
-  off; mid (planner/light-orchestrator) = flash, thinking on +
-  `reasoningEffort: low`; deep (deep-worker/oracle/reviewer) = pro, default
-  high. `solo` has no `model:` field, so it follows the session model and its
-  thinking tier follows that model.
+  off; mid (planner/light-orchestrator) = `deepseek/deepseek-flash#low` — the
+  `low` variant turns thinking on at effort `low`; deep
+  (deep-worker/oracle/reviewer) = pro, thinking on at the API default. `solo`
+  has no `model:` field, so it follows the session model and its tier follows
+  that model.
 - **Routing:** trivial → flash off; routine-but-nontrivial multi-file → flash
-  low; deep/uncertain → pro high.
+  `#low`; deep/uncertain → pro.
+- The 2-model matrix is inviolate: a variant is a mode of flash, never a third
+  model.
 
 ## Scope First + Delegate Always
 
@@ -258,6 +265,19 @@ Skills live under `skills/<name>/SKILL.md` and load on demand. Before
 reinventing a workflow, check whether a skill covers it. The `superpowers`
 plugin adds process skills (brainstorming, systematic debugging, TDD) — prefer
 those before raw reasoning.
+
+- **The `skill` ruleset IS the roster filter.** Core builds each request's
+  `<available_skills>` list from the skills a ruleset does not deny, so an
+  agent's `skill` allowlist sets exactly what that agent sees — and pays for —
+  on every request. Add a skill to an agent by adding an allow rule; keep one
+  off by not listing it (the `"*"` deny above the allowlist does the work).
+- **Frontmatter is v2-native everywhere.** Agent files carry only `model`,
+  `request`, `system`, `description`, `mode`, `hidden`, `color`, `steps`,
+  `disabled`, `permissions`, `variant`. The v1 spellings (`name`, `options`,
+  `permission`, top-level `temperature`) are never written: any one of them
+  flips that agent onto v2's V1→V2 migration path. `permissions` is an array of
+  `{action, resource, effect}` in evaluation order, and the v2 action names are
+  `shell`/`subagent`/`edit` (not `bash`/`task`/`write`).
 
 ## Self-Verification
 
