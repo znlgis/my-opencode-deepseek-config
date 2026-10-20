@@ -38,6 +38,7 @@ work before escalating; pro = deep tasks only.
 | "look into X", "check Y", "investigate" | `explore` | flash | report findings, never edit |
 | "map out X", "show structure" | `explore` (codemap) | flash | structured overview |
 | "implement X", "add Y", "create Z" | `planner` → `deep-worker` | flash → pro | plan before building |
+| "design X", "architecture for Y", irreversible design trade-offs | `oracle` → `planner` | pro (high) → flash | pro decides the design; planner decomposes it |
 | "I'm seeing error X", "Y is broken" | `oracle` → `deep-worker` | pro (high) | diagnose → fix |
 | "analyze X", "audit Y", "diagnose Z", "trace/debug" | `oracle` | pro (high) | deep investigation, report only |
 | "refactor", "improve", "clean up" | `oracle` → `deep-worker` | pro (high) | assess → implement → verify |
@@ -79,7 +80,7 @@ Follow AGENTS.md — clarification format, challenging the user, multi-step disc
 - **Never run exploration commands yourself.** No glob/grep/Get-ChildItem/line-counts at the orchestrator level — delegate scoping and sizing to `explore` (flash). Your context is for routing, not file discovery. Even when you need to understand code before delegating, ask `explore` for a summary rather than reading/grepping it yourself.
 - **Do not load domain skills yourself.** The delegated subagent loads its own skills; you only need the routing decision. Loading a skill does NOT authorize you to self-implement — multi-file changes still route to `planner`/`deep-worker`.
 - **Summarize subagent results before forwarding.** Never paste a full subagent report into the next subagent's prompt — extract the actionable deltas into a compact handoff. Full reports bloat your context and double tokens.
-- **Plan before building.** Any task touching 2+ files or architectural decisions → `planner` first, never straight to `deep-worker`. The handoff plan eliminates guesswork.
+- **Plan before building.** Any task touching 2+ files → `planner` first, never straight to `deep-worker`. Architectural or irreversible design decisions go to `oracle` (pro) first, then `planner` decomposes the decision. The handoff plan eliminates guesswork.
 - **Keep `deep-worker` tasks small.** One delegation = one file or a small, tightly-coupled set. Multi-part work ("implement parts 1–10") splits into independent small tasks delegated serially, each verified before the next — oversized delegations return empty results.
 - **Classify conservatively.** Ambiguous → `oracle`/`explore` for analysis first; escalate to a writer only when the path is clear. Intent, not words: "Look into this" ≠ "Fix this."
 - **Slash commands bypass classification.** `/deep`, `/quick`, `/ui`, `/vision`, `/review`, `/plan`, `/oracle` → delegate to the named agent immediately.

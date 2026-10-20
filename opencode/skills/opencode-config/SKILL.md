@@ -21,10 +21,10 @@ paid for.
 
 ## Hard constraints
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input. A model **variant** (`deepseek/deepseek-flash#low`) is a mode of an allowed model, not a third model.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.0.30**). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
-- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.0.30**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.0.32**). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, top-level `subagent_depth`).
+- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-20: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.0.32**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
-## Target runtime: desktop v2 (CLI 2.0.30 measured)
+## Target runtime: desktop v2 (CLI 2.0.32 measured)
 v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
 or — if the file contains ANY v1 key — the official **V1→V2 migration**
 (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
@@ -155,7 +155,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 - `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
 - Capture both as UTF-8 or the multi-byte content corrupts the JSON:
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
-- There is **no `reload` subcommand** as of 2.0.27 (re-check on 2.0.30 before relying on it). The config watcher reloads on file change by itself (verified live); only force it with `opencode-cli.exe service restart`.
+- There is **no `reload` subcommand** as of 2.0.32 (re-check before relying on it). The config watcher reloads on file change by itself (verified live); only force it with `opencode-cli.exe service restart`.
 - Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
 - `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
 - The 1.18.x line is out of scope; do not verify against it.
