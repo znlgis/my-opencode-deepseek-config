@@ -10,12 +10,12 @@
 - 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
-- 权限基线：`read` 默认放行、`shell` 默认 `ask`（default-ask，不是默认放行）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 白名单（默认 deny 全部 + 仅放行只读子命令）
+- 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
 - 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.0`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v7.0.0（2026-10-10 发布）已在桌面 v2 的 CLI **2.0.32** 复核（2026-10-20：`gh release list` 确认 v7.0.0 仍是 Latest，pin 无需变动）；此前在 CLI 2.0.27 实测加载（`plugin list` → version `bb92a77`）；其 opencode 运行时文件 `.opencode/plugins/superpowers.js` 与 v6.4.2 **逐字节相同**（SHA256 一致）→ bootstrap 注入与常驻前缀不变，技能名册仍为 15 个；且**子会话（task subagent）不再注入 bootstrap**
+- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.0`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v7.0.0（2026-10-10 发布）已在桌面 v2 的 CLI **2.0.30** 复核（2026-10-16：`gh release list` 确认 v7.0.0 仍是 Latest，pin 无需变动）；此前在 CLI 2.0.27 实测加载（`plugin list` → version `bb92a77`）；其 opencode 运行时文件 `.opencode/plugins/superpowers.js` 与 v6.4.2 **逐字节相同**（SHA256 一致）→ bootstrap 注入与常驻前缀不变，技能名册仍为 15 个；且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
@@ -23,13 +23,13 @@
 
 > 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`providers.deepseek.models.*.limit.input` + `buffer`）覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
-因此"深度架构/复杂审查/疑难调试用 pro，规划/执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v7.0.0 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项；且 `.opencode/plugins/superpowers.js` 自 v6.4.2 起逐字节未变），勿重复调研。
+因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v7.0.0 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项；且 `.opencode/plugins/superpowers.js` 自 v6.4.2 起逐字节未变），勿重复调研。
 
 ## DeepSeek 模型配置
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.0.32**，2026-10-20 核验通过；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.0.30**，2026-10-16 核验通过；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「快速开始」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
@@ -62,29 +62,22 @@ opencode
 }
 ```
 
-本配置在 `providers` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `capabilities`（图像输入）。示例（flash，v2 原生键；`thinking`/`temperature` 必须写在 `body`，`settings` 只放 provider 选项）：
+本配置在 `providers` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `capabilities`（图像输入）。示例（flash，v2 原生键）：
 
 ```jsonc
 "providers": {
   "deepseek": {
     "models": {
       "deepseek-flash": {
-        "body": {
-          "thinking": { "type": "disabled" },
-          "temperature": 0
+        "settings": {
+          "temperature": 0,
+          "thinking": { "type": "disabled" }
         },
         "capabilities": {
           "tools": true,
           "input": ["text", "image"],
           "output": ["text"]
-        },
-        "variants": [
-          {
-            "id": "low",
-            "settings": { "reasoningEffort": "low" },
-            "body": { "thinking": { "type": "enabled" } }
-          }
-        ]
+        }
       }
     }
   }
@@ -100,7 +93,7 @@ opencode
 | 关注点 | 本仓库写法（v2 原生） | 要点 |
 | --- | --- | --- |
 | 插件 | `plugins`（字符串或 `{package, options}`） | superpowers 使用字符串形式 |
-| Provider/模型 | `providers.<id>.models.<mid>.{settings, body, capabilities, cost, limit, variants}` | `settings` = provider 选项（`reasoningEffort`、超时等）；`body` = 请求体字段（`thinking`/`temperature`）；`variants` 以 `model: <provider>/<model>#<id>` 选用；`capabilities` = `{tools, input[], output[]}`；`cost` 为**数组** + 嵌套 `cache: {read, write}`；`limit.input` 驱动压缩触发点 |
+| Provider/模型 | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = 请求透传（temperature/thinking）；`capabilities` = `{tools, input[], output[]}`；`cost` 为**数组** + 嵌套 `cache: {read, write}`；`limit.input` 驱动压缩触发点 |
 | Agent / 命令 | `agents` / `commands` | 内联覆盖内置 agent；文件型 agent 保持 `agents/*.md` |
 | 权限 | `permissions`（有序 `{action, resource, effect}` 列表） | last-match-wins；v2 action 名：`shell`（非 `bash`）、`subagent`（非 `task`） |
 | 附件 | `media.image` | 原 `attachment` |
@@ -128,11 +121,11 @@ opencode
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-v4-pro`；Agent 列表有 12 个自定义 Agent；随便描述一个需求，`orchestrator` 会自动分类并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review` 等命令）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行（2026-10-20 核验）**：本配置是 v2 原生的（v1 键名一律不写，见「v2 原生键名」）。本机实测：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**（`opencode --version` → `1.18.4`），真正在跑的是桌面版 **v2.0.32** 及其自带 CLI：
+> **⚠️ 必须由 OpenCode V2.x 运行（2026-10-16 核验）**：本配置是 v2 原生的（v1 键名一律不写，见「v2 原生键名」）。本机实测：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**（`opencode --version` → `1.18.4`），真正在跑的是桌面版 **v2.0.30** 及其自带 CLI：
 >
 > ```powershell
 > $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"
-> & $cli --version        # opencode v2.0.32
+> & $cli --version        # opencode v2.0.30
 > ```
 >
 > 用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用上面的 `$cli`，别用 PATH 里的 `opencode`。
@@ -240,19 +233,6 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 成本比：pro 输入价 4.4× flash（0.66 vs 0.15 / 1M tokens）、输出价 3.3×，故 trivial 任务绝不落到 pro。
 
-### 档位解析（tier resolution）
-
-两个逻辑档位与具体模型的绑定（解析依据：本仓库配置的显式声明，不做关键词猜测）：
-
-| 档位 | Provider | 模型 ID | 承担场景 | 单价（USD/1M，off-peak） |
-| --- | --- | --- | --- | --- |
-| `default` | `deepseek` | `deepseek/deepseek-flash` | 日常编码、单元测试、轻量问答、文档、批量生成、`gh` 操作、UI 还原、视觉理解；编排/路由/规划/初检 | 输入 0.15 / 输出 0.60 / 缓存命中 0.003 |
-| `escalation` | `deepseek` | `deepseek/deepseek-v4-pro` | 复杂推理、代码审查、架构设计、疑难调试、跨文件重构、复杂安全/性能 | 输入 0.66 / 输出 1.98 / 缓存命中 0.022 |
-
-- 生效日期 2026-10-20；高峰时段为 off-peak 的 2 倍（见「成本对比」）。
-- 当前 provider 暴露 2 个模型，两档各绑定一个，无需降级。若某台机器只剩 1 个模型：两档绑定同一 ID，`escalation` 改为提高 reasoning effort（如新增 `#high` 变体——仍是该模型的模式，不是第三个模型）并强制分步推理 + 自检。
-- 会话主模型（`opencode.jsonc.model`）仍为 pro，作为主会话兜底；`orchestrator` 与所有默认 agent 走 flash，headless 批量任务显式 `-m deepseek/deepseek-flash`。
-
 ### 路由策略
 
 - **Trivial → flash off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走 flash agent，thinking 关闭（最省）
@@ -279,7 +259,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-20 按官方定价页复核**，off-peak 价；官方页以人民币计价，下表按 1 USD ≈ 6.8 CNY 折算，仅供 OpenCode 成本显示；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-16 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
 | --- | --- | --- | --- | --- | --- |
@@ -483,7 +463,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 压缩触发窗口（按模型）/ buffer / 保留尾部 | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction`（`buffer`/`keep`） |
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
-> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`。桌面 v2 的配置 watcher 会自动热重载；需强制时用 `opencode-cli.exe service restart`（2.0.27 起已无 `reload` 子命令）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode-cli.exe debug config`。
+> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`opencode-cli.exe reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode-cli.exe debug config`。
 
 ## 使用指南
 
@@ -546,23 +526,6 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
-
-### 2026-10-20：常规升级轮 —— CLI 2.0.32 + 定价复核 + 文档与路由对齐
-
-只读审计 + 文档修正；`opencode.jsonc` 仅改一处注释，无功能配置变更。
-
-| 项 | 核验/变更 | 结论 |
-| --- | --- | --- |
-| 主程序 | 桌面版自带 CLI **2.0.32**（`opencode-cli.exe --version`）；本地文档仓出现 v2.1.0 版本同步提交（2026-10-20） | 已升级；v2.1 的 breaking-change 提交未触及 `packages/schema/src/config/*` 与 `packages/core/src/config/*`，本配置无需迁移 |
-| 插件 | `obra/superpowers` **v7.0.0**（`gh release list` 仍为 Latest） | pin 不变 |
-| 定价 | 官方页 2026-10-20 复核：flash 1 / 4 / 0.02 元、pro 4.5 / 13.5 / 0.15 元（off-peak，CNY/1M） | 与配置 USD 表一致（折算率 ≈6.8），无需改价；`deepseek-flash` 现由 DeepSeek-V4.1-Flash-1017 提供服务 |
-| 文档缺陷 | provider 示例把 `thinking`/`temperature` 写在 `settings` 下（正是 2026-10-16 修掉的失效写法）；v2 键表同样写错；`reload` 子命令已不存在；权限基线写成「默认放行」 | 已改为 `body` 示例、`service restart`、default-ask 表述（中英双语） |
-| 路由缺口 | 「架构设计」此前落到 `planner`（flash#low），与两档定义不符 | `orchestrator` 增加「架构/不可逆设计 → `oracle`（pro）→ `planner`」；`planner` 的升级目标改为 `oracle`（不再指向执行者 `deep-worker`），`oracle` 描述补上 architecture decisions |
-| 档位解析 | 显式写入「档位解析」表 | `default=deepseek/deepseek-flash`、`escalation=deepseek/deepseek-v4-pro`；2 模型，无需单模型降级 |
-
-**验证**：`node scripts/validate-jsonc.js` 通过；`sync-config.ps1` 后仓库 ↔ 全局 `opencode.jsonc` SHA256 相等；`debug config` 原样解析两个模型、`limit`/`compaction`/`variants`；`debug agents` 18 个 agent 全部就位，`planner`/`light-orchestrator` 为 `flash#low`。
-
-**未验证**：本轮无付费调用，token 降幅未实测；`thinking` 关闭的线上请求体仍需在有 DeepSeek 凭据的机器上抓包确认（同上轮）。
 
 ### 2026-10-16（五）：常规升级轮 —— 主程序 2.0.30 + 定价复核 + thinking 开关接线修复 + frontmatter 全面 v2 原生
 

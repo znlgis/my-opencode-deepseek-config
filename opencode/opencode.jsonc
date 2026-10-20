@@ -173,7 +173,7 @@
         }
     },
     // Built-in agents (no .md file). `model` here binds only three surfaces
-    // (verified against v2.0.32 + live runs): subagent/child sessions — incl.
+    // (verified against v2.0.27 + live runs): subagent/child sessions — incl.
     // `general` (the superpowers Task dispatch target) and `/` commands bound
     // to subagent-mode agents — the title/summary/compaction one-shots, and
     // the desktop composer's per-agent default for new sessions (build/plan
