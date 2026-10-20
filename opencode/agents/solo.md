@@ -7,7 +7,6 @@ permissions:
   - { action: subagent, resource: "*", effect: deny }
   - { action: skill, resource: "*", effect: deny }
   - { action: skill, resource: brainstorming, effect: allow }
-  - { action: skill, resource: systematic-debugging, effect: allow }
   - { action: skill, resource: test-driven-development, effect: allow }
   - { action: skill, resource: verification-before-completion, effect: allow }
   - { action: skill, resource: writing-plans, effect: allow }
@@ -28,7 +27,6 @@ permissions:
   - { action: skill, resource: gh-cli, effect: allow }
   - { action: skill, resource: opencode-config, effect: allow }
   - { action: skill, resource: writing-for-agents, effect: allow }
-  - { action: skill, resource: writing-skills, effect: allow }
   - { action: skill, resource: verify-with-docs, effect: allow }
   - { action: skill, resource: codemap, effect: allow }
   - { action: skill, resource: grilling, effect: allow }

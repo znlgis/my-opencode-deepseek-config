@@ -11,11 +11,11 @@
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除；无第三方压缩插件
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.0`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v7.0.0（2026-10-10 发布）已在桌面 v2 的 CLI **2.0.30** 复核（2026-10-16：`gh release list` 确认 v7.0.0 仍是 Latest，pin 无需变动）；此前在 CLI 2.0.27 实测加载（`plugin list` → version `bb92a77`）；其 opencode 运行时文件 `.opencode/plugins/superpowers.js` 与 v6.4.2 **逐字节相同**（SHA256 一致）→ bootstrap 注入与常驻前缀不变，技能名册仍为 15 个；且**子会话（task subagent）不再注入 bootstrap**
+- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.0`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v7.0.0（2026-10-10 发布）已在桌面 v2 的 CLI **2.1.0** 复核（2026-10-20：`gh release list` 确认 v7.0.0 仍是 Latest，pin 无需变动）；此前在 CLI 2.0.27 实测加载（`plugin list` → version `bb92a77`）；其 opencode 运行时文件 `.opencode/plugins/superpowers.js` 与 v6.4.2 **逐字节相同**（SHA256 一致）→ bootstrap 注入与常驻前缀不变，技能名册仍为 15 个；且**子会话（task subagent）不再注入 bootstrap**
 
 ### 插件与模型映射（重要）
 
@@ -29,7 +29,7 @@
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.0.30**，2026-10-16 核验通过；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.1.0**，2026-10-20 核验通过；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「快速开始」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
@@ -97,7 +97,7 @@ opencode
 | Agent / 命令 | `agents` / `commands` | 内联覆盖内置 agent；文件型 agent 保持 `agents/*.md` |
 | 权限 | `permissions`（有序 `{action, resource, effect}` 列表） | last-match-wins；v2 action 名：`shell`（非 `bash`）、`subagent`（非 `task`） |
 | 附件 | `media.image` | 原 `attachment` |
-| 压缩 | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` 为 v1 拼写，v2 不读，已移除 |
+| 压缩 | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` 为 v1 拼写，v2 不读，已移除；v1 的 `reserved`（压缩预留）对应 v2 的 `buffer` |
 | 嵌套深度 | `experimental.subagent_depth` | 顶层 `subagent_depth` 已被 v2 丢弃 |
 | small_model | —（不写） | v2 将其展开为 `title` agent 模型；本仓库直接钉 `title` |
 
@@ -121,11 +121,11 @@ opencode
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-v4-pro`；Agent 列表有 12 个自定义 Agent；随便描述一个需求，`orchestrator` 会自动分类并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review` 等命令）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行（2026-10-16 核验）**：本配置是 v2 原生的（v1 键名一律不写，见「v2 原生键名」）。本机实测：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**（`opencode --version` → `1.18.4`），真正在跑的是桌面版 **v2.0.30** 及其自带 CLI：
+> **⚠️ 必须由 OpenCode V2.x 运行（2026-10-20 核验）**：本配置是 v2 原生的（v1 键名一律不写，见「v2 原生键名」）。本机实测：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**（`opencode --version` → `1.18.4`），真正在跑的是桌面版 **v2.1.0** 及其自带 CLI：
 >
 > ```powershell
 > $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"
-> & $cli --version        # opencode v2.0.30
+> & $cli --version        # opencode v2.1.0
 > ```
 >
 > 用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用上面的 `$cli`，别用 PATH 里的 `opencode`。
@@ -259,7 +259,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-16 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-20 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
 | --- | --- | --- | --- | --- | --- |
@@ -432,7 +432,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `codebase-design` | 架构词汇表：module/interface/depth/seam/adapter/leverage/locality，删除测试、深度测试，评估模块边界是否合理 |
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
-> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文。2026-10-16 实测：全部放行时名册 **30 条**（23 个本地 + 7 个 superpowers 接线项），渲染后的名册块 **12,186 字符 / 11,927 字节 ≈ 3.3K tokens**——`orchestrator` 只放行 2 个 skill，名册仅 804 字符 ≈ 223 tokens，差 **15×**。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。**被 deny 的 skill 不会出现在该 Agent 的名册里**（core 用 `skill` 权限规则集过滤名册），所以每个 Agent 的 allowlist 就是它的常驻上下文预算。**隐藏的一次性 agent（title/summary/compaction）已显式 `skill:* deny`——它们永远不加载 skill，名册对它们纯属浪费**（见变更记录 2026-10-12、2026-10-16）。
+> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文。2026-10-16 实测（当时全部放行）：名册 **30 条**（23 个本地 + 7 个 superpowers 接线项），渲染后的名册块 **12,186 字符 / 11,927 字节 ≈ 3.3K tokens**——`orchestrator` 只放行 2 个 skill，名册仅 804 字符 ≈ 223 tokens，差 **15×**。2026-10-20 起 `solo` 裁掉 2 个与本地 skill 语义重复的接线项（`systematic-debugging` → `diagnosing-bugs`、`writing-skills` → `writing-for-agents`），其名册降到 28 条，已无任何 Agent 放行全部 30 条。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。**被 deny 的 skill 不会出现在该 Agent 的名册里**（core 用 `skill` 权限规则集过滤名册），所以每个 Agent 的 allowlist 就是它的常驻上下文预算。**隐藏的一次性 agent（title/summary/compaction）已显式 `skill:* deny`——它们永远不加载 skill，名册对它们纯属浪费**（见变更记录 2026-10-12、2026-10-16、2026-10-20）。
 
 ## 仓库结构
 
@@ -526,6 +526,35 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ```
 
 ## 本次重构变更记录
+
+### 2026-10-20（二）：常规升级轮 —— 主程序 2.1.0 + 常驻前缀去重 + 名册裁剪 + `compaction.reserved` 口径澄清
+
+**只读审计 + 最小改动**：三路升级源（主程序 / 插件 / 定价）逐项核验，另删掉 1 处冗余配置、2 处重复表述、2 个重复名册项。所有改动都指向同一目标：降低**每轮请求的常驻前缀**。
+
+| 项 | 核验值 | 结论 |
+| --- | --- | --- |
+| 主程序 | 桌面版自带 CLI **v2.1.0**（`opencode-cli.exe --version` → `opencode v2.1.0`，2026-10-20） | 较上一轮 2.0.30 升了一个 minor；本轮只用 `validate-jsonc.js` 校验仓库副本——`debug config` 会连到运行中的实例、只返回 live 配置，读不到仓库副本 |
+| 插件 | `obra/superpowers` **v7.0.0**（2026-10-10），`gh release list` 仍为 Latest | pin 保持 `#v7.0.0`，**不改** |
+| 定价 | DeepSeek 官方定价页 2026-10-20 抓取 | 与 `opencode.jsonc` 逐项一致（flash 0.15/0.60/0.003、pro 0.66/1.98/0.022），peak = off-peak ×2 的时段定义未变，**无需修正** |
+| 模型 ID | `deepseek/deepseek-flash`、`deepseek/deepseek-v4-pro` | **不动**（用户硬约束）；variant `#low` 仍是 flash 的模式，不是第三个模型 |
+
+**变更明细**
+
+| 变更 | 位置 | 说明 / 依据 |
+| --- | --- | --- |
+| 删除 `instructions: ["AGENTS.md"]` | `opencode.jsonc` | 冗余：`core/instruction-discovery.ts` 默认 `global`+`project` 双发现，AGENTS.md 本来就由「全局配置目录 + 项目根上溯」加载；`editor.files` 是 **Map<path>**，同一路径重复登记也只会保留一份。删掉它只省一次多余扫描，行为不变 |
+| 合并 `orchestrator.md` 与 `AGENTS.md` 的重复条目 | `agents/orchestrator.md`、`AGENTS.md` | `task_id`（「不带就是新会话」）与 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 两处原文重复，各只保留一份：语义说明归 `AGENTS.md`（所有 agent 共享），路由措辞留在 orchestrator |
+| `solo` 名册 30 → **28** | `agents/solo.md` | 移除与本地蒸馏重复的两个 superpowers 接线项：`systematic-debugging`（→ `diagnosing-bugs`）、`writing-skills`（→ `writing-for-agents`）。名册 name+description 是每轮常驻成本，重复项纯损耗 |
+| `compaction.reserved` 口径澄清 | `opencode.jsonc`、本 README | v2 schema（`packages/schema/src/config/compaction.ts`）只有 `{auto, keep:{tokens}, buffer}`，**没有 `reserved`**；该名字是 v1 遗留，v2 等价旋钮是 `buffer`。两个模型的 `limit.input` 本就显式声明（flash 131072 / pro 163840），压缩触发点仍是 115,072 / 147,840 tokens |
+| 版本与日期同步 | 本 README、`README.en-US.md` | CLI 2.0.30 → **2.1.0**，定价核验日期 → 2026-10-20 |
+
+**验证**
+
+- `node scripts/validate-jsonc.js` → 配置合法（删除 `instructions`、修改注释后仍通过）。
+- `node scripts/estimate-cost.js` 正常运行（价格表本轮未改动）。
+- 名册口径：本地 23 个 `SKILL.md` 的 `name` 与目录名一致、`name`+`description` 齐备，本轮未增删 skill 本身。
+
+**未验证项（如实标注）**：CLI 2.1.0 只做了版本号与配置解析核验，未做全链路 `run` 冒烟；本机 live service 仍只配置 `opencode-go` provider，`-m deepseek/*` 不可用，真实 token 降幅无法实测。上表所有「省 token」结论都是**结构性**的（删掉的字节数 × 每轮请求数），不是计费数据。
 
 ### 2026-10-16（五）：常规升级轮 —— 主程序 2.0.30 + 定价复核 + thinking 开关接线修复 + frontmatter 全面 v2 原生
 

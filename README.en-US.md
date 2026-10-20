@@ -11,11 +11,11 @@
 - Agent nesting: `experimental.subagent_depth: 2` (v2-native key; the v1 top-level `subagent_depth` is dropped by v2 and no longer written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
-- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), keeping a verbatim tail of `keep.tokens: 12000`; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed; no third-party compression plugin
+- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), keeping a verbatim tail of `keep.tokens: 12000`; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed (the v1 `reserved` maps to v2 `buffer`); no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v7.0.0`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v7.0.0 (released 2026-10-10) is re-confirmed as the **Latest** release on 2026-10-16 (`gh release list`), so the pin needs no change; it was first smoke-tested on desktop v2's CLI 2.0.27 (`plugin list` → version `bb92a77`) and re-checked on CLI **2.0.30**; its opencode runtime file `.opencode/plugins/superpowers.js` is **byte-identical** to v6.4.2 (same SHA256), so the bootstrap injection and the always-on prefix are unchanged and the plugin exposes 15 skills; **task sub-sessions still receive no bootstrap injection**
+- Plugins: `superpowers` only (git URL pinned to tag `#v7.0.0`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v7.0.0 (released 2026-10-10) is re-confirmed as the **Latest** release on 2026-10-20 (`gh release list`), so the pin needs no change; it was first smoke-tested on desktop v2's CLI 2.0.27 (`plugin list` → version `bb92a77`) and re-checked on CLI **2.1.0**; its opencode runtime file `.opencode/plugins/superpowers.js` is **byte-identical** to v6.4.2 (same SHA256), so the bootstrap injection and the always-on prefix are unchanged and the plugin exposes 15 skills; **task sub-sessions still receive no bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
@@ -29,7 +29,7 @@ So the split "planning/architecture/complex review on pro; execution/first-pass/
 
 ### Prerequisites
 
-- OpenCode v2 (desktop app's bundled CLI **2.0.30**, verified 2026-10-16; 1.18.x and older are **no longer supported**)
+- OpenCode v2 (desktop app's bundled CLI **2.1.0**, verified 2026-10-20; 1.18.x and older are **no longer supported**)
 - **Runtime caveat**: the `opencode` on `PATH` (WinGet install) is **1.18.4**, not this config's runtime — it takes the V1→V2 migration path. For headless runs use the desktop app's bundled CLI (path in the Quick Start ⚠️ note)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
 - Background subagents (delegation with `background: true`) require the environment variable `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` (PowerShell: `$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`); when unset, background delegation errors out and should fall back to foreground/serial dispatch
@@ -97,7 +97,7 @@ This repo is an **OpenCode v2-only config** (1.18.x is no longer supported). v2 
 | Agents / commands | `agents` / `commands` | inline overrides; file-based agents stay in `agents/*.md` |
 | Permissions | `permissions` (ordered `{action, resource, effect}` list) | last-match-wins; v2 action names: `shell` (not `bash`), `subagent` (not `task`) |
 | Attachments | `media.image` | the former `attachment` |
-| Compaction | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1 spellings v2 does not read; removed |
+| Compaction | `{auto, keep: {tokens}, buffer}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1 spellings v2 does not read; removed. The v1 `reserved` (headroom) maps to v2 `buffer` |
 | Nesting depth | `experimental.subagent_depth` | the top-level `subagent_depth` is dropped by v2 |
 | small_model | — (not written) | v2 expands it into the `title` agent; this repo pins `title` directly |
 
@@ -121,11 +121,11 @@ opencode
 
 Three self-checks after launch: `/models` shows `deepseek/deepseek-v4-pro`; the agent list has all 12 custom agents; describe any task in plain language and `orchestrator` classifies and routes it (to skip routing, use `/quick`, `/deep`, `/review`, … directly).
 
-> **⚠️ Must run on OpenCode V2.x (verified 2026-10-16).** This config is v2-native (no v1 key spellings anywhere — see "v2-native keys"). Measured on this machine: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4** (`opencode --version` → `1.18.4`), while the runtime actually in use is the desktop app **v2.0.30** and its bundled CLI:
+> **⚠️ Must run on OpenCode V2.x (verified 2026-10-20).** This config is v2-native (no v1 key spellings anywhere — see "v2-native keys"). Measured on this machine: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4** (`opencode --version` → `1.18.4`), while the runtime actually in use is the desktop app **v2.1.0** and its bundled CLI:
 >
 > ```powershell
 > $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"
-> & $cli --version        # opencode v2.0.30
+> & $cli --version        # opencode v2.1.0
 > ```
 >
 > Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds. For headless runs use the `$cli` above, not the `opencode` on `PATH`.
@@ -259,7 +259,7 @@ A Tier-1 report is a **complete review**, not a preview — a clean result is ne
 
 ### Cost Comparison
 
-Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-10-16**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-10-20**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
 | --- | --- | --- | --- | --- | --- |
@@ -432,7 +432,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | `codebase-design` | Architecture vocabulary: module/interface/depth/seam/adapter/leverage/locality, deletion test, depth test — assess whether module boundaries are sound |
 | `domain-modeling` | Active domain modeling: maintain a CONTEXT.md glossary (vocabulary only, no implementation details), challenge/sharpen fuzzy terms during sessions, offer ADRs only when warranted; includes the repeated-explanation trigger (pin a term when the same concept keeps being re-explained) |
 
-> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** per-turn context. Measured 2026-10-16 with everything allowed: **30 entries** (23 local + 7 wired superpowers skills), rendered roster block **12,186 chars / 11,927 bytes ≈ 3.3K tokens** — while `orchestrator`, which allows only 2 skills, carries just 804 chars ≈ 223 tokens, a **15×** difference. So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed. **A denied skill does not appear in that agent's roster at all** (core filters the roster with the `skill` permission ruleset), so each agent's allowlist *is* its always-on context budget. **The hidden one-shot agents (title/summary/compaction) carry an explicit `skill:* deny` — they never load a skill, so the roster was pure waste on them** (see the 2026-10-12 and 2026-10-16 change-log entries).
+> **The roster is the budget**: every skill's name + description in the `skill` tool's `<available_skills>` list is **always-on** per-turn context. Measured 2026-10-16 (everything allowed at the time): **30 entries** (23 local + 7 wired superpowers skills), rendered roster block **12,186 chars / 11,927 bytes ≈ 3.3K tokens** — while `orchestrator`, which allows only 2 skills, carries just 804 chars ≈ 223 tokens, a **15×** difference. Since 2026-10-20 `solo` drops 2 wired entries that duplicate local skills (`systematic-debugging` → `diagnosing-bugs`, `writing-skills` → `writing-for-agents`), bringing its roster to 28 entries; no agent allows all 30 any more. So a skill that is no longer used often, or duplicates another, should be merged or deleted rather than kept "just in case"; over-long `description` fields should be trimmed to the trigger words that are actually needed. **A denied skill does not appear in that agent's roster at all** (core filters the roster with the `skill` permission ruleset), so each agent's allowlist *is* its always-on context budget. **The hidden one-shot agents (title/summary/compaction) carry an explicit `skill:* deny` — they never load a skill, so the roster was pure waste on them** (see the 2026-10-12, 2026-10-16 and 2026-10-20 change-log entries).
 
 ## Repository Structure
 
@@ -526,6 +526,35 @@ On the fence: let flash take one pass; escalate only when you can state the reas
 ```
 
 ## Refactor Change Log
+
+### 2026-10-20 (7): regular upgrade pass — desktop CLI 2.1.0 + always-on prefix dedupe + roster trim + `compaction.reserved` clarification
+
+**Read-only audit plus minimal edits**: all three upgrade sources (host app / plugin / pricing) were verified item by item, and 1 redundant config key, 2 duplicated passages and 2 duplicated roster entries were removed. Every change targets the same thing: shrinking the **always-on per-request prefix**.
+
+| Item | Verified value | Conclusion |
+| --- | --- | --- |
+| Host app | desktop app's bundled CLI **v2.1.0** (`opencode-cli.exe --version` → `opencode v2.1.0`, 2026-10-20) | One minor above the previous 2.0.30; this pass only validated the repo copy with `validate-jsonc.js` — `debug config` attaches to the running instance and returns the live config, not the repo copy |
+| Plugin | `obra/superpowers` **v7.0.0** (2026-10-10); `gh release list` still reports Latest | Pin stays `#v7.0.0`, **no change** |
+| Pricing | DeepSeek official pricing page fetched 2026-10-20 | Item-by-item identical to `opencode.jsonc` (flash 0.15/0.60/0.003, pro 0.66/1.98/0.022); the peak = 2× off-peak window definition is unchanged, **no correction** |
+| Model IDs | `deepseek/deepseek-flash`, `deepseek/deepseek-v4-pro` | **Untouched** (hard user constraint); `#low` is still a mode of flash, not a third model |
+
+**Change details**
+
+| Change | Location | Rationale / evidence |
+| --- | --- | --- |
+| Removed `instructions: ["AGENTS.md"]` | `opencode.jsonc` | Redundant: `core/instruction-discovery.ts` defaults both `global` and `project` discovery to on, so AGENTS.md is already loaded from the global config dir plus the project-root walk; `editor.files` is a **Map<path>**, so registering the same path twice keeps one copy anyway. Removing it only saves a redundant rescan |
+| Merged duplicated `orchestrator.md` / `AGENTS.md` entries | `agents/orchestrator.md`, `AGENTS.md` | The `task_id` rule ("without it you get a fresh spawn") and the `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` requirement were written twice; each now exists once — semantics belong in `AGENTS.md` (shared by every agent), routing wording stays in the orchestrator |
+| `solo` roster 30 → **28** | `agents/solo.md` | Dropped two wired superpowers entries that duplicate local skills: `systematic-debugging` (→ `diagnosing-bugs`) and `writing-skills` (→ `writing-for-agents`). The roster's name+description is per-turn cost, so duplicates are pure waste |
+| `compaction.reserved` clarified | `opencode.jsonc`, both READMEs | The v2 schema (`packages/schema/src/config/compaction.ts`) only has `{auto, keep:{tokens}, buffer}` — there is **no `reserved`**; that name is v1 legacy, and its v2 equivalent is `buffer`. Both models already declare `limit.input` explicitly (flash 131072 / pro 163840), so the trigger stays 115,072 / 147,840 tokens |
+| Version and date sync | both READMEs | CLI 2.0.30 → **2.1.0**, pricing verification date → 2026-10-20 |
+
+**Verification**
+
+- `node scripts/validate-jsonc.js` → config is valid (still passes after removing `instructions` and editing comments).
+- `node scripts/estimate-cost.js` runs normally (the price table was not changed this round).
+- Roster accounting: the 23 local `SKILL.md` files all have `name` + `description`, with `name` matching the directory; no skill was added or deleted this round.
+
+**Not verified (stated honestly)**: CLI 2.1.0 was checked only for version and config parsing, not a full end-to-end `run` smoke test; this machine's live service still only has the `opencode-go` provider, so `-m deepseek/*` is unavailable and the real token reduction cannot be measured. Every "saves tokens" claim above is **structural** (bytes removed × requests per turn), not billing data.
 
 ### 2026-10-16 (6): regular upgrade pass — desktop 2.0.30 + pricing re-verification + thinking-toggle wiring fix + fully v2-native frontmatter
 

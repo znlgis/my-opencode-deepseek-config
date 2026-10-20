@@ -87,7 +87,8 @@ in `agents/orchestrator.md` — do not restate them here.
   and tell the user the subagent infrastructure is failing. Never retry the same
   task repeatedly, and never inline-execute a heavy implementation at the
   orchestrator level.
-- **Pass the explicit `task_id`** when resuming a subagent session.
+- **Pass the explicit `task_id`** when resuming a subagent session — without it
+  you get a fresh spawn, not a resumed session.
 - **Reference paths, don't paste files.** Point at `src/app.ts:42`.
 
 ## Language
@@ -323,7 +324,7 @@ change.
   `writing-skills` → `writing-for-agents`.
 - A roster entry is injected with every request of every agent that allows it, so
   superpowers entries stay deliberate — only `planner`, `deep-worker`,
-  `light-orchestrator` (and `solo`, which allows the full set) carry any.
+  `light-orchestrator` (and `solo`, which has the broadest roster) carry any.
   Routing table: `agents/orchestrator.md`.
 
 Context compression is **built-in only** — there is no DCP plugin. Compaction
