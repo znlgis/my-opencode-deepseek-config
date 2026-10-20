@@ -10,10 +10,10 @@
 - 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
-- 权限基线：默认放行，破坏性 bash 命令设为 `ask`；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 bash 白名单（默认 deny 全部 + 仅放行只读子命令）
+- 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）
 - 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
-- 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `permission.skill` 白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
+- 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
 - 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.0`，过程型技能；经 v2 原生 `plugins` 数组加载）；固定版本（pin）以保证字节稳定前缀、避免自动更新导致的前缀漂移。v7.0.0（2026-10-10 发布）已在桌面 v2 的 CLI **2.1.0** 复核（2026-10-20：`gh release list` 确认 v7.0.0 仍是 Latest，pin 无需变动）；此前在 CLI 2.0.27 实测加载（`plugin list` → version `bb92a77`）；其 opencode 运行时文件 `.opencode/plugins/superpowers.js` 与 v6.4.2 **逐字节相同**（SHA256 一致）→ bootstrap 注入与常驻前缀不变，技能名册仍为 15 个；且**子会话（task subagent）不再注入 bootstrap**
 
@@ -69,9 +69,9 @@ opencode
   "deepseek": {
     "models": {
       "deepseek-flash": {
-        "settings": {
-          "temperature": 0,
-          "thinking": { "type": "disabled" }
+        "body": {
+          "thinking": { "type": "disabled" },
+          "temperature": 0
         },
         "capabilities": {
           "tools": true,
@@ -84,6 +84,8 @@ opencode
 }
 ```
 
+> `thinking`/`temperature` 必须写在 `body`：`settings` 只承载 provider 选项（`timeout`/`chunkTimeout`/`reasoningEffort` 等），写进去会被静默丢弃。
+
 > **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-flash`。
 
 ### v2 原生键名（本仓库唯一写法）
@@ -93,7 +95,7 @@ opencode
 | 关注点 | 本仓库写法（v2 原生） | 要点 |
 | --- | --- | --- |
 | 插件 | `plugins`（字符串或 `{package, options}`） | superpowers 使用字符串形式 |
-| Provider/模型 | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = 请求透传（temperature/thinking）；`capabilities` = `{tools, input[], output[]}`；`cost` 为**数组** + 嵌套 `cache: {read, write}`；`limit.input` 驱动压缩触发点 |
+| Provider/模型 | `providers.<id>.models.<mid>.{settings, body, capabilities, cost, limit, variants}` | `settings` = provider 选项（`timeout`/`chunkTimeout`/`reasoningEffort` 等）；`body` = 原始请求字段（thinking/temperature）；`capabilities` = `{tools, input[], output[]}`；`cost` 为**数组** + 嵌套 `cache: {read, write}`；`limit.input` 驱动压缩触发点 |
 | Agent / 命令 | `agents` / `commands` | 内联覆盖内置 agent；文件型 agent 保持 `agents/*.md` |
 | 权限 | `permissions`（有序 `{action, resource, effect}` 列表） | last-match-wins；v2 action 名：`shell`（非 `bash`）、`subagent`（非 `task`） |
 | 附件 | `media.image` | 原 `attachment` |
@@ -197,13 +199,13 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 .\scripts\sync-config.ps1
 ```
 
-将 `opencode/` 下的配置文件同步到 `~/.config/opencode/`（排除 `node_modules`、`package.json`、`package-lock.json`）。脚本支持 `-Src` 传参指定源目录，便于其他机器使用：
+将 `opencode/` 下的配置文件同步到 `~/.config/opencode/`（排除 `node_modules`、`.git`、包清单与锁文件：`package.json`/`package-lock.json`/`bun.lockb`/`pnpm-lock.yaml`）。脚本支持 `-Src` 传参指定源目录，便于其他机器使用：
 
 ```powershell
 .\scripts\sync-config.ps1 -Src "D:\path\to\my-opencode-deepseek-config\opencode"
 ```
 
-> **注意**：`skills/`、`agents/`、`commands/` 的删除清理走 git 索引 + 历史记录。刚 `git rm` 但**尚未提交**的删除不会被识别为“待清理文件”，此时需手动删一次全局目录里的同名副本（提交后再跑一次同步即可自动对账）。
+> **注意**：`skills/`、`agents/`、`commands/` 的删除清理走 git 索引 + **全历史**（`git log --all --name-only`）。`git rm` 后即使**尚未提交**也会被识别为待清理文件；同步时目标目录里的同名副本会被删除。
 
 ## 模型分工
 
@@ -326,7 +328,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 单次费用受**缓存命中率**支配（同一配置连跑两次，命中部分在 256～6,528 tokens 之间浮动），因此跨轮比较要看总 prompt tokens：**14,690 → 15,153（+463，≈ +3.2%）**，与上面的字节账（+1627 字节 ≈ +407 tokens）吻合。
 
-这 15,153 tokens 里，`AGENTS.md`（15,731 B）+ `orchestrator.md`（13,172 B）≈ 7.4K tokens，其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
+当前常驻前缀里，`AGENTS.md`（16,819 B）+ `orchestrator.md`（13,311 B）≈ 7.5K tokens（上表 15,153 tokens 是 2026-09-20 的基线）；其余是 opencode 基础系统提示与工具 schema——**本仓库能直接控制的就是前面这部分**，所以「精简提示词」是唯一能持续压缩常驻成本的手段。复现这条命令即可核对当前常驻开销。
 
 ## Agent 结构
 
@@ -337,13 +339,13 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `orchestrator` | flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
 | `solo` | v4-pro（默认） | 单模型内联执行器：零委派、不用后台助手，全程在当前会话所选模型内完成 |
 
-> `solo` 是第二个 primary agent：`permission.task: "*": "deny"`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话所选模型，默认 pro）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
+> `solo` 是第二个 primary agent：`{action: subagent, resource: "*", effect: deny}`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话所选模型，默认 pro）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
 
 ### Subagents
 
 | Agent | 模型 | 权限 | 作用 |
 | --- | --- | --- | --- |
-| `planner` | flash | 读写 | 规划、架构、拆解任务 |
+| `planner` | flash#low | 读写 | 规划、架构、拆解任务 |
 | `deep-worker` | v4-pro | 读写 | 重型实现、多文件改动、复杂调试 |
 | `oracle` | v4-pro | **只读** | 根因分析、深度理解代码 |
 | `reviewer` | v4-pro | **只读** | 代码审查升级层：Full 路径 / 高风险触发 / 确认 flash 初检线索 |
@@ -351,14 +353,14 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `consultant` | flash | 读写 | 方案讨论、最佳实践建议 |
 | `explore` | flash | **只读** | 代码库搜索、并行探索 |
 | `librarian` | flash | **只读** | 文档检索、Web 搜索 |
-| `light-orchestrator` | flash | 读写 | 轻量任务、单文件编辑 |
+| `light-orchestrator` | flash#low | 读写 | 轻量任务、单文件编辑 |
 | `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
 
 > `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（pro 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 输入价 4.4× flash）。
 >
-> 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + bash 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`bash: "*": deny`，无任何 bash 白名单。
+> 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`systematic-debugging`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`/`writing-skills`（内联执行器需要完整工具链，仍以 `"*": deny` 兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
 > **思考分档（thinking tiers）**：全部声明在 `opencode.jsonc` 的**模型层**，Agent 只选模型引用（详见「模型分工」）。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking 关（最省，模型层 body `{"type":"disabled"}`）；`planner`/`light-orchestrator` = `deepseek/deepseek-flash#low`（thinking 开 + `settings.reasoningEffort: low`）；`deep-worker`/`oracle`/`reviewer` = pro · API 默认（thinking 开、effort `high`）；`solo` 无 `model` 字段，跟随会话所选模型，思考档随该模型而定。**Agent frontmatter 里不再出现任何思考参数**——`options.*` 既装不下 provider setting，也会把该 agent 打回 V1 迁移路径（见变更记录 2026-10-16）。
 
@@ -527,6 +529,25 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 ## 本次重构变更记录
 
+### 2026-10-20（三）：全面审查轮 —— v2 术语校正 + 文档/配置对齐 + 校验器加 v1 守卫
+
+**只读审计 + 最小修复**：全仓核对 v2 术语、模型档位、skill/命令名册与脚本行为。配置本身结构合法（12 agents / 18 commands / 23 skills / 2 models），本轮修的是「文档教错写法」和「能力接线断开」。
+
+| 变更 | 位置 | 说明 / 依据 |
+| --- | --- | --- |
+| v1 术语清理 | `AGENTS.md`、`agents/orchestrator.md`、`agents/solo.md` | `Task`/`permission.task`/`task_id`/`bash` → v2 的 `subagent`/`sessionID`/`shell`；v2 迁移器明确 `sessionID` 取代 `task_id` |
+| README thinking 示例纠正 | 两份 README | 示例把 `thinking`/`temperature` 写在 `settings` 下，正是 2026-10-16 修掉的失效写法；改为 `body`，并在键名表写明 `settings` 只放 provider 选项 |
+| 档位表校正 | 两份 README | `planner`/`light-orchestrator` 标为 `flash#low`（原表写 flash，与 `agents/*.md` 和 AGENTS.md 的 mid tier 不符） |
+| solo 名册表述校正 | 两份 README | 删除已裁掉的 `systematic-debugging`/`writing-skills`，与 `solo.md` 的 28 项 allowlist 一致 |
+| 字节数/同步说明校正 | 两份 README | 常驻前缀按当前文件重算（16,819 + 13,311 B ≈ 7.5K tokens）；`git rm` 未提交的删除本来就会被全历史对账捕获，删除相反的手动步骤 |
+| vision 预处理接线 | `agents/vision.md`、`skills/vision-prep/SKILL.md` | `vision-prep` 需要 `python`，但 vision 的 shell 默认 deny；补脚本级 allow（`tile.py`/`pdf2png.py`），并把 v1 的 `attachment.image` 改为 `media.image` |
+| 维护技能运行时更新 | `skills/opencode-config/SKILL.md` | 2.0.30 → **2.1.0**；`reload` 在 2.1.0 已恢复（`--help` 实测），修正「无 reload」的旧结论 |
+| 校验器加固 | `scripts/validate-jsonc.js` | 顶层出现任一 v1 键即失败，防止「未知键静默丢弃」导致再次走进 V1→V2 迁移路径 |
+
+**验证**：`node scripts/validate-jsonc.js` 通过；结构审计确认 12 agents / 18 commands / 23 skills / 2 models、frontmatter 仅原生键、所有 skill 引用存在；CLI `v2.1.0 --help` 确认 `reload`。
+
+**未同步全局配置**：本轮只改仓库（配置源），未运行 `sync-config.ps1`，避免会话中途触发热重载；部署时执行 `.\scripts\sync-config.ps1`。
+
 ### 2026-10-20（二）：常规升级轮 —— 主程序 2.1.0 + 常驻前缀去重 + 名册裁剪 + `compaction.reserved` 口径澄清
 
 **只读审计 + 最小改动**：三路升级源（主程序 / 插件 / 定价）逐项核验，另删掉 1 处冗余配置、2 处重复表述、2 个重复名册项。所有改动都指向同一目标：降低**每轮请求的常驻前缀**。
@@ -543,7 +564,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 变更 | 位置 | 说明 / 依据 |
 | --- | --- | --- |
 | 删除 `instructions: ["AGENTS.md"]` | `opencode.jsonc` | 冗余：`core/instruction-discovery.ts` 默认 `global`+`project` 双发现，AGENTS.md 本来就由「全局配置目录 + 项目根上溯」加载；`editor.files` 是 **Map<path>**，同一路径重复登记也只会保留一份。删掉它只省一次多余扫描，行为不变 |
-| 合并 `orchestrator.md` 与 `AGENTS.md` 的重复条目 | `agents/orchestrator.md`、`AGENTS.md` | `task_id`（「不带就是新会话」）与 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 两处原文重复，各只保留一份：语义说明归 `AGENTS.md`（所有 agent 共享），路由措辞留在 orchestrator |
+| 合并 `orchestrator.md` 与 `AGENTS.md` 的重复条目 | `agents/orchestrator.md`、`AGENTS.md` | `sessionID`（v1 旧名 `task_id`；「不带就是新会话」）与 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 两处原文重复，各只保留一份：语义说明归 `AGENTS.md`（所有 agent 共享），路由措辞留在 orchestrator |
 | `solo` 名册 30 → **28** | `agents/solo.md` | 移除与本地蒸馏重复的两个 superpowers 接线项：`systematic-debugging`（→ `diagnosing-bugs`）、`writing-skills`（→ `writing-for-agents`）。名册 name+description 是每轮常驻成本，重复项纯损耗 |
 | `compaction.reserved` 口径澄清 | `opencode.jsonc`、本 README | v2 schema（`packages/schema/src/config/compaction.ts`）只有 `{auto, keep:{tokens}, buffer}`，**没有 `reserved`**；该名字是 v1 遗留，v2 等价旋钮是 `buffer`。两个模型的 `limit.input` 本就显式声明（flash 131072 / pro 163840），压缩触发点仍是 115,072 / 147,840 tokens |
 | 版本与日期同步 | 本 README、`README.en-US.md` | CLI 2.0.30 → **2.1.0**，定价核验日期 → 2026-10-20 |
@@ -729,7 +750,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 - **视觉输入成本封顶** —— `media.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
-- **名册即预算** —— 每个 Agent 的 `permission.skill` 白名单同时决定 skill 名册大小；被 deny 的 skill 不进名册，也就不进每轮的常驻上下文
+- **名册即预算** —— 每个 Agent 的 `skill` 权限白名单同时决定 skill 名册大小；被 deny 的 skill 不进名册，也就不进每轮的常驻上下文
 - **视觉 opt-in** —— 图像只在用户提供时进入 payload；非视觉任务不传图、不生成图
 - **持续改进** —— reflect 机制化发现摩擦、code-review 证据门控保证质量
 - **审查成本分级** —— 代码审查默认 flash 初检（省约 73%），仅在升级触发条件命中时付 pro 全价；升级时传递未验证线索，避免重复推导

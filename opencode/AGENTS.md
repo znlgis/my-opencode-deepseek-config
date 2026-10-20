@@ -2,8 +2,8 @@
 
 These rules apply to every agent and load automatically as shared context;
 `agents/*.md` only add what is unique to each role. When prompts overlap, follow
-the stricter instruction. Routing tables, model tiers, and fallback chains live
-in `agents/orchestrator.md` — do not restate them here.
+the stricter instruction. Routing tables and fallback chains live in
+`agents/orchestrator.md` — do not restate them here.
 
 ## Core Principles
 
@@ -87,8 +87,8 @@ in `agents/orchestrator.md` — do not restate them here.
   and tell the user the subagent infrastructure is failing. Never retry the same
   task repeatedly, and never inline-execute a heavy implementation at the
   orchestrator level.
-- **Pass the explicit `task_id`** when resuming a subagent session — without it
-  you get a fresh spawn, not a resumed session.
+- **Pass the explicit `sessionID`** when resuming a subagent session — without
+  it you get a fresh spawn, not a resumed session.
 - **Reference paths, don't paste files.** Point at `src/app.ts:42`.
 
 ## Language

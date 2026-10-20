@@ -10,10 +10,10 @@
 - Primary model: `deepseek/deepseek-v4-pro`; lightweight/multimodal model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal)
 - Agent nesting: `experimental.subagent_depth: 2` (v2-native key; the v1 top-level `subagent_depth` is dropped by v2 and no longer written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
-- Permission baseline: allow by default, destructive bash commands set to `ask`; sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get a bash allowlist (deny all by default + allow read-only subcommands only)
+- Permission baseline: `read` allowed by default, `shell` set to `ask` (unmatched commands go to a human; dangerous patterns are not enumerated); sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get shell rules (deny all by default + allow read-only subcommands only)
 - Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (flash `131072−16000=115,072`, pro `163840−16000=147,840` tokens), keeping a verbatim tail of `keep.tokens: 12000`; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed (the v1 `reserved` maps to v2 `buffer`); no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
-- Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `permission.skill` allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
+- Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `skill` permission allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
 - Plugins: `superpowers` only (git URL pinned to tag `#v7.0.0`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v7.0.0 (released 2026-10-10) is re-confirmed as the **Latest** release on 2026-10-20 (`gh release list`), so the pin needs no change; it was first smoke-tested on desktop v2's CLI 2.0.27 (`plugin list` → version `bb92a77`) and re-checked on CLI **2.1.0**; its opencode runtime file `.opencode/plugins/superpowers.js` is **byte-identical** to v6.4.2 (same SHA256), so the bootstrap injection and the always-on prefix are unchanged and the plugin exposes 15 skills; **task sub-sessions still receive no bootstrap injection**
 
@@ -69,9 +69,9 @@ This config splits thinking at the `providers` layer: flash disables thinking an
   "deepseek": {
     "models": {
       "deepseek-flash": {
-        "settings": {
-          "temperature": 0,
-          "thinking": { "type": "disabled" }
+        "body": {
+          "thinking": { "type": "disabled" },
+          "temperature": 0
         },
         "capabilities": {
           "tools": true,
@@ -84,6 +84,8 @@ This config splits thinking at the `providers` layer: flash disables thinking an
 }
 ```
 
+> `thinking`/`temperature` must live under `body`: `settings` carries provider options only (`timeout`/`chunkTimeout`/`reasoningEffort`, …), and keys placed there are silently dropped.
+
 > **Model ID naming convention**: `provider_id/model_id` — i.e. `deepseek/deepseek-v4-pro` and `deepseek/deepseek-flash`.
 
 ### v2-native keys (the only dialect this repo writes)
@@ -93,7 +95,7 @@ This repo is an **OpenCode v2-only config** (1.18.x is no longer supported). v2 
 | Concern | What this repo writes (v2-native) | Notes |
 | --- | --- | --- |
 | Plugins | `plugins` (string or `{package, options}`) | superpowers uses the string form |
-| Providers/models | `providers.<id>.models.<mid>.{settings, capabilities, cost, limit}` | `settings` = request passthrough (temperature/thinking); `capabilities` = `{tools, input[], output[]}`; `cost` = **array** + nested `cache: {read, write}`; `limit.input` drives the compaction trigger |
+| Providers/models | `providers.<id>.models.<mid>.{settings, body, capabilities, cost, limit, variants}` | `settings` = provider options (`timeout`/`chunkTimeout`/`reasoningEffort`, …); `body` = raw request fields (thinking/temperature); `capabilities` = `{tools, input[], output[]}`; `cost` = **array** + nested `cache: {read, write}`; `limit.input` drives the compaction trigger |
 | Agents / commands | `agents` / `commands` | inline overrides; file-based agents stay in `agents/*.md` |
 | Permissions | `permissions` (ordered `{action, resource, effect}` list) | last-match-wins; v2 action names: `shell` (not `bash`), `subagent` (not `task`) |
 | Attachments | `media.image` | the former `attachment` |
@@ -197,13 +199,13 @@ Launch OpenCode and confirm:
 .\scripts\sync-config.ps1
 ```
 
-This copies the config files under `opencode/` into `~/.config/opencode/` (excluding `node_modules`, `package.json`, and `package-lock.json`). Pass `-Src` to specify a custom source directory for use on other machines:
+This copies the config files under `opencode/` into `~/.config/opencode/` (excluding `node_modules`, `.git`, package manifests and lockfiles: `package.json`/`package-lock.json`/`bun.lockb`/`pnpm-lock.yaml`). Pass `-Src` to specify a custom source directory for use on other machines:
 
 ```powershell
 .\scripts\sync-config.ps1 -Src "D:\path\to\my-opencode-deepseek-config\opencode"
 ```
 
-> **Note**: stale-file cleanup inside `skills/`, `agents/`, and `commands/` is driven by the git index plus git history. A deletion that is `git rm`-staged but **not yet committed** is not recognized as stale, so delete that same-name copy in the global directory by hand once; after the commit, a re-run of the sync reconciles it automatically.
+> **Note**: stale-file cleanup inside `skills/`, `agents/`, and `commands/` is driven by the git index plus **full history** (`git log --all --name-only`). A deletion that is `git rm`-staged but **not yet committed** is still recognized as stale, and the same-name copy in the global directory is removed on the next sync.
 
 ## Model Division of Labor
 
@@ -326,7 +328,7 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 
 Per-request cost is dominated by **cache hit rate** (two back-to-back runs of the same config varied between 256 and 6,528 cache-read tokens), so cross-pass comparison should use total prompt tokens: **14,690 → 15,153 (+463, ≈ +3.2%)**, which matches the byte accounting above (+1627 bytes ≈ +407 tokens).
 
-Of those 15,153 tokens, `AGENTS.md` (15,731 B) + `orchestrator.md` (13,172 B) ≈ 7.4K tokens; the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
+In the current always-on prefix, `AGENTS.md` (16,819 B) + `orchestrator.md` (13,311 B) ≈ 7.5K tokens (the 15,153-token row above is the 2026-09-20 baseline); the rest is opencode's base system prompt and tool schemas — **the part this repo controls directly is the former**, which is why prompt trimming is the only lever that keeps shrinking the always-on cost. Re-run the command above to check the current standing overhead.
 
 ## Agent Structure
 
@@ -337,13 +339,13 @@ Of those 15,153 tokens, `AGENTS.md` (15,731 B) + `orchestrator.md` (13,172 B) �
 | `orchestrator` | flash | Default entry point: intent gate + model-aware routing + fallback chains |
 | `solo` | v4-pro (default) | Single-model inline executor: zero delegation, no background helpers, all work done inline in the current session |
 
-> `solo` is the second primary agent: `permission.task: "*": "deny"` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's selected model, pro by default), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
+> `solo` is the second primary agent: `{action: subagent, resource: "*", effect: deny}` (zero delegation — spawns no subagents), no explicit `model` field (follows the session's selected model, pro by default), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
 
 ### Subagents
 
 | Agent | Model | Permission | Role |
 | --- | --- | --- | --- |
-| `planner` | flash | read-write | Planning, architecture, task breakdown |
+| `planner` | flash#low | read-write | Planning, architecture, task breakdown |
 | `deep-worker` | v4-pro | read-write | Heavy implementation, multi-file changes, complex debugging |
 | `oracle` | v4-pro | **read-only** | Root-cause analysis, deep code understanding |
 | `reviewer` | v4-pro | **read-only** | Review escalation tier: Full path / high-stakes trigger / confirming flash first-pass leads |
@@ -351,14 +353,14 @@ Of those 15,153 tokens, `AGENTS.md` (15,731 B) + `orchestrator.md` (13,172 B) �
 | `consultant` | flash | read-write | Approach discussions, best-practice advice |
 | `explore` | flash | **read-only** | Codebase search, parallel exploration |
 | `librarian` | flash | **read-only** | Documentation lookup, web search |
-| `light-orchestrator` | flash | read-write | Lightweight tasks, single-file edits |
+| `light-orchestrator` | flash#low | read-write | Lightweight tasks, single-file edits |
 | `vision` | flash | read-write | Multimodal: images/screenshots/charts/UI mockups |
 
 > `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (pro review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a flash agent can finish → refuse (pro input is 4.4× flash).
 >
-> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a bash allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: `bash: "*": deny`, no bash allowlist at all.
+> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a shell allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: the `shell` ruleset denies everything by default, with no shell allowlist at all.
 >
-> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`/`writing-plans`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set plus `brainstorming`/`systematic-debugging`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`/`writing-skills` (the inline executor needs the complete toolchain, still guarded by `"*": deny`). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget. Only 4 superpowers entries are wired (`writing-plans` → `planner`; `test-driven-development`/`verification-before-completion` → `deep-worker`; `verification-before-completion` → `light-orchestrator`); every other superpowers skill has a local equivalent and stays unwired so two competing processes never coexist — the mapping table is in `AGENTS.md`'s Plugins section.
+> Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`/`writing-plans`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set plus `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans` (the inline executor needs the complete toolchain, still guarded by a `resource: "*"` deny rule). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget. Only 4 superpowers entries are wired (`writing-plans` → `planner`; `test-driven-development`/`verification-before-completion` → `deep-worker`; `verification-before-completion` → `light-orchestrator`); every other superpowers skill has a local equivalent and stays unwired so two competing processes never coexist — the mapping table is in `AGENTS.md`'s Plugins section.
 >
 > **Thinking tiers**: all declared at the **model layer** in `opencode.jsonc`; agents only choose a model reference (see "Model Division of Labor"). `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking off (cheapest, model-level body `{"type":"disabled"}`); `planner`/`light-orchestrator` = `deepseek/deepseek-flash#low` (thinking on + `settings.reasoningEffort: low`); `deep-worker`/`oracle`/`reviewer` = pro · API default (thinking on, effort `high`); `solo` has no `model` field and follows the session's selected model, so its thinking tier follows that model. **No thinking parameter ever appears in agent frontmatter** — `options.*` cannot hold a provider setting and additionally pushes that agent back onto the V1 migration path (see the 2026-10-16 change-log entry).
 
@@ -527,6 +529,25 @@ On the fence: let flash take one pass; escalate only when you can state the reas
 
 ## Refactor Change Log
 
+### 2026-10-20 (8): full-review pass — v2 terminology fixes + docs/config alignment + a v1 guard in the validator
+
+**Read-only audit plus minimal edits**: the whole repo was checked for v2 terminology, model tiers, skill/command rosters and script behavior. The config itself was structurally valid (12 agents / 18 commands / 23 skills / 2 models); the fixes target docs that taught the wrong shape and one capability that was wired but unusable.
+
+| Change | Location | Rationale / evidence |
+| --- | --- | --- |
+| v1 terminology cleanup | `AGENTS.md`, `agents/orchestrator.md`, `agents/solo.md` | `Task`/`permission.task`/`task_id`/`bash` → v2 `subagent`/`sessionID`/`shell`; the v2 migration message states that `sessionID` replaces `task_id` |
+| README thinking example corrected | both READMEs | The example put `thinking`/`temperature` under `settings`, the exact inert shape fixed on 2026-10-16; moved to `body`, and the key map now says `settings` carries provider options only |
+| Tier table corrected | both READMEs | `planner`/`light-orchestrator` are `flash#low`; the table said flash, contradicting `agents/*.md` and AGENTS.md's mid tier |
+| solo roster wording corrected | both READMEs | Removed the already-dropped `systematic-debugging`/`writing-skills`, matching solo's 28-entry allowlist |
+| Byte counts / sync note corrected | both READMEs | Always-on prefix recomputed from the current files (16,819 + 13,311 B ≈ 7.5K tokens); a `git rm`-staged deletion is already caught by full-history reconciliation, so the manual step was wrong |
+| vision preprocessing wired | `agents/vision.md`, `skills/vision-prep/SKILL.md` | `vision-prep` needs `python`, but vision's shell was deny-by-default; added script-scoped allows (`tile.py`/`pdf2png.py`) and replaced the v1 `attachment.image` with `media.image` |
+| Maintenance skill runtime updated | `skills/opencode-config/SKILL.md` | 2.0.30 → **2.1.0**; `reload` is back on 2.1.0 (verified with `--help`), correcting the "no reload" conclusion |
+| Validator hardened | `scripts/validate-jsonc.js` | Any top-level v1 key now fails the check, preventing another silent trip through the V1→V2 migration path |
+
+**Verification**: `node scripts/validate-jsonc.js` passes; the structural audit confirms 12 agents / 18 commands / 23 skills / 2 models, native-only frontmatter keys, and every referenced skill exists; CLI `v2.1.0 --help` lists `reload`.
+
+**Global config not synced**: this pass changed the repo (the source of truth) only and deliberately skipped `sync-config.ps1` to avoid a mid-session hot reload. Run `.\scripts\sync-config.ps1` when deploying.
+
 ### 2026-10-20 (7): regular upgrade pass — desktop CLI 2.1.0 + always-on prefix dedupe + roster trim + `compaction.reserved` clarification
 
 **Read-only audit plus minimal edits**: all three upgrade sources (host app / plugin / pricing) were verified item by item, and 1 redundant config key, 2 duplicated passages and 2 duplicated roster entries were removed. Every change targets the same thing: shrinking the **always-on per-request prefix**.
@@ -543,7 +564,7 @@ On the fence: let flash take one pass; escalate only when you can state the reas
 | Change | Location | Rationale / evidence |
 | --- | --- | --- |
 | Removed `instructions: ["AGENTS.md"]` | `opencode.jsonc` | Redundant: `core/instruction-discovery.ts` defaults both `global` and `project` discovery to on, so AGENTS.md is already loaded from the global config dir plus the project-root walk; `editor.files` is a **Map<path>**, so registering the same path twice keeps one copy anyway. Removing it only saves a redundant rescan |
-| Merged duplicated `orchestrator.md` / `AGENTS.md` entries | `agents/orchestrator.md`, `AGENTS.md` | The `task_id` rule ("without it you get a fresh spawn") and the `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` requirement were written twice; each now exists once — semantics belong in `AGENTS.md` (shared by every agent), routing wording stays in the orchestrator |
+| Merged duplicated `orchestrator.md` / `AGENTS.md` entries | `agents/orchestrator.md`, `AGENTS.md` | The `sessionID` rule (v1 name `task_id`; "without it you get a fresh spawn") and the `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` requirement were written twice; each now exists once — semantics belong in `AGENTS.md` (shared by every agent), routing wording stays in the orchestrator |
 | `solo` roster 30 → **28** | `agents/solo.md` | Dropped two wired superpowers entries that duplicate local skills: `systematic-debugging` (→ `diagnosing-bugs`) and `writing-skills` (→ `writing-for-agents`). The roster's name+description is per-turn cost, so duplicates are pure waste |
 | `compaction.reserved` clarified | `opencode.jsonc`, both READMEs | The v2 schema (`packages/schema/src/config/compaction.ts`) only has `{auto, keep:{tokens}, buffer}` — there is **no `reserved`**; that name is v1 legacy, and its v2 equivalent is `buffer`. Both models already declare `limit.input` explicitly (flash 131072 / pro 163840), so the trigger stays 115,072 / 147,840 tokens |
 | Version and date sync | both READMEs | CLI 2.0.30 → **2.1.0**, pricing verification date → 2026-10-20 |
@@ -727,7 +748,7 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 - **Controllable progress + failure isolation** — every TODO carries a verifiable completion criterion and reports `[done/total]` at phase boundaries; errors are classified transient/recoverable/fatal, with at most 3 attempts per operation and a mandatory strategy change on each retry; large tasks split into independent units so one failure never blocks the rest, closing with a `succeeded / failed / skipped` tally
 - **Per-model cost-tiered compression** — `limit.input` declares a separate working window per model: flash `131072−16000=115,072` (high-frequency path, tighter window), pro `163840−16000=147,840` (deep tasks, more headroom to reduce lossy compactions); the trigger point is computed, not inherited
 - **Vision input cost cap** — `media.image` auto-resizes oversized images (>1600px / >2MB before upload), combined with flash's internal ~800x800 downsampling, to avoid wasted base64 bytes
-- **The roster is the budget** — each agent's `permission.skill` allowlist also decides its skill roster size; a denied skill never enters the roster and therefore never enters the always-loaded context
+- **The roster is the budget** — each agent's `skill` permission allowlist also decides its skill roster size; a denied skill never enters the roster and therefore never enters the always-loaded context
 - **Vision is opt-in** — images enter the payload only when the user supplies them; non-visual tasks never attach or generate images
 - **Verification budget + evidence strength** — set the minimum non-duplicative evidence path up front; "it typechecks" alone is not QA for a behavior change
 - **Volatile-zone discipline** — volatile content (timestamps, random IDs, dynamic file lists) sits at the payload tail to protect DeepSeek's prompt-cache prefix

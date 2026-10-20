@@ -12,6 +12,15 @@
 const fs = require('fs');
 const path = require('path');
 
+// Top-level keys that only exist in the v1 dialect. Any one of them makes v2
+// take the V1→V2 migration branch instead of native decode.
+const V1_TOP_LEVEL_KEYS = new Set([
+  'logLevel', 'server', 'command', 'reference', 'snapshot', 'plugin',
+  'autoupdate', 'autoshare', 'disabled_providers', 'enabled_providers',
+  'small_model', 'mode', 'agent', 'provider', 'permission', 'tools',
+  'attachment', 'layout', 'subagent_depth',
+]);
+
 function stripJsonc(source) {
   const out = [];
   let inString = false;
@@ -131,8 +140,26 @@ function validate(filePath) {
 
   try {
     const raw = fs.readFileSync(absPath, 'utf-8');
-    const stripped = stripJsonc(raw);
-    JSON.parse(stripped);
+    const stripped = stripJsonc(raw.replace(/^\uFEFF/, ''));
+    const parsed = JSON.parse(stripped);
+
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      console.error(`  ✗ INVALID: ${absPath}`);
+      console.error('    config root must be a JSON object');
+      return false;
+    }
+
+    // The repo's central invariant: never contain a top-level v1 key, because
+    // any one of them silently reroutes the whole file through the V1→V2
+    // migration path. Nested keys are not checked here — `mode` and `tools`
+    // are legal inside v2 agent/provider objects.
+    const legacy = Object.keys(parsed).filter((key) => V1_TOP_LEVEL_KEYS.has(key));
+    if (legacy.length > 0) {
+      console.error(`  ✗ INVALID: ${absPath}`);
+      console.error(`    v1 top-level key(s) trigger the V1→V2 migration path: ${legacy.join(', ')}`);
+      return false;
+    }
+
     console.log(`  ✓ VALID: ${absPath}`);
     return true;
   } catch (e) {

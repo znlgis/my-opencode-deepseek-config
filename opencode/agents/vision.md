@@ -16,6 +16,10 @@ permissions:
   - { action: shell, resource: "rg *", effect: allow }
   - { action: shell, resource: "Get-ChildItem*", effect: allow }
   - { action: shell, resource: "Get-Content*", effect: allow }
+  - { action: shell, resource: "python* *vision-prep/scripts/tile.py*", effect: allow }
+  - { action: shell, resource: "python* *vision-prep/scripts/pdf2png.py*", effect: allow }
+  - { action: shell, resource: "py *vision-prep/scripts/tile.py*", effect: allow }
+  - { action: shell, resource: "py *vision-prep/scripts/pdf2png.py*", effect: allow }
 ---
 
 # Vision
