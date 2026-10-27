@@ -325,9 +325,11 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 ```text
 ├── opencode/          # OpenCode 配置目录（agents/、skills/、opencode.jsonc、AGENTS.md）
+├── docs/UPGRADE.md    # 升级流程：不变量、基线表、上游核对点、验收命令
 ├── scripts/           # sync-config.ps1（同步到全局配置）
 │                      # validate-jsonc.js（JSONC 校验）
 │                      # estimate-cost.js（按 token 数估算费用）
+├── AGENTS.md          # 本仓库维护规则（自动加载，指向 docs/UPGRADE.md）
 ├── README.md          # 简体中文（默认）
 ├── README.en-US.md    # English
 └── LICENSE
@@ -351,6 +353,8 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
 > 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`opencode-cli.exe reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode-cli.exe debug config`。
+
+> 升级 opencode、插件或模型/定价时不要凭记忆改：按 `docs/UPGRADE.md` 走（不变量、基线表、上游核对点、验收命令）。仓库根的 `AGENTS.md` 会在本仓库的每个会话自动加载并指向它。
 
 ## 使用指南
 

@@ -325,9 +325,11 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 
 ```text
 ├── opencode/          # OpenCode config directory (agents/, skills/, opencode.jsonc, AGENTS.md)
+├── docs/UPGRADE.md    # Upgrade runbook: invariants, baseline, upstream checks, acceptance (zh)
 ├── scripts/           # sync-config.ps1 (sync to global config)
 │                      # validate-jsonc.js (JSONC validation)
 │                      # estimate-cost.js (cost estimate from token counts)
+├── AGENTS.md          # Repo maintenance rules (auto-loaded, points at docs/UPGRADE.md)
 ├── README.md          # Simplified Chinese (default)
 ├── README.en-US.md    # English
 └── LICENSE
@@ -351,6 +353,8 @@ When editing config, locate "what to change → which file", so you never change
 | A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
 
 > After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode`, then reload (desktop v2: `opencode-cli.exe reload`; or restart opencode). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode-cli.exe debug config`.
+
+> For an opencode, plugin or model/pricing upgrade, don't change from memory: follow `docs/UPGRADE.md` (invariants, baseline, upstream checks, acceptance list). The repo-root `AGENTS.md` is auto-loaded in every session in this repo and points at it.
 
 ## Usage Guide
 
