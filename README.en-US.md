@@ -15,21 +15,21 @@
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **23** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `skill` permission allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
-- Plugins: `superpowers` only (git URL pinned to tag `#v7.0.0`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v7.0.0 (released 2026-10-10) is re-confirmed as the **Latest** release on 2026-10-20 (`gh release list`), so the pin needs no change; it was first smoke-tested on desktop v2's CLI 2.0.27 (`plugin list` → version `bb92a77`) and re-checked on CLI **2.1.0**; its opencode runtime file `.opencode/plugins/superpowers.js` is **byte-identical** to v6.4.2 (same SHA256), so the bootstrap injection and the always-on prefix are unchanged and the plugin exposes 15 skills; **task sub-sessions still receive no bootstrap injection**
+- Plugins: `superpowers` only (git URL pinned to tag `#v7.0.1`, process skills, loaded via the v2-native `plugins` array); version-pinned to keep the prefix byte-stable and prevent prefix drift from auto-updates. v7.0.1 (released 2026-10-21) is confirmed **Latest** on 2026-10-27 (`gh release list`); its opencode runtime file `.opencode/plugins/superpowers.js` is **byte-identical** to v7.0.0 (17,617 B), so the bootstrap injection and the always-on prefix are unchanged and the plugin still exposes 15 skills; v7.0.1's changes live in skill bodies (brainstorming's question strategy rewritten; three long skills moved supporting docs into `references/`, read on demand); **task sub-sessions receive no bootstrap injection**
 
 ### Plugins and Model Mapping (Important)
 
-The single remaining plugin, **superpowers v7.0.0**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v7.0.0 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
+The single remaining plugin, **superpowers v7.0.1**, is a pure skill-injection plugin (`.opencode/plugins/superpowers.js`) with **no model-mapping capability**, so model routing can only happen at the agent layer — which is exactly how this config implements it. There is no way (and no need) to assign models inside a plugin. The v7.0.1 mapping table lives in `AGENTS.md`'s Plugins section (skill → agent → tier) and explicitly marks the entries that stay unwired because a local equivalent exists.
 
 > `@tarquinen/opencode-dcp` was removed: its two jobs (absolute-threshold early compression, tool-call dedup) are now covered by built-in compaction's **explicit per-model windows** (`providers.deepseek.models.*.limit.input` + `buffer`); one less plugin means one less prefix-drift and startup-cost path. Its cache, `dcp.jsonc`, and `compress` permission were all cleaned up.
 
-So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v7.0.0: it still only registers the skills path and injects the bootstrap — no model config keys — and `.opencode/plugins/superpowers.js` has not changed a byte since v6.4.2) — do not re-investigate.
+So the split "planning/architecture/complex review on pro; execution/first-pass/doc/batch/vision on flash" is implemented entirely through the `model:` field and thinking tiers in `agents/*.md` (see the routing strategy below), not through plugin config. This conclusion was verified against the plugin source (re-checked on v7.0.1: it still only registers the skills path and injects the bootstrap — no model config keys — and `.opencode/plugins/superpowers.js` has not changed a byte since v6.4.2) — do not re-investigate.
 
 ## DeepSeek Model Configuration
 
 ### Prerequisites
 
-- OpenCode v2 (desktop app's bundled CLI **2.1.0**, verified 2026-10-20; 1.18.x and older are **no longer supported**)
+- OpenCode v2 (desktop app's bundled CLI **2.2.0**, verified 2026-10-27; 1.18.x and older are **no longer supported**)
 - **Runtime caveat**: the `opencode` on `PATH` (WinGet install) is **1.18.4**, not this config's runtime — it takes the V1→V2 migration path. For headless runs use the desktop app's bundled CLI (path in the Quick Start ⚠️ note)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
 - Background subagents (delegation with `background: true`) require the environment variable `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` (PowerShell: `$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`); when unset, background delegation errors out and should fall back to foreground/serial dispatch
@@ -123,11 +123,11 @@ opencode
 
 Three self-checks after launch: `/models` shows `deepseek/deepseek-v4-pro`; the agent list has all 12 custom agents; describe any task in plain language and `orchestrator` classifies and routes it (to skip routing, use `/quick`, `/deep`, `/review`, … directly).
 
-> **⚠️ Must run on OpenCode V2.x (verified 2026-10-20).** This config is v2-native (no v1 key spellings anywhere — see "v2-native keys"). Measured on this machine: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4** (`opencode --version` → `1.18.4`), while the runtime actually in use is the desktop app **v2.1.0** and its bundled CLI:
+> **⚠️ Must run on OpenCode V2.x (verified 2026-10-27).** This config is v2-native (no v1 key spellings anywhere — see "v2-native keys"). Measured on this machine: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4** (`opencode --version` → `1.18.4`), while the runtime actually in use is the desktop app **v2.2.0** and its bundled CLI:
 >
 > ```powershell
 > $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"
-> & $cli --version        # opencode v2.1.0
+> & $cli --version        # opencode v2.2.0
 > ```
 >
 > Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds. For headless runs use the `$cli` above, not the `opencode` on `PATH`.
@@ -244,7 +244,7 @@ Cost ratio: pro input price is 4.4× flash (0.66 vs 0.15 per 1M tokens) and outp
 - **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `media.image` to 1600px / 2MiB to avoid wasting base64 bytes
 - **Automatic escalation**: when a flash agent can't handle a task, it escalates to pro automatically (with full context)
 
-**Model resolution chain (v2.0.24 source + live-verified; re-checked on v2.0.27 on 2026-10-12 with an environment caveat)**: `agent.model` decides the actual model in exactly three places — ① subagent/child sessions (including `/` commands: a command bound to a subagent-mode agent **spawns a child session** running at that agent's tier, e.g. `/deep`→pro, `/quick`→flash, and the current session model is untouched); ② the title/summary/compaction one-shot calls; ③ the desktop App's per-agent default for new sessions (build/plan/orchestrator → flash). The main session itself resolves `-m` > stored session model > global `model` (pro): in the desktop App you switch via the model picker (your pick is remembered); headless `opencode run` **does not read** `agent.model` — pass `-m deepseek/deepseek-flash` to get flash (verified: without it = pro ×2, with it = flash). **⚠️ 2026-10-12 re-test (v2.0.27)**: on this machine (whose live service only has the `opencode-go` provider) `-m deepseek/*` returns `provider.no-route` for both models, and only the run without `-m` succeeds — so the `-m` semantics depend on the target machine having `/connect deepseek` with a working provider route; re-verify there before relying on it.
+**Model resolution chain (v2.0.24 source + live-verified; re-checked on v2.0.27 on 2026-10-12 with an environment caveat; source re-checked on v2.2.0 on 2026-10-27)**: `agent.model` decides the actual model in exactly three places — ① subagent/child sessions (including `/` commands: a command bound to a subagent-mode agent **spawns a child session** running at that agent's tier, e.g. `/deep`→pro, `/quick`→flash, and the current session model is untouched); ② the title/summary/compaction one-shot calls; ③ the desktop App's per-agent default for new sessions (build/plan/orchestrator → flash). The main session itself resolves `-m` > stored session model > global `model` (pro): in the desktop App you switch via the model picker (your pick is remembered); headless `opencode run` **does not read** `agent.model` — pass `-m deepseek/deepseek-flash` to get flash (verified: without it = pro ×2, with it = flash). **⚠️ 2026-10-12 re-test (v2.0.27)**: on this machine (whose live service only has the `opencode-go` provider) `-m deepseek/*` returns `provider.no-route` for both models, and only the run without `-m` succeeds — so the `-m` semantics depend on the target machine having `/connect deepseek` with a working provider route; re-verify there before relying on it.
 
 Usage examples: "how does this library work?" → flash off (librarian); "add an export feature to the user module" → flash `#low` (planner); "what's the root cause of this login error?" → pro (oracle); `/review` → flash first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → flash first pass then pro escalation.
 
@@ -261,7 +261,7 @@ A Tier-1 report is a **complete review**, not a preview — a clean result is ne
 
 ### Cost Comparison
 
-Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-10-20**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-10-27**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) | Input price vs flash |
 | --- | --- | --- | --- | --- | --- |
@@ -412,7 +412,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 | --- | --- |
 | `code-review` | Single-pass code review + evidence gating; two-tier flash first pass / pro escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
 | `codemap` | Generates an annotated repository structure map for quick orientation, saving exploration tokens |
-| `gh-cli` | GitHub CLI v2.100+ reference: PR posting, api, rate limits, gh pr checks, gh skill/gh-aw, GHSA security notes |
+| `gh-cli` | GitHub CLI v2.103+ reference: PR posting, api, rate limits, gh pr checks, gh skill/gh-aw, GHSA security notes |
 | `git-master` | Advanced Git operations: rebase, squash, fixup, bisect, reflog, code archaeology, worktrees |
 | `git-release` | Tagged releases: release notes, SemVer inference, gh release commands |
 | `resolving-merge-conflicts` | Resolve merge conflicts hunk by hunk: trace original intent, never invent new behavior, never --abort |
@@ -528,6 +528,35 @@ On the fence: let flash take one pass; escalate only when you can state the reas
 ```
 
 ## Refactor Change Log
+
+### 2026-10-27 (9): regular upgrade pass — desktop CLI 2.2.0 + superpowers v7.0.1 + pricing re-check + doc sync
+
+**Read-only verification + minimal changes**: the three upgrade sources (host CLI / plugin / pricing) were each re-checked, and the config structure and rosters are unchanged (12 agents / 18 commands / 23 skills / 2 models). No new capability this round — the point is to make the "current version facts" accurate.
+
+| Item | Verified value | Conclusion |
+| --- | --- | --- |
+| Host app | desktop app's bundled CLI **v2.2.0** (`opencode-cli.exe --version` → `opencode v2.2.0`, 2026-10-27) | One minor above the previous 2.1.0; `--help` still lists `reload`. v2.2.0's breaking changes (TUI plugins need OpenTUI 0.7; `@opencode/ai` root export is now a Promise) do not affect this config — the repo only loads a skill-injection plugin and builds no TUI plugin |
+| Plugin | `obra/superpowers` **v7.0.1** (2026-10-21); `gh release list` confirms Latest | Pin `#v7.0.0` → **`#v7.0.1`**. Safety verified: `.opencode/plugins/superpowers.js` is **byte-identical** across the two tags (17,617 B) → bootstrap injection and the always-on prefix are unchanged. v7.0.1's actual changes are in skill bodies: brainstorming's question strategy was rewritten, and `subagent-driven-development`/`writing-skills`/`executing-plans` moved supporting docs into `references/` (read on demand) |
+| Pricing | DeepSeek official pricing page fetched 2026-10-27 | Matches `opencode.jsonc` item by item (flash 0.15/0.60/0.003, pro 0.66/1.98/0.022, off-peak); peak = off-peak ×2 with the same hours (UTC Mon–Fri 01–04 / 06–10, excluding Chinese public holidays). The page lists no separate "effective date", so 2026-10-27 is the verification anchor; **no correction needed** |
+| Model IDs | `deepseek/deepseek-flash`, `deepseek/deepseek-v4-pro` | **Unchanged** (hard constraint); `#low` remains a mode of flash, not a third model |
+
+**Change details**
+
+| Change | Location | Rationale |
+| --- | --- | --- |
+| Plugin pin bump | `opencode/opencode.jsonc` | `#v7.0.0` → `#v7.0.1`; zero prefix risk (the plugin file is byte-identical), and the skill-body trim only pays off when that skill is loaded — `executing-plans` drops its duplicated Example Workflow, while `subagent-driven-development`/`writing-skills` read their supporting docs from disk on demand |
+| Runtime-version comments | `opencode.jsonc`, `skills/opencode-config/SKILL.md` | The model-resolution chain now records "live-verified on v2.0.27 + source re-checked on v2.2.0 (`session/context.ts`, `tool/plugin/subagent.ts`, `session/compaction.ts`)"; the maintenance skill's target runtime moves 2.1.0 → **2.2.0** |
+| New v2.2.0 key recorded | `skills/opencode-config/SKILL.md` | Documents `settings.cache.ttl` (`Provider.CacheTTL`): DeepSeek's context cache is automatic and the official docs expose no client-side TTL, so it is **not adopted** — an unverified key never enters the config |
+| gh-cli skill corrected | `skills/gh-cli/SKILL.md` | Version baseline v2.100.0 → **v2.103.3**; fixes an example that fails outright: `isLatest` is a `gh release list` field and `gh release view --json` rejects it (measured on v2.103.3) |
+| Version and date sync | both READMEs | CLI 2.1.0 → **2.2.0**, plugin v7.0.0 → **v7.0.1**, pricing verification date → 2026-10-27 |
+
+**Token impact (structural)**: the config's always-on prefix is **unchanged** (the plugin injection file is byte-identical; agents/AGENTS.md untouched). The only quantifiable item is the smaller body when `executing-plans` is loaded; `references/` content is read only at the step that needs it and never enters the always-on context. Because this machine's live service still only has the `opencode-go` provider, no real request/billing data can confirm the reduction.
+
+**Verification**: `node scripts/validate-jsonc.js` passes; `node scripts/estimate-cost.js` matches the pricing table; the structural counts stay 12 agents / 18 commands / 23 skills / 2 models; CLI `v2.2.0 --help` lists `reload`; `gh release list` confirms v7.0.1 is Latest.
+
+**Not verified**: v2.2.0 was checked only for version, config parsing and source cross-reading, not a full end-to-end `run` smoke test; `settings.cache.ttl` was not tested against DeepSeek and is therefore not enabled; the skill-body reduction was not byte-measured (recorded from the release notes only).
+
+**Global config not synced**: this pass changed the repo (config source) only and did not run `sync-config.ps1`; run `.\scripts\sync-config.ps1` when deploying.
 
 ### 2026-10-20 (8): full-review pass — v2 terminology fixes + docs/config alignment + a v1 guard in the validator
 
@@ -733,7 +762,7 @@ Switching: automatic — `orchestrator` classifies by intent and routes, and a f
 
 ## Sources
 
-The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (intent gating, read-only isolation, anti-patterns), [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) (dispatcher-first, fallback chains, rejection contract, prompt-cache safety), [anomalyco/opencode](https://github.com/anomalyco/opencode) (config schema, skill system), [cli/cli](https://github.com/cli/cli) (gh v2.100 command set), [OpenSpec](https://github.com/Fission-AI/OpenSpec) (delta specs), [mattpocock/skills](https://github.com/mattpocock/skills) (conflict resolution, handoff documents, debugging/architecture/domain-modeling skills), [pi](https://github.com/earendil-works/pi) (answer first then act, terse responses), and [deepreview](https://github.com/mechanai/deepreview) (effective-size routing). Pure config, zero extra dependencies. **Borrow, don't copy**: take only lightweight design ideas, simplify before adding.
+The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent) (intent gating, read-only isolation, anti-patterns), [oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim) (dispatcher-first, fallback chains, rejection contract, prompt-cache safety), [anomalyco/opencode](https://github.com/anomalyco/opencode) (config schema, skill system), [cli/cli](https://github.com/cli/cli) (gh v2.103 command set), [OpenSpec](https://github.com/Fission-AI/OpenSpec) (delta specs), [mattpocock/skills](https://github.com/mattpocock/skills) (conflict resolution, handoff documents, debugging/architecture/domain-modeling skills), [pi](https://github.com/earendil-works/pi) (answer first then act, terse responses), and [deepreview](https://github.com/mechanai/deepreview) (effective-size routing). Pure config, zero extra dependencies. **Borrow, don't copy**: take only lightweight design ideas, simplify before adding.
 
 ## Design Philosophy
 

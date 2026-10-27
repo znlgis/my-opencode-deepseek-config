@@ -1,11 +1,11 @@
 ---
 name: gh-cli
-description: Patterns for invoking the GitHub CLI (gh v2.100.0+) from agents. Use when the task mentions GitHub, gh, pull requests/PRs, issues, releases, gists, Actions/workflow runs, forks, repo cloning, reviews, or you need exact gh commands. Covers pagination, repo targeting, search vs list, discussions, projects, rulesets, skills, and gh api fallback.
+description: Patterns for invoking the GitHub CLI (gh v2.103.3+) from agents. Use when the task mentions GitHub, gh, pull requests/PRs, issues, releases, gists, Actions/workflow runs, forks, repo cloning, reviews, or you need exact gh commands. Covers pagination, repo targeting, search vs list, discussions, projects, rulesets, skills, and gh api fallback.
 ---
 
 # GitHub CLI (`gh`) agent patterns
 
-Authoritative patterns for driving the official `gh` CLI (v2.100.0) from agents,
+Authoritative patterns for driving the official `gh` CLI (v2.103.3) from agents,
 based on [cli/cli](https://github.com/cli/cli) trunk. Prefer `gh` over raw `curl`
 or `gh api` — `gh` handles auth, pagination, and JSON output automatically.
 
@@ -377,7 +377,8 @@ for parsing — never scrape the human-readable table.
 gh release list -L 10
 
 # The latest release (no tag argument reads "latest"), machine-readable
-gh release view --json tagName,name,isLatest,publishedAt,url,assets
+# NOTE: isLatest is a `gh release list` field — `gh release view` rejects it.
+gh release view --json tagName,name,publishedAt,url,assets
 
 # A specific tag
 gh release view v1.2.0 --json tagName,url,assets

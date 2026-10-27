@@ -59,7 +59,7 @@
     // notes, then confirm `.opencode/plugins/superpowers.js` is still
     // byte-identical (that file is the whole opencode integration).
     "plugins": [
-        "superpowers@git+https://github.com/obra/superpowers.git#v7.0.0"
+        "superpowers@git+https://github.com/obra/superpowers.git#v7.0.1"
     ],
     // No `instructions` entry: AGENTS.md is already loaded by discovery — the
     // global config dir plus the project-root walk (core/instruction-discovery.ts,
@@ -123,7 +123,7 @@
                         }
                     ],
                     // `cost` is USD per 1M tokens — official off-peak rates,
-                    // re-verified against the pricing page 2026-10-20. Peak
+                    // re-verified against the pricing page 2026-10-27. Peak
                     // hours (UTC 01-04 & 06-10 Mon-Fri, excluding Chinese
                     // public holidays = Beijing 09-12 & 14-18) charge double,
                     // so this table under-reports peak-time spend by ~2x; it
@@ -174,7 +174,8 @@
         }
     },
     // Built-in agents (no .md file). `model` here binds only three surfaces
-    // (verified against v2.0.27 + live runs): subagent/child sessions — incl.
+    // (verified against v2.0.27 + live runs; source re-checked on v2.2.0
+    // 2026-10-27): subagent/child sessions — incl.
     // `general` (the superpowers Task dispatch target) and `/` commands bound
     // to subagent-mode agents — the title/summary/compaction one-shots, and
     // the desktop composer's per-agent default for new sessions (build/plan

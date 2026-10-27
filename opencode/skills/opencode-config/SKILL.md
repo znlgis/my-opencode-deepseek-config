@@ -21,10 +21,10 @@ paid for.
 
 ## Hard constraints
 - Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input. A model **variant** (`deepseek/deepseek-flash#low`) is a mode of an allowed model, not a third model.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.1.0**). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
-- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.1.0**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.2.0** on 2026-10-27). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
+- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.2.0**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
-## Target runtime: desktop v2 (CLI 2.1.0 measured)
+## Target runtime: desktop v2 (CLI 2.2.0 measured)
 v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
 or — if the file contains ANY v1 key — the official **V1→V2 migration**
 (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
@@ -45,6 +45,11 @@ so the loader never takes the migration branch.
 | subagent_depth | `experimental.subagent_depth` | top-level `subagent_depth` is dropped by v2 — never write it |
 | skills | flat `string[]` of paths/URLs | not used here (config-dir skills are auto-discovered) |
 | small_model | — | v2 expands it into the `title` agent; this repo pins `title` explicitly instead |
+
+`settings.cache.ttl` (`Provider.CacheTTL`, e.g. `"5m"`/`"1h"`) is the new
+provider knob found in v2.2.0. DeepSeek's context cache is automatic and its
+pricing page exposes no client-side TTL, so this repo does not set it —
+unverified against DeepSeek, not adopted.
 
 `$schema` stays `https://opencode.ai/config.json` — the app itself writes that
 URL even though the published schema only documents the v1 keys (observed
@@ -155,7 +160,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 - `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
 - Capture both as UTF-8 or the multi-byte content corrupts the JSON:
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
-- `reload` is back on **2.1.0** (`opencode-cli.exe --help` lists it; 2.0.27 did not). The config watcher also reloads on file change by itself; use `opencode-cli.exe service restart` when a forced restart is needed.
+- `reload` is present on **2.2.0** (`opencode-cli.exe --help` lists it; absent in 2.0.27, restored in 2.1.0). The config watcher also reloads on file change by itself; use `opencode-cli.exe service restart` when a forced restart is needed.
 - Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
 - `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
 - The 1.18.x line is out of scope; do not verify against it.
