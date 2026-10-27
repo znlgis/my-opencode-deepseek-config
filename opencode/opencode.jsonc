@@ -7,7 +7,7 @@
     // README「v2 原生键名」for the key map and the verification method.
     "$schema": "https://opencode.ai/config.json",
     "default_agent": "orchestrator",
-    "model": "deepseek/deepseek-v4-pro",
+    "model": "deepseek/deepseek-flash",
     "update": "notify",
     "share": "disabled",
     "lsp": true,
@@ -65,8 +65,18 @@
     // global config dir plus the project-root walk (core/instruction-discovery.ts,
     // both scopes default true). Listing it again only added a redundant rescan.
 
-    // DeepSeek thinking split (deepseek-harness official): flash disables
-    // thinking for cheapest+fastest runs; pro keeps the default (thinking on).
+    // Single-model config: `deepseek-flash` is the ONLY model. Agents differ
+    // only in thinking mode, expressed as model variants so the choice stays
+    // at the model layer:
+    //   (no suffix) thinking OFF + temperature 0   — cheapest, router/simple;
+    //   #low        thinking ON, effort `low`       — routine planning;
+    //   #high       thinking ON, effort `high`      — deep reasoning/review.
+    // Upstream default is thinking ON at effort `high` (DeepSeek thinking-mode
+    // guide, re-checked 2026-10-27). So only the no-suffix tier actually saves
+    // reasoning tokens — it must send `disabled` explicitly; `#high` merely
+    // restates the default, and `#low` is the one middle rung that exists.
+    // There is no medium effort: `minimal`→low, `medium`/`xhigh`→high,
+    // `max`/`ultra`→max.
     // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
     // and vision variants are now one natively-multimodal model, so it carries
     // the `capabilities` block (image input). Without it OpenCode treats the
@@ -77,11 +87,11 @@
     //            `settings.reasoningEffort` provider setting (camelCase in
     //            config, snake_case on the wire). Neither is a native schema
     //            field; both are DeepSeek API request parameters.
-    // Effort is expressed as a model VARIANT rather than a per-agent option:
-    // an agent cannot carry provider settings (`request` overlays only
-    // `headers`/`body`), and OpenCode's own DeepSeek mapping resolves effort
-    // through `settings`. A variant is a mode of flash, not a third model, so
-    // the 2-model matrix (pro / flash) stays intact.
+    // Effort is a model VARIANT rather than a per-agent option: an agent cannot
+    // carry provider settings (`request` overlays only `headers`/`body`), and
+    // OpenCode's own DeepSeek mapping resolves effort through `settings`. Every
+    // tier bills at the same flash rate; higher effort only buys extra
+    // reasoning tokens.
     "providers": {
         "deepseek": {
             "models": {
@@ -98,6 +108,13 @@
                     // (core/variant.ts — the `deepseekChat` protocol emits
                     // `body: {thinking: {type: "disabled"}}` for a non-thinking
                     // run).
+                    // `temperature: 0` binds ONLY on this thinking-off tier:
+                    // with thinking on, the API ignores temperature,
+                    // presence_penalty and frequency_penalty — no error, no
+                    // effect — so the variants inherit it inertly. Do not try
+                    // to null it out per variant: mergeOverlay treats `null` as
+                    // a value (only `undefined` keeps the base), so it would be
+                    // serialized onto the wire.
                     "body": {
                         "thinking": { "type": "disabled" },
                         "temperature": 0
@@ -107,18 +124,28 @@
                         "input": ["text", "image"],
                         "output": ["text"]
                     },
-                    // The mid tier (planner, light-orchestrator) wants thinking
-                    // ON at low effort — the one combination flash does not get
-                    // by default. Effort is a provider setting, not a body key:
-                    // `settings.reasoningEffort` is what the aisdk layer
-                    // forwards as the API's `reasoning_effort` (core/aisdk.ts
-                    // reads it; ai/protocols/openai-chat.ts maps it into the
-                    // body). Agents select this variant with
-                    // `model: deepseek/deepseek-flash#low`.
+                    // The two non-default tiers. Effort is a provider setting,
+                    // not a body key: `settings.reasoningEffort` is what the
+                    // aisdk layer forwards as the API's `reasoning_effort`
+                    // (core/aisdk.ts reads it; ai/protocols/openai-chat.ts maps
+                    // it into the body), while the toggle rides `body`. Agents
+                    // select a variant with `model:
+                    // deepseek/deepseek-flash#low` or `#high`. Each variant must
+                    // restate `thinking: enabled`: the model level disables it
+                    // and the overlay deep-merges, so a variant that omitted the
+                    // toggle would inherit `disabled`. `top_p` stays unset on
+                    // purpose — on flash it applies only with thinking on
+                    // (0.95-1.0, values below clamp to 0.95) and is pinned to
+                    // 1.0 when thinking is off.
                     "variants": [
                         {
                             "id": "low",
                             "settings": { "reasoningEffort": "low" },
+                            "body": { "thinking": { "type": "enabled" } }
+                        },
+                        {
+                            "id": "high",
+                            "settings": { "reasoningEffort": "high" },
                             "body": { "thinking": { "type": "enabled" } }
                         }
                     ],
@@ -141,21 +168,11 @@
                     // `context - maxOutputTokens` = 968,000, i.e. a session
                     // could grow to ~968K tokens before anything is
                     // compressed. Declaring `input` turns the cap into an
-                    // explicit working budget: flash 115K / pro 148K (see the
-                    // compaction block below).
+                    // explicit working budget: 131072 - 16000 = 115,072 tokens
+                    // (see the compaction block below).
                     "limit": {
                         "context": 1000000,
                         "input": 131072,
-                        "output": 384000
-                    }
-                },
-                "deepseek-v4-pro": {
-                    "cost": [
-                        { "input": 0.66, "output": 1.98, "cache": { "read": 0.022, "write": 0.66 } }
-                    ],
-                    "limit": {
-                        "context": 1000000,
-                        "input": 163840,
                         "output": 384000
                     }
                 }
@@ -180,10 +197,10 @@
     // to subagent-mode agents — the title/summary/compaction one-shots, and
     // the desktop composer's per-agent default for new sessions (build/plan
     // -> flash). The main `opencode run` session ignores it: `-m` > stored
-    // session model > root `model` (pro), so pass `-m deepseek/deepseek-flash`
-    // there. Thinking is controlled at the provider layer (flash = disabled,
-    // pro = default), so no per-agent variant or temperature here. Heavy work
-    // escalates to deep-worker (pro).
+    // session model > root `model` (flash), so pick a tier there with
+    // `-m deepseek/deepseek-flash#high`. Thinking is controlled at the
+    // provider layer (default off, variants on), so no per-agent temperature
+    // or variant here. Heavy work escalates to deep-worker (flash#high).
     //
     // `permissions` on an inline agent are APPENDED after that agent's
     // built-in rules and after the global `permissions` list above, so under
@@ -231,8 +248,7 @@
     //
     // When it fires: session tokens >= limit.input - buffer.
     //     flash: 131072 - 16000 = 115,072
-    //     pro:   163840 - 16000 = 147,840
-    // Both windows sit far below the 1M hard limit on purpose: every request
+    // That window sits far below the 1M hard limit on purpose: every request
     // re-sends the whole context, so a 968K session (the un-capped default)
     // costs ~8x more per request than a compacted one on cache misses and
     // ~8x more on cache reads too. Compacting early is the cheapest lever
@@ -282,12 +298,12 @@
             "template": "Read the attached image(s) and describe what you see. Report findings with concrete details (text, layout, colors, positions). If the task requires code changes beyond visual interpretation, escalate to deep-worker."
         },
         "review": {
-            "description": "Code review — flash first pass, pro escalation on complex findings",
+            "description": "Code review — cheap first pass, #high escalation on complex findings",
             "agent": "light-orchestrator",
-            "template": "Load the code-review skill and run the tier-1 (flash) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (pro) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
+            "template": "Load the code-review skill and run the tier-1 (thinking off) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (flash#high) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
         },
         "deep-review": {
-            "description": "Force a pro (deepseek-v4-pro) code review, skipping the flash first pass",
+            "description": "Force a deep (deepseek-flash#high) code review, skipping the cheap first pass",
             "agent": "reviewer",
             "template": "Load the code-review skill and run the Full path regardless of size. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Report findings by severity. Do not modify code."
         },

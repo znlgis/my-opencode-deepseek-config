@@ -19,10 +19,11 @@ the stricter instruction. Routing tables and fallback chains live in
    `explore`, `librarian`) never modify files; they report findings as text.
 6. **Don't create files unless asked.** Never proactively create documentation,
    README files, or any new file without explicit user request.
-7. **Right-size the model to the task.** Prefer flash for routing, search,
-   lookup, planning, and routine implementation; reserve pro for deep
-   reasoning, root-cause analysis, code review, and heavy multi-file
-   implementation. When borderline, prefer flash, then escalate.
+7. **Right-size the thinking tier to the task.** Thinking off for routing,
+   search, lookup, and simple edits; `#low` for planning and routine
+   implementation; `#high` for deep reasoning, root-cause analysis, code
+   review, and heavy multi-file implementation. When borderline, start
+   cheaper, then escalate.
 8. **Know your stop condition.** Before starting, define the observable
    condition that means "done". Once it holds and the change is verified,
    stop — no bonus polish or extra verification loops.
@@ -40,18 +41,25 @@ the stricter instruction. Routing tables and fallback chains live in
   cost. Volatile content (timestamps, random IDs, per-request tokens, dynamic
   file lists) goes near the END of the payload, never the head.
 - **Freeze toolsets.** Never reorder tool schemas or injected rules mid-session.
-- **Temperature.** flash: 0 (a body field, alongside thinking off). pro: unset
-  — thinking is on and DeepSeek silently ignores temperature/top_p.
-- **Thinking.** flash = off, pro = on (the API default). Both knobs are
-  REQUEST BODY fields under `providers.deepseek.models.<id>.body`: a
+- **Temperature.** 0 on the thinking-off tier (a body field, alongside
+  thinking disabled) — the only tier where it binds. Variants inherit it and
+  the API **silently ignores** it there: thinking mode supports no
+  `temperature`/`presence_penalty`/`frequency_penalty` (no error, no effect).
+  `top_p` is the mirror image on this model: effective only with thinking on,
+  pinned to 1.0 when thinking is off. Do not set either on a variant.
+- **Thinking.** The upstream default is **ON at effort `high`**, so the default
+  tier must send `disabled` explicitly — that is where the saving comes from;
+  `#high` only restates the default, and `#low` is the one tier that actually
+  cuts reasoning tokens. The toggle is a REQUEST BODY field under
+  `providers.deepseek.models.<id>.body`: a
   `settings.thinking`/`settings.temperature` entry is inert, because the
-  openai-chat protocol implements no such option. To re-enable thinking over
-  flash's disabled default, select the `#low` variant — never an agent-level
+  openai-chat protocol implements no such option. Select a tier through the
+  variant suffix (`deepseek/deepseek-flash#low`) — never an agent-level
   override: an agent's `request` overlay carries only `headers`/`body`, and
   effort is resolved as a provider setting.
-- **One-shot requests ride flash.** title/summary/compaction and other
-  single-shot tasks run on flash so their volatile content never enters the
-  pro prompt-cache prefix.
+- **One-shot requests ride the thinking-off tier.** title/summary/compaction
+  and other single-shot tasks run with thinking off so their volatile content
+  never enters a `#high` prompt-cache prefix.
 - **reasoning_content** must round-trip on tool calls (opencode handles this);
   never reorder messages in ways that break it.
 
@@ -62,16 +70,14 @@ the stricter instruction. Routing tables and fallback chains live in
   `settings.reasoningEffort`, which the aisdk layer forwards as the API's
   `reasoning_effort`. Both live in `opencode.jsonc`, so agents only choose a
   model reference.
-- **Tiers:** trivial (explore/librarian/consultant/ui-builder) = flash, thinking
-  off; mid (planner/light-orchestrator) = `deepseek/deepseek-flash#low` — the
-  `low` variant turns thinking on at effort `low`; deep
-  (deep-worker/oracle/reviewer) = pro, thinking on at the API default. `solo`
-  has no `model:` field, so it follows the session model and its tier follows
-  that model.
-- **Routing:** trivial → flash off; routine-but-nontrivial multi-file → flash
-  `#low`; deep/uncertain → pro.
-- The 2-model matrix is inviolate: a variant is a mode of flash, never a third
-  model.
+- **Tiers:** trivial (orchestrator/explore/librarian/consultant/ui-builder/
+  vision) = flash, thinking off; mid (planner/light-orchestrator) =
+  `deepseek/deepseek-flash#low`; deep
+  (deep-worker/oracle/reviewer/solo) = `deepseek/deepseek-flash#high`.
+- **Routing:** trivial → thinking off; routine-but-nontrivial multi-file →
+  `#low`; deep/uncertain → `#high`.
+- **One model only.** `deepseek-flash` is the sole model; `#low`/`#high` are
+  thinking modes of it, never additional models.
 
 ## Scope First + Delegate Always
 
@@ -98,8 +104,9 @@ zh-CN Windows system, Chinese; en-US, English. Never force English unless asked.
 
 ## Constraints (this repository)
 
-- **No new models.** Only `deepseek/deepseek-v4-pro` and the natively
-  multimodal `deepseek/deepseek-flash` may be used. Do not introduce others.
+- **No new models.** Only the natively multimodal `deepseek/deepseek-flash`
+  may be used, with its `#low`/`#high` thinking variants. Do not introduce
+  others.
 - **Vision input is opt-in.** `deepseek-flash` accepts images, but an image
   enters the payload only when the user supplied one or explicitly asked about
   one. Never attach, generate, or request images for a non-visual task; route
@@ -310,10 +317,10 @@ change.
 
 | Superpowers skill | Wired on | Tier |
 | --- | --- | --- |
-| `writing-plans` | `planner` | flash-low; deep or architectural design escalates to pro |
-| `test-driven-development` | `deep-worker` | pro |
-| `verification-before-completion` | `deep-worker`, `light-orchestrator` | pro / flash |
-| `brainstorming`, `executing-plans` | `solo` only | session model |
+| `writing-plans` | `planner` | `#low`; deep or architectural design escalates to `#high` |
+| `test-driven-development` | `deep-worker` | `#high` |
+| `verification-before-completion` | `deep-worker`, `light-orchestrator` | `#high` / `#low` |
+| `brainstorming`, `executing-plans` | `solo` only | `#high` |
 
 - **Prefer the local distillation when both exist** (these stay unwired on
   routing agents): `systematic-debugging` → `diagnosing-bugs`, `brainstorming` →
@@ -328,5 +335,5 @@ change.
   Routing table: `agents/orchestrator.md`.
 
 Context compression is **built-in only** — there is no DCP plugin. Compaction
-fires at `limit.input - compaction.buffer` (flash ~115K, pro ~148K tokens),
+fires at `limit.input - compaction.buffer` (131072 − 16000 = 115,072 tokens),
 configured with v2-native keys in `opencode.jsonc`.

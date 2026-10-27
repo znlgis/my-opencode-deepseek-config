@@ -20,7 +20,7 @@ paid for.
 | `skills/<name>/SKILL.md` | On-demand skills, auto-discovered from the config dir |
 
 ## Hard constraints
-- Only `deepseek/deepseek-v4-pro` and the natively multimodal `deepseek/deepseek-flash`. Never a third model; flash handles both text and visual input. A model **variant** (`deepseek/deepseek-flash#low`) is a mode of an allowed model, not a third model.
+- Only the natively multimodal `deepseek/deepseek-flash`, with its thinking variants `#low` / `#high`. Never another model; the one model handles both text and visual input. A **variant** (`deepseek/deepseek-flash#low`) is a thinking mode of the allowed model, not another model.
 - **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.2.0** on 2026-10-27). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
 - **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.2.0**. Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
@@ -108,7 +108,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 | --- | --- |
 | `description` | When to use this agent (drives routing + @-menu) |
 | `mode` | `primary` \| `subagent` |
-| `model` | `deepseek/deepseek-v4-pro` \| `deepseek/deepseek-flash` (natively multimodal) \| `deepseek/deepseek-flash#low` (variant) |
+| `model` | `deepseek/deepseek-flash` (natively multimodal, thinking off) \| `deepseek/deepseek-flash#low` \| `deepseek/deepseek-flash#high` (thinking variants) |
 | `steps` | step budget; heavier agents get more |
 | `color` | "#RRGGBB" |
 | `hidden` | optional: hide from @-menu |
@@ -127,7 +127,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
   first, then the allowlist. v2 action names are `shell`/`subagent`/`edit`
   (not `bash`/`task`/`write`); `subagent` rules are matched against the target
   agent id (`subagent.ts` evaluates `Permission.evaluate("subagent", agent.id, …)`).
-- Each prompt references `AGENTS.md` (not restating it) plus a short Model Leverage (pro) / Model Awareness (flash) note.
+- Each prompt references `AGENTS.md` (not restating it) plus a short thinking-tier note (thinking-off cheap tier vs `#high` deep tier).
 
 ## Skill file format (`skills/<name>/SKILL.md`)
 - One folder per skill; file must be `SKILL.md` (uppercase).

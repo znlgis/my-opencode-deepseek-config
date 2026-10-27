@@ -47,14 +47,14 @@ outside the blast radius — not pre-existing unchanged code, not unrelated file
 ADRs and other historical decision documents are records, not living specs: do
 not flag them stale.
 
-## Model tier — flash first, pro on escalation
+## Thinking tier — cheap first, `#high` on escalation
 
-Review is two-tier so the common case never pays pro prices:
+Review is two-tier so the common case never pays for reasoning tokens:
 
 | Tier | Agent | Handles |
 | --- | --- | --- |
-| **1 — flash** | `light-orchestrator` (via `/review`) | Abbreviated path: ≤8 logic files, ≤300 effective lines, no stakes trigger. |
-| **2 — pro** | `reviewer` | Full path, any high-stakes trigger, or a tier-1 finding that needs deep confirmation. |
+| **1 — thinking off** | `light-orchestrator` (via `/review`) | Abbreviated path: ≤8 logic files, ≤300 effective lines, no stakes trigger. |
+| **2 — `#high`** | `reviewer` | Full path, any high-stakes trigger, or a tier-1 finding that needs deep confirmation. |
 
 Escalate to tier 2 when **any** of these holds:
 

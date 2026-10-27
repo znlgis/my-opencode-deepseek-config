@@ -1,7 +1,7 @@
 ---
 description: Heavy-lift implementer. Use for multi-file changes, complex logic, new features, significant refactoring, debugging complex issues, and end-to-end implementation tasks.
 mode: subagent
-model: deepseek/deepseek-v4-pro
+model: deepseek/deepseek-flash#high
 steps: 100
 color: "#E24A4A"
 permissions:
@@ -69,4 +69,4 @@ Follow AGENTS.md Self-Verification: re-read every modified file, grep for broken
 Reject the task immediately — do not attempt a degraded version — when:
 - **Trivial single-file edit**: refuse, route to `light-orchestrator` (flash)
 - **Pure research / lookups**: refuse, route to `oracle`/`explore`
-- **Anything a flash agent can finish**: refuse — pro is 4.4× flash on input, so trivial work must not land on pro
+- **Anything a cheap-tier agent can finish**: refuse — this tier burns reasoning tokens on every step, so trivial work must not land here

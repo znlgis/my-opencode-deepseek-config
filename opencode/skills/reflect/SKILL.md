@@ -36,7 +36,7 @@ Look for low-cost, high-impact fixes:
 
 | Signal | Possible Fix |
 |---|---|
-| Flash agent escalates to pro 3+ times for same category | Adjust agent description or routing rules |
+| Cheap-tier agent escalates to `#high` 3+ times for same category | Adjust agent description or routing rules |
 | Skill triggered but agent ignores it | Skill description too vague — add trigger keywords |
 | Repeated style violations | Add explicit rule to AGENTS.md or agent prompt |
 | Agent keeps trying to delegate when it shouldn't | Add "no delegation" constraint to that agent |

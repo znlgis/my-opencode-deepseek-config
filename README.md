@@ -2,16 +2,16 @@
 
 **简体中文** | [English](README.en-US.md)
 
-**OpenCode v2 × DeepSeek 最优配置** —— 在 OpenCode v2 多 Agent 框架下，将 DeepSeek V4 模型族（Pro + Flash）的能力发挥到极致的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
+**OpenCode v2 × DeepSeek 最优配置** —— 在 OpenCode v2 多 Agent 框架下，只保留 `deepseek/deepseek-flash` 一个模型、用 thinking 档位区分 Agent 分工的配置方案。核心理念：**Token 效率优先，用最小的上下文成本达到最好的开发效果**。
 
 ## 当前配置概览
 
 - 默认主 Agent：`orchestrator`
-- 主模型：`deepseek/deepseek-v4-pro`，轻量/多模态模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）
+- 唯一模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）；Agent 只按 thinking 档位区分：默认（thinking 关）/ `#low` / `#high`
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（flash `131072−16000=115,072`、pro `163840−16000=147,840` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（`131072−16000=115,072` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
@@ -23,7 +23,7 @@
 
 > 已移除 `@tarquinen/opencode-dcp`：它的两块价值（绝对值阈值提前压缩、工具调用去重）现在由内置 compaction 的**显式模型窗口**（`providers.deepseek.models.*.limit.input` + `buffer`）覆盖；少一个插件就少一条前缀漂移与启动开销路径。缓存、`dcp.jsonc` 与 `compress` 权限均已清理。
 
-因此"规划/架构/复杂审查用 pro，执行/初检/文档/批量/视觉用 flash"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v7.0.1 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项；且 `.opencode/plugins/superpowers.js` 自 v6.4.2 起逐字节未变），勿重复调研。
+因此"深度推理/复杂审查用 `#high`，路由/执行/初检/文档/批量/视觉用 thinking 关档"这一分工，全部由 `agents/*.md` 的 `model:` 字段与 thinking tiers 实现（见下文路由策略），而非插件配置。此结论已核实插件源码（v7.0.1 复核：插件仍只做 skills 路径注册 + bootstrap 注入，无任何模型配置项；且 `.opencode/plugins/superpowers.js` 自 v6.4.2 起逐字节未变），勿重复调研。
 
 ## DeepSeek 模型配置
 
@@ -39,7 +39,7 @@
 ```bash
 opencode
 # 在 TUI 中输入: /connect → 选择 DeepSeek → 粘贴 API Key
-# 然后: /models → 选择 deepseek-v4-pro
+# 然后: /models → 选择 deepseek-flash
 ```
 
 API Key 会自动持久化到 `~/.local/share/opencode/auth.json`。
@@ -58,11 +58,11 @@ opencode
 
 ```jsonc
 {
-  "model": "deepseek/deepseek-v4-pro"
+  "model": "deepseek/deepseek-flash"
 }
 ```
 
-本配置在 `providers` 层拆分 thinking：flash 关闭 thinking 并固定 `temperature: 0`（最快最省），pro 保持默认（thinking 开启）。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `capabilities`（图像输入）。示例（flash，v2 原生键）：
+本配置只保留 `deepseek-flash` 一个模型，在 `providers` 层用 **variant** 拆分 thinking：默认档关闭 thinking 并固定 `temperature: 0`（最快最省），`#low` / `#high` 两个 variant 打开 thinking，并分别把 `settings.reasoningEffort` 设为 `low` / `high`。`deepseek-flash` 是合并后的 V4.1 Flash 模型——原文本版与视觉版已合并为一个原生多模态模型，因此由它声明 `capabilities`（图像输入）。示例（v2 原生键）：
 
 ```jsonc
 "providers": {
@@ -77,7 +77,11 @@ opencode
           "tools": true,
           "input": ["text", "image"],
           "output": ["text"]
-        }
+        },
+        "variants": [
+          { "id": "low",  "settings": { "reasoningEffort": "low" },  "body": { "thinking": { "type": "enabled" } } },
+          { "id": "high", "settings": { "reasoningEffort": "high" }, "body": { "thinking": { "type": "enabled" } } }
+        ]
       }
     }
   }
@@ -86,7 +90,7 @@ opencode
 
 > `thinking`/`temperature` 必须写在 `body`：`settings` 只承载 provider 选项（`timeout`/`chunkTimeout`/`reasoningEffort` 等），写进去会被静默丢弃。
 
-> **模型 ID 命名规则**：`provider_id/model_id`，即 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-flash`。
+> **模型 ID 命名规则**：`provider_id/model_id`，variant 用 `#` 后缀。本仓库只有 `deepseek/deepseek-flash`、`deepseek/deepseek-flash#low`、`deepseek/deepseek-flash#high`。
 
 ### v2 原生键名（本仓库唯一写法）
 
@@ -121,7 +125,7 @@ $env:DEEPSEEK_API_KEY = "sk-your-key-here"
 opencode
 ```
 
-启动后自检三条：`/models` 显示 `deepseek/deepseek-v4-pro`；Agent 列表有 12 个自定义 Agent；随便描述一个需求，`orchestrator` 会自动分类并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review` 等命令）。
+启动后自检三条：`/models` 显示 `deepseek/deepseek-flash`；Agent 列表有 12 个自定义 Agent；随便描述一个需求，`orchestrator` 会自动分类并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review` 等命令）。
 
 > **⚠️ 必须由 OpenCode V2.x 运行（2026-10-27 核验）**：本配置是 v2 原生的（v1 键名一律不写，见「v2 原生键名」）。本机实测：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**（`opencode --version` → `1.18.4`），真正在跑的是桌面版 **v2.2.0** 及其自带 CLI：
 >
@@ -187,7 +191,7 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 ### 验证安装
 
 启动 OpenCode 确认：
-1. `/models` → 当前模型为 `deepseek/deepseek-v4-pro`
+1. `/models` → 当前模型为 `deepseek/deepseek-flash`
 2. Agent 列表应能看到 `orchestrator`、`planner`、`deep-worker` 等 12 个 Agent
 3. 输入任意请求，Orchestrator 自动分析意图并路由
 
@@ -209,90 +213,91 @@ ln -s /path/to/my-opencode-deepseek-config/opencode ~/.config/opencode
 
 ## 模型分工
 
-本仓库严格限制在 DeepSeek V4 模型族内分工，不引入其他模型——**2 个模型 × 按 Agent 分档的思考强度（thinking tier）**，而非多模型矩阵：
+**为什么只保留 `deepseek-flash`**（opencode v2 正式版发布后顺势收敛配置）：
 
-| 模型 | 用途 |
-| --- | --- |
-| `deepseek/deepseek-v4-pro` | 深度推理、根因分析、代码审查、重型多文件实现 |
-| `deepseek/deepseek-flash` | 编排/路由、规划、常规实现、咨询、UI、探索、外部检索、轻量编辑、标题/摘要/压缩；原生多模态（图像/截图/图表/UI 稿理解） |
+- **日常开发的瓶颈不在模型上限。** 读代码、改文件、跑测试、写文档、按 diff 审查——这些任务要的是快、稳、便宜，不是极限推理；用 pro 级模型做这些，多付的钱换不来对应的产出。
+- **flash 是当前各家投入最密集的档位。** 竞争重心集中于此，意味着同价位的能力仍在快速上涨；配置压在 flash 上，等于跟着迭代最快的那条曲线走。
+- **pro 的能力和价格对日常开发双重溢出。** 它服务的是少数难题，而配置要为每一次普通调用付费——为偶尔的硬任务常驻一个更贵的模型，账单结构本身就是错的。
+- **需要更强推理时，用同一模型的 thinking 档位补。** `#high` 靠 reasoning token 加深推理，成本随任务发生、按输出价线性增长，不引入第二套费率和第二条缓存前缀。
+- **代价是显式承认的：用上限换成本。** 极端难题上 flash 可能不如 pro 一次到位，会多一轮返工或升级到 `#high`——这部分代价只落在少数任务上，而不是让每次普通调用都为它买单。
 
-思考强度由两个**请求参数**控制，二者都声明在 `opencode.jsonc` 的**模型层**；Agent 只选模型引用，不写任何思考参数。这样 2 模型矩阵不变（variant 是 flash 的一种模式，不是第三个模型），同一模型可跑不同思考档：
+本仓库只使用 **一个模型** `deepseek/deepseek-flash`，不引入任何其他模型。Agent 之间的差异只有一个维度——**思考档位（thinking tier）**，用模型 variant 表达：
 
-- **thinking 开关** —— `{"thinking":{"type":"enabled"|"disabled"}}`，是**请求体（body）字段**。flash 默认关闭（最省），pro 保持 API 默认（开启）。
+| 档位 | 模型引用 | 机制 | 典型 Agent |
+| --- | --- | --- | --- |
+| 省（trivial） | `deepseek/deepseek-flash` | body `{"type":"disabled"}` + `temperature: 0` | `orchestrator`/`explore`/`librarian`/`consultant`/`ui-builder`/`vision` |
+| 中（routine） | `deepseek/deepseek-flash#low` | thinking 开 + `settings.reasoningEffort: low` | `planner`/`light-orchestrator` |
+| 高（deep） | `deepseek/deepseek-flash#high` | thinking 开 + `settings.reasoningEffort: high` | `deep-worker`/`oracle`/`reviewer`/`solo` |
+
+思考强度由两个**请求参数**控制，二者都声明在 `opencode.jsonc` 的**模型层**；Agent 只选模型引用，不写任何思考参数：
+
+- **thinking 开关** —— `{"thinking":{"type":"enabled"|"disabled"}}`，是**请求体（body）字段**。默认档关闭（最省），`#low`/`#high` 打开。
 - **thinking 强度** —— `{"reasoning_effort":"low"|"high"|"max"}`，由 **provider setting** `settings.reasoningEffort` 驱动（配置里写 camelCase，线上是 snake_case）——这是 opencode aisdk 层唯一会转成 `reasoning_effort` 的路径。
+
+> **官方文档核对（2026-10-27，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token，`#high` 只是把默认值写明，`#low` 是唯一存在的中间档；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 
 > **⚠️ 2026-10-16 修正：这两个旋钮此前都没接上。** 旧写法把 `thinking`/`temperature` 放在 `settings` 下、把 `reasoningEffort` 放在 Agent frontmatter 的 `options` 里。核对 v2.0.29 源码后确认两者都不生效：
 > ① `settings` 下的键作为 provider option 传给 provider 包，而 openai-chat 协议**不实现** `thinking`/`temperature` 选项——没有任何消费者；
 > ② `options` 经 V1 迁移后会落到 Agent 的 `request.body`，而 Agent 的 `request` overlay 只有 `headers`/`body`，装不下 provider setting，且 `reasoningEffort` 是 camelCase，即使到了 body 也不是 API 认的 `reasoning_effort`。
 > 实测后果：**flash 一直开着 thinking 跑**，「最省档」并未落地，每一步都在付 reasoning token。现改为 body 字段 + model variant，两条路径都真正生效（依据：opencode 自带的 DeepSeek 映射 `core/variant.ts` 正是把 toggle 写进 `body`、把 effort 写进 `settings`）。
 
-| 档位 | 模型 × thinking | 典型 Agent |
-| --- | --- | --- |
-| 低（trivial） | flash · thinking **关**（模型层 body `{"type":"disabled"}`） | `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` |
-| 中（routine） | `deepseek/deepseek-flash#low` · thinking 开 + effort `low` | `planner`/`light-orchestrator` |
-| 高（deep） | pro · API 默认（thinking 开、effort `high`） | `deep-worker`/`oracle`/`reviewer` |
-| 跟随会话 | 会话所选模型（默认 pro） | `solo`（无 `model` 字段，思考档随该模型） |
-
-成本比：pro 输入价 4.4× flash（0.66 vs 0.15 / 1M tokens）、输出价 3.3×，故 trivial 任务绝不落到 pro。
+**成本结构**：三个档位共用 flash 的同一份费率（in 0.15 / out 0.60 / cache_read 0.003 USD per 1M，off-peak），没有模型溢价；档位差异只体现在 **reasoning token 数量**，而 reasoning token 按输出价计费。所以「升档」是多花输出 token，不是换更贵的单价——深度任务不再付 4.4× 输入价。
 
 ### 路由策略
 
-- **Trivial → flash off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走 flash agent，thinking 关闭（最省）
-- **Routine-nontrivial → flash `#low`**：规划、常规多文件实现等稍有难度的任务走 `deepseek/deepseek-flash#low`（thinking 开 + effort `low`）
-- **Deep/uncertain → pro high**：深度推理、根因分析、重型多文件实现——只用 pro
-- **代码审查 → flash 初检，pro 升级**：`/review` 默认走 flash 初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（pro）；`/deep-review` 强制 pro 全量审查
+- **Trivial → thinking off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走默认档（最省）
+- **Routine-nontrivial → `#low`**：规划、常规多文件实现等稍有难度的任务走 `deepseek/deepseek-flash#low`（thinking 开 + effort `low`）
+- **Deep/uncertain → `#high`**：深度推理、根因分析、重型多文件实现走 `deepseek/deepseek-flash#high`（thinking 开 + effort `high`）
+- **代码审查 → thinking off 初检，`#high` 升级**：`/review` 默认走默认档初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（`#high`）；`/deep-review` 强制 `#high` 全量审查
 - **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
-- **自动升级**：flash agent 无法胜任时自动升级到 pro（带完整上下文）
+- **自动升级**：thinking off / `#low` agent 无法胜任时自动升级到 `#high`（带完整上下文）
 
-**模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-10-27 于 v2.2.0 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→pro、`/quick`→flash，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（pro）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——要 flash 必须显式加 `-m deepseek/deepseek-flash`（实测：不加 = pro ×2，加了 = flash）。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 两个模型都返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
+**模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-10-27 于 v2.2.0 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（flash 默认档）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析；要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
 
-用法示例：`「这个库怎么用」` → flash off（librarian）；`「给用户模块加导出功能」` → flash `#low`（planner）；`「排查登录接口报错的根因」` → pro（oracle）；`/review` → flash 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ flash 初检后升级 pro。
+用法示例：`「这个库怎么用」` → thinking off（librarian）；`「给用户模块加导出功能」` → `#low`（planner）；`「排查登录接口报错的根因」` → `#high`（oracle）；`/review` → thinking off 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ 初检后升级 `#high`。
 
-#### 代码审查的两级模型（轻量化 Review）
+#### 代码审查的两级档位（轻量化 Review）
 
 | 层级 | 模型 | 执行者 | 覆盖范围 |
 | --- | --- | --- | --- |
-| Tier 1（默认） | `deepseek-flash` | `light-orchestrator`（`/review`） | Abbreviated 路径：≤8 个逻辑文件且 ≤300 有效行，且无高风险触发 |
-| Tier 2（升级） | `deepseek-v4-pro` | `reviewer`（`/deep-review` 或自动升级） | Full 路径、高风险触发、或 Tier 1 发现需跨文件确认的 critical/major |
+| Tier 1（默认） | `deepseek/deepseek-flash`（thinking off） | `light-orchestrator`（`/review`） | Abbreviated 路径：≤8 个逻辑文件且 ≤300 有效行，且无高风险触发 |
+| Tier 2（升级） | `deepseek/deepseek-flash#high` | `reviewer`（`/deep-review` 或自动升级） | Full 路径、高风险触发、或 Tier 1 发现需跨文件确认的 critical/major |
 
 升级触发条件（命中任一即升级）：路径为 Full（大 diff 或高风险正则命中）；Tier 1 发现 critical/major 但无法仅凭 diff 确认影响；diff 触及信任边界（同时加载 `security-review`）；用户明确要求深度审查。
 
-Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认一下"而升级。升级时把 Tier 1 发现作为**未验证线索**传给 Tier 2，让 pro 确认而非重新推导，避免重复 token 消耗。
+Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认一下"而升级。升级时把 Tier 1 发现作为**未验证线索**传给 Tier 2，让 `#high` 确认而非重新推导，避免重复 token 消耗。
 
 ### 成本对比
 
 价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-27 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
-| 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） | 相对 flash 输入价 |
-| --- | --- | --- | --- | --- | --- |
-| `deepseek-flash` | 0.15 | 0.60 | 0.003 | 0.15 | 1× |
-| `deepseek-v4-pro` | 0.66 | 1.98 | 0.022 | 0.66 | 4.4× |
+| 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） |
+| --- | --- | --- | --- | --- |
+| `deepseek-flash` | 0.15 | 0.60 | 0.003 | 0.15 |
 
 两个成本杠杆：
 
-- **模型档位**：pro 输入价 4.4× flash、输出价 3.3×，故 trivial 任务绝不落到 pro（见上文路由策略）。
-- **提示词缓存**：`cache_read` 比输入价便宜 **50×（flash 0.003 vs 0.15）/ 30×（pro 0.022 vs 0.66）**。本配置的字节稳定前缀 + 易变区纪律（见 `AGENTS.md`）正是为了最大化缓存命中率。
+- **思考档位**：三档同一单价，差别只在 reasoning token 数量（按输出价计费）——升档是多花输出 token，不是换更贵的单价。
+- **提示词缓存**：`cache_read` 比输入价便宜 **50×（0.003 vs 0.15）**。本配置的字节稳定前缀 + 易变区纪律（见 `AGENTS.md`）正是为了最大化缓存命中率。
 
 **典型会话成本估算**（假设 200K 输入 tokens，其中 150K 命中缓存，30K 输出）：
 
-| 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
+| 档位 | 缓存命中 | 输入未命中 | 输出 | 合计 |
 | --- | --- | --- | --- | --- |
-| flash | 150K × 0.003 = $0.0005 | 50K × 0.15 = $0.0075 | 30K × 0.60 = $0.018 | **≈ $0.026** |
-| pro | 150K × 0.022 = $0.003 | 50K × 0.66 = $0.033 | 30K × 1.98 = $0.059 | **≈ $0.096** |
+| thinking off | 150K × 0.003 = $0.0005 | 50K × 0.15 = $0.0075 | 30K × 0.60 = $0.018 | **≈ $0.026** |
 
-同一 token 量下 pro ≈ 3.7× flash。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
+`#low` / `#high` 在同一可见 token 量上只需多出 reasoning token，就按输出价线性叠加。可用 `scripts/estimate-cost.js` 按实际 token 数估算。
 
-#### 优化前后成本对比
+#### 思考档位的成本对比
 
-以"审查一个 300 有效行的本地 diff"为例（假设 60K 输入 tokens，其中 45K 命中缓存，8K 输出）：
+以"审查一个 300 有效行的本地 diff"为例（假设 60K 输入 tokens，其中 45K 命中缓存，8K 可见输出；`#high` 额外产生 4K reasoning tokens，按输出价计费）：
 
-| 方案 | 模型 | 缓存命中 | 输入未命中 | 输出 | 合计 |
-| --- | --- | --- | --- | --- | --- |
-| 优化前（`/review` 固定 pro） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
-| 优化后（`/review` flash 初检） | flash | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
-| 优化后（升级到 pro 全量） | pro | 45K × 0.022 = $0.001 | 15K × 0.66 = $0.010 | 8K × 1.98 = $0.016 | **≈ $0.027** |
+| 档位 | 缓存命中 | 输入未命中 | 输出（含 reasoning） | 合计 |
+| --- | --- | --- | --- | --- |
+| thinking off（`/review` 初检） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
+| `#high`（`/deep-review`） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.010** |
 
-**节省比例**：小 diff 走 flash 初检约省 **73%**（$0.027 → $0.007）；只有命中升级触发条件时才付 pro 全价，且升级时传递未验证线索避免重复推导。
+**结论**：单模型下两级审查的价差不是「模型单价」，而是「多出的 reasoning token」——同一输入基数下 `#high` 约贵 40%（$0.007 → $0.010），远小于双模型时 pro 的 3.7×。reasoning token 数是假设值，实际值需在具备 DeepSeek 凭据的机器上用 `scripts/estimate-cost.js` 复测。
 
 其他优化项的 token 节省（字节均为 LF 计数，即仓库实际存储大小）：
 
@@ -303,14 +308,14 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | 插件升到 v6.4.1：子会话不再注入 bootstrap | 每个 task 子会话 −3110 字节 | 每委派 1 个子智能体即省 **≈ 780 tokens**；只要链路里有委派（本仓库默认如此），本轮增量即被抵掉且净赚 |
 | Skills 名册瘦身 | 25 → 23 个（合并 `wait-what`/`grill-with-docs` 进 `grilling`） | 名册 name+description 常驻成本 **10,127 → 9,802 字节**（−325 字节 ≈ −81 tokens），且少两个可能选错的入口 |
 | `subagent_depth` 3 → 2 | 覆盖实际最深链路即可 | 关掉未使用的第 3 层嵌套，避免意外 token 放大 |
-| 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（flash 115K / pro 148K） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K/148K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
-| 内置 agent 档位固定 | title/summary/compaction + `general` 等 subagent 目标固定 flash；桌面 App 新会话的 build/plan/orchestrator 默认选中 flash 档 | 高频路径单次调用输入价降至 pro 的 **1/4.4**（0.15 vs 0.66）；headless `run` 需显式 `-m deepseek/deepseek-flash`（见「模型解析链」） |
+| 移除 DCP + 压缩窗口显式化 | 删插件与 `dcp.jsonc`；改由 `limit.input` 声明工作窗口（115,072 tokens） | 单次请求可携带的上下文上限从隐式 **968K** 降到 **115K**（约 1/8）；缓存未命中时按同比例省钱，且少一个第三方插件 |
+| 内置 agent 档位固定 | title/summary/compaction + `general` 等 subagent 目标固定 flash（thinking off）；桌面 App 新会话的 build/plan/orchestrator 默认选中该档 | 高频路径不再有机会落到更贵档位；headless `run` 要指定档位需显式 `-m`（见「模型解析链」） |
 | 隐藏一次性 agent 屏蔽 skill 名册 | `agents.title/summary/compaction` 追加 `skill:* deny` | 每次 title/summary/compaction 请求少 **11,927 字节 ≈ 3.3K tokens**（30 个 skill 的 `<available_skills>` 全名册，2026-10-16 实测；旧文写的「38 个 / 14.1 KB」是过期口径）；这三类调用每次都在压缩/标题/摘要时发生，收益随会话长度累积 |
-| **flash thinking 真正关闭（本轮）** | `opencode.jsonc`：`thinking`/`temperature` 从 `settings` 移到 `body` | 这是本轮最大的一项。「最省档」此前**未生效**（见「模型分工」⚠️），flash 一直开着 thinking 跑。reasoning token 按**输出价**计费（flash 0.60 / pro 1.98 USD per 1M），一个典型编码步骤即使只多出 500 reasoning token 也是每步 +$0.0003，长会话按步数线性放大。**定量收益未实测**（需抓线上请求体确认），定性方向明确 |
+| **flash thinking 真正关闭（本轮）** | `opencode.jsonc`：`thinking`/`temperature` 从 `settings` 移到 `body` | 这是本轮最大的一项。「最省档」此前**未生效**（见「模型分工」⚠️），flash 一直开着 thinking 跑。reasoning token 按**输出价**计费（flash 0.60 USD per 1M），一个典型编码步骤即使只多出 500 reasoning token 也是每步 +$0.0003，长会话按步数线性放大。**定量收益未实测**（需抓线上请求体确认），定性方向明确 |
 | **Agent frontmatter 全面 v2 原生（本轮）** | 12 个 `agents/*.md`：`permission`→`permissions` 数组、去掉 `name`/`options`、`task`→`subagent`、`bash`→`shell` | 消除 V1→V2 迁移路径，杜绝「看着生效其实不生效」的 `options.*` 配置。逐文件与 HEAD 展开比对，规则**顺序与语义完全等价**（`orchestrator` 14 条、`deep-worker` 16 条、`solo` 32 条……共 12 个文件全通过），行为无回归 |
 | **skill 名册口径校正（本轮）** | `AGENTS.md`、`opencode.jsonc`、`README` | 旧文「39 个 skill / 14.1 KB ≈ 3.6K tokens」为过期数字，实测 **30 个 / 11,927 字节 ≈ 3.3K tokens**；同时写清「`skill` 权限规则集就是名册过滤器」这一机制 |
 
-> 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.003 / pro 0.022 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
+> 说明：常驻前缀的变化在**缓存未命中**的请求上体现为全额 token 差异，命中缓存时按 `cache_read` 价（flash 0.003 per 1M）计——但前缀越小，命中率越高、压缩触发越晚，两者叠加才是节省的完整来源。
 
 **实测基线**（本机 2026-09-20，精简后配置）：
 
@@ -337,18 +342,18 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
 | `orchestrator` | flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
-| `solo` | v4-pro（默认） | 单模型内联执行器：零委派、不用后台助手，全程在当前会话所选模型内完成 |
+| `solo` | flash#high | 单模型内联执行器：零委派、不用后台助手，全程在 flash 的 `#high` 档完成 |
 
-> `solo` 是第二个 primary agent：`{action: subagent, resource: "*", effect: deny}`（零委派，不调用任何子智能体）、无显式 `model` 字段（跟随会话所选模型，默认 pro）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
+> `solo` 是第二个 primary agent：`{action: subagent, resource: "*", effect: deny}`（零委派，不调用任何子智能体）、显式 `model: deepseek/deepseek-flash#high`（全程固定最强思考档）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
 
 ### Subagents
 
 | Agent | 模型 | 权限 | 作用 |
 | --- | --- | --- | --- |
 | `planner` | flash#low | 读写 | 规划、架构、拆解任务 |
-| `deep-worker` | v4-pro | 读写 | 重型实现、多文件改动、复杂调试 |
-| `oracle` | v4-pro | **只读** | 根因分析、深度理解代码 |
-| `reviewer` | v4-pro | **只读** | 代码审查升级层：Full 路径 / 高风险触发 / 确认 flash 初检线索 |
+| `deep-worker` | flash#high | 读写 | 重型实现、多文件改动、复杂调试 |
+| `oracle` | flash#high | **只读** | 根因分析、深度理解代码 |
+| `reviewer` | flash#high | **只读** | 代码审查升级层：Full 路径 / 高风险触发 / 确认便宜档初检线索 |
 | `ui-builder` | flash | 读写 | 前端与 UI 相关任务 |
 | `consultant` | flash | 读写 | 方案讨论、最佳实践建议 |
 | `explore` | flash | **只读** | 代码库搜索、并行探索 |
@@ -356,13 +361,13 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `light-orchestrator` | flash#low | 读写 | 轻量任务、单文件编辑 |
 | `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
 
-> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（pro 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何 flash 能完成的任务 → 拒接（pro 输入价 4.4× flash）。
+> `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（`#high` 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何便宜档能完成的任务 → 拒接（本档每步都付 reasoning token）。
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
 >
 > 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
-> **思考分档（thinking tiers）**：全部声明在 `opencode.jsonc` 的**模型层**，Agent 只选模型引用（详见「模型分工」）。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking 关（最省，模型层 body `{"type":"disabled"}`）；`planner`/`light-orchestrator` = `deepseek/deepseek-flash#low`（thinking 开 + `settings.reasoningEffort: low`）；`deep-worker`/`oracle`/`reviewer` = pro · API 默认（thinking 开、effort `high`）；`solo` 无 `model` 字段，跟随会话所选模型，思考档随该模型而定。**Agent frontmatter 里不再出现任何思考参数**——`options.*` 既装不下 provider setting，也会把该 agent 打回 V1 迁移路径（见变更记录 2026-10-16）。
+> **思考分档（thinking tiers）**：全部声明在 `opencode.jsonc` 的**模型层**，Agent 只选模型引用（详见「模型分工」）。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking 关（最省，模型层 body `{"type":"disabled"}`）；`planner`/`light-orchestrator` = `deepseek/deepseek-flash#low`（thinking 开 + `settings.reasoningEffort: low`）；`deep-worker`/`oracle`/`reviewer`/`solo` = `deepseek/deepseek-flash#high`（thinking 开 + `settings.reasoningEffort: high`）。**Agent frontmatter 里不再出现任何思考参数**——`options.*` 既装不下 provider setting，也会把该 agent 打回 V1 迁移路径（见变更记录 2026-10-16）。
 
 ## 快捷命令
 
@@ -374,8 +379,8 @@ opencode run "Reply with exactly: OK" --agent orchestrator --format json
 | `/quick` | `light-orchestrator` | 轻量任务、单文件编辑 |
 | `/ui` | `ui-builder` | 前端/UI 工作 |
 | `/vision` | `vision` | 多模态：图像/截图/图表理解 |
-| `/review` | `light-orchestrator`（code-review）→ 按需升级 `reviewer` | 代码审查：默认 flash 初检（Abbreviated 路径直接出报告）；命中升级触发条件时委派 `reviewer`（pro）并传递未验证线索；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
-| `/deep-review` | `reviewer`（code-review + gh-cli） | 强制 pro 全量审查，跳过 flash 初检；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
+| `/review` | `light-orchestrator`（code-review）→ 按需升级 `reviewer` | 代码审查：默认 thinking off 初检（Abbreviated 路径直接出报告）；命中升级触发条件时委派 `reviewer`（`#high`）并传递未验证线索；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
+| `/deep-review` | `reviewer`（code-review + gh-cli） | 强制 `#high` 全量审查，跳过便宜档初检；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
 | `/plan` | `planner` | 制定计划、技术方案 |
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
 
@@ -410,7 +415,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 
 | Skill | 作用 |
 | --- | --- |
-| `code-review` | 单遍代码审查 + 证据门控；flash 初检 / pro 升级两级模型；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
+| `code-review` | 单遍代码审查 + 证据门控；thinking off 初检 / `#high` 升级两级；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
 | `codemap` | 生成带标注的仓库结构图，快速定向，节省探索 token |
 | `gh-cli` | GitHub CLI v2.103+ 参考：PR 回帖、api、rate limit、gh pr checks、gh skill/gh-aw、GHSA 安全要点 |
 | `git-master` | 高级 Git 操作：rebase、squash、fixup、bisect、reflog、代码考古、worktree |
@@ -474,11 +479,11 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 用自然语言描述需求，Orchestrator 自动分析意图、选择最合适的 Agent 和模型执行。
 
 ```text
-「帮我排查这个登录接口的报错」     → oracle 分析根因 → 返回诊断报告        （pro high）
-「优化这段循环，性能太差了」         → oracle 分析 → deep-worker 实施优化    （pro high）
-「这个 PR 帮我审查一下」             → light-orchestrator flash 初检 → 返回分级报告（命中升级触发条件才走 reviewer，pro high）
-「我想给用户模块加个导出功能」       → planner 制定方案 → deep-worker 实现  （flash#low → pro high）
-「React 19 的 use() API 怎么用」    → librarian 查文档 → 返回签名和示例   （flash off）
+「帮我排查这个登录接口的报错」     → oracle 分析根因 → 返回诊断报告        （flash#high）
+「优化这段循环，性能太差了」         → oracle 分析 → deep-worker 实施优化    （flash#high）
+「这个 PR 帮我审查一下」             → light-orchestrator 初检 → 返回分级报告（命中升级触发条件才走 reviewer，flash#high）
+「我想给用户模块加个导出功能」       → planner 制定方案 → deep-worker 实现  （flash#low → flash#high）
+「React 19 的 use() API 怎么用」    → librarian 查文档 → 返回签名和示例   （thinking off）
 ```
 
 ### 模式二：命令别名直达
@@ -505,29 +510,49 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 /oracle  → /deep  → /rmslop  → /commit
 ```
 
-**代码审查（flash 初检 → pro 升级）：**
+**代码审查（thinking off 初检 → `#high` 升级）：**
 ```text
-/review        ← 默认：flash 初检（Abbreviated 路径直接出报告，最省）
+/review        ← 默认：thinking off 初检（Abbreviated 路径直接出报告，最省）
 /review #123   ← PR 模式：审查 PR + 回帖 GitHub（gh-cli，event=COMMENT）
-/deep-review   ← 强制 pro 全量审查（大 diff / 高风险 / 需要跨文件确认时）
+/deep-review   ← 强制 `#high` 全量审查（大 diff / 高风险 / 需要跨文件确认时）
 ```
 
-**日常编码（flash 为主）：**
+**日常编码（thinking off / `#low` 为主）：**
 ```text
 「给 utils 加一个日期格式化函数」  → light-orchestrator 单文件实现   （flash#low）
-「这个函数为什么返回 undefined」   → explore 定位 → 直接回答        （flash off）
+「这个函数为什么返回 undefined」   → explore 定位 → 直接回答        （thinking off）
 /quick 修一下这个拼写错误          → light-orchestrator 直接改       （flash#low）
 批量改名 / 生成 20 个测试用例      → light-orchestrator 批量产出     （flash#low；不需要推理，抵住升级诱惑）
 ```
 
-**日常编码里的「别升 pro」判断：**
+**日常编码里的「别升 `#high`」判断：**
 ```text
-触发 pro 的信号：跨 ≥3 个模块、需要读 5+ 文件才能决策、bug 无法一次定位、需要设计取舍
-不触发 pro 的信号：单文件、错误信息已明确指出位置、纯机械替换、有现成模式可照抄
-边界做法：先让 flash 跑一轮，失败/含糊再升 pro —— 升级要能说出理由（AGENTS.md 约束）
+触发 #high 的信号：跨 ≥3 个模块、需要读 5+ 文件才能决策、bug 无法一次定位、需要设计取舍
+不触发 #high 的信号：单文件、错误信息已明确指出位置、纯机械替换、有现成模式可照抄
+边界做法：先用便宜档跑一轮，失败/含糊再升 #high —— 升级要能说出理由（AGENTS.md 约束）
 ```
 
 ## 本次重构变更记录
+
+### 2026-10-27（五）：单模型收敛 —— 只保留 deepseek-flash，Agent 改用 thinking 档位区分
+
+**用户决策**：Flash 对日常开发已经足够，配置只保留 `deepseek/deepseek-flash`；各 Agent 仅按用途区分思考模式（完整取舍理由见上文「模型分工」）。这是一次**显式的约束覆盖**：此前 `AGENTS.md` 的「2-model matrix is inviolate」作废，`deepseek-v4-pro` 从配置中完全移除。
+
+| 变更 | 位置 | 说明 |
+| --- | --- | --- |
+| 删除 `deepseek-v4-pro` | `opencode/opencode.jsonc` | 模型块整段移除；根 `model` 改为 `deepseek/deepseek-flash`。压缩窗口从两档收敛为一档：`131072−16000=115,072` tokens |
+| 新增 `#high` variant | `opencode/opencode.jsonc` | `{id: "high", settings: {reasoningEffort: "high"}, body: {thinking: {type: "enabled"}}}`，与既有 `#low` 并列 |
+| Agent 档位重排 | `opencode/agents/*.md` | `deep-worker`/`oracle`/`reviewer`/`solo` → `deepseek/deepseek-flash#high`；`planner`/`light-orchestrator` 保持 `#low`；其余保持默认（thinking off）。`solo` 此前无 `model` 字段（跟随会话模型），现在固定 `#high` |
+| 文案清理 | `AGENTS.md`、`orchestrator.md`、3 个 skill | 「pro」「v4-pro」「2 模型矩阵」「4.4× 价差」全部改写为思考档位表述；`solo` 删除「pro 为纯文本、不能读图」的拒绝条款（flash 原生多模态） |
+| 文档同步 | 本 README、`README.en-US.md` | 概览、模型分工、路由策略、审查分层、成本表、Agent 表、用法示例、设计哲学按单模型重写 |
+
+**成本影响（结构性）**：三档共用 flash 费率，模型溢价归零。相同输入下，深度任务不再付 4.4× 输入价 / 3.3× 输出价；代价是同一模型的 reasoning token 取代了「更强模型」——`#high` 的 reasoning token 按输出价计费，量取决于任务。
+
+**验证**：`node scripts/validate-jsonc.js` 通过；结构为 1 model / 3 档（默认 + `#low` + `#high`）/ 12 agents / 18 commands / 23 skills；`estimate-cost.js` 输出单行 flash 成本；全仓 grep 确认活跃配置与文档不再引用 `deepseek-v4-pro`。
+
+**未验证项**：`reasoningEffort: "high"` 在 DeepSeek flash 上的实际推理深度与 token 增量**未实测**（本机 live service 只有 `opencode-go` provider，`-m deepseek/*` 返回 `provider.no-route`）。配置写法沿用 `#low` 已验证的 `settings.reasoningEffort` 通道，风险点在于服务端是否对 flash 接受 `high`；请在具备 DeepSeek 凭据的机器上用一次 `/deep-review` 复核。
+
+**未同步全局配置**：本轮只改仓库（配置源），未运行 `sync-config.ps1`；部署时执行 `.\scripts\sync-config.ps1`。
 
 ### 2026-10-27（四）：常规升级轮 —— 主程序 2.2.0 + superpowers v7.0.1 + 定价复核 + 文档同步
 
@@ -751,7 +776,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | README「配置变更点速查」表 | 维护时一次定位到文件与小节，减少试错（试错本身就是 token 消耗） |
 | README「快速开始」四步 TL;DR | 新机器上手从「读完全文」变成「照抄四行」 |
 
-**两个模型的最终路由规则**（全仓仅此两个模型，无任何其他模型引用）
+**（历史）上一轮的双模型路由规则**（2026-10-27 起已合并为单模型，见最新变更记录；下表仅作历史留档）
 
 | 模型 | 触发条件 | 承担角色 | 计费（USD/1M，off-peak） |
 | --- | --- | --- | --- |
@@ -767,19 +792,19 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 ## 设计哲学
 
 - **纯配置驱动，零额外依赖** —— 所有能力由 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现
-- **DeepSeek V4 模型族极致利用** —— Pro 做深度推理与重型实现，Flash 做路由、规划、常规执行与原生多模态
+- **单模型 + thinking 档位** —— 只用 `deepseek-flash`：thinking 关做路由与常规执行，`#low` 做规划，`#high` 做深度推理与重型实现
 - **Token 效率优先** —— 路径引用替代粘贴文件、技能按需加载、压缩分级管理
 - **插件增效但不喧宾夺主** —— 唯一插件 superpowers 只提供过程纪律（固定 pin 以保字节稳定前缀）；上下文压缩 100% 交给内置 compaction，不引入第三方压缩层
 - **执行与探索分离** —— deep-worker/light-orchestrator 禁止研究/委托，explore/librarian 禁止修改
-- **缓存与 thinking 纪律** —— 静态前缀稳定以命中 DeepSeek 提示词缓存；flash 关 thinking + temperature 0（providers 模型层），pro 默认 thinking 开
+- **缓存与 thinking 纪律** —— 静态前缀稳定以命中 DeepSeek 提示词缓存；默认档关 thinking + temperature 0，`#low`/`#high` 开 thinking（providers 模型层）
 - **Scope First + Delegate Always** —— 先定范围（2+ 步/多文件/架构变更先走 planner），再委派执行，顶层 token 只留给路由与难题
 - **原子 TODO** —— 多步任务先写有序 TODO，逐条 in_progress→completed；格式 `path: action for scenario — verify by check`
 - **进度可控 + 失败隔离** —— 每个 TODO 带可验证完成判据，阶段边界汇报 `[done/total]`；错误分 transient/recoverable/fatal 三类，同一操作最多重试 3 次且每次必须换策略；大任务拆成独立单元，单元失败不阻塞其余，最终汇总 `succeeded / failed / skipped`
-- **按模型成本分级压缩** —— 用 `limit.input` 给两个模型分别声明工作窗口：flash `131072−16000=115,072`（高频路径，窗口更紧）、pro `163840−16000=147,840`（深度任务，留更多余量以减少有损压缩次数）；触发点是算出来的，不是继承来的
+- **显式压缩窗口** —— 用 `limit.input` 给唯一模型声明工作窗口：`131072−16000=115,072`；触发点是算出来的，不是继承来的
 - **视觉输入成本封顶** —— `media.image` 自动缩放超大图（>1600px / >2MB 先缩放再上传），配合 flash 内部 ~800x800 降采样，避免 base64 字节浪费
 - **验证预算 + 证据强度** —— 动手前设定最小非重复证据路径；"能 typecheck" 不等于行为变更的 QA
 - **易变区纪律** —— 时间戳/随机 ID/动态文件列表等易变内容置于 payload 尾部，保护 DeepSeek 提示词缓存前缀
 - **名册即预算** —— 每个 Agent 的 `skill` 权限白名单同时决定 skill 名册大小；被 deny 的 skill 不进名册，也就不进每轮的常驻上下文
 - **视觉 opt-in** —— 图像只在用户提供时进入 payload；非视觉任务不传图、不生成图
 - **持续改进** —— reflect 机制化发现摩擦、code-review 证据门控保证质量
-- **审查成本分级** —— 代码审查默认 flash 初检（省约 73%），仅在升级触发条件命中时付 pro 全价；升级时传递未验证线索，避免重复推导
+- **审查成本分级** —— 代码审查默认 thinking off 初检，仅在升级触发条件命中时才走 `#high`（多付 reasoning token）；升级时传递未验证线索，避免重复推导
