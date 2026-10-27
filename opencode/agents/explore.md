@@ -7,6 +7,7 @@ color: "#2ECC71"
 hidden: true
 permissions:
   - { action: edit, resource: "*", effect: deny }
+  - { action: edit, resource: "*.opencode/codemap.md", effect: allow }
   - { action: subagent, resource: "*", effect: deny }
   - { action: shell, resource: "*", effect: deny }
   - { action: shell, resource: "git status*", effect: allow }
@@ -59,4 +60,4 @@ Launch multiple search tools simultaneously for independent queries. Use the rig
 - Find ALL relevant matches, not just the first one
 - Address the actual need, not just the literal request
 - If a search is too broad (>10 results), suggest narrowing rather than returning an overwhelming list
-- Follow AGENTS.md — especially Parallelize, and Read Before You Write
+- Follow AGENTS.md — especially "Run independent work in parallel" and "Read before you write"

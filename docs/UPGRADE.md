@@ -124,7 +124,7 @@ node scripts/validate-jsonc.js        # 退出码 0
 
 全部勾上方可宣告升级完成：
 
-- [ ] `node scripts/validate-jsonc.js` 退出码 0，无报错
+- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter 均无报错）
 - [ ] `& $cli --version` 是目标版本
 - [ ] `& $cli debug config` 输出中没有 v1 迁移痕迹；模型只有 `deepseek-flash` 三档
 - [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析

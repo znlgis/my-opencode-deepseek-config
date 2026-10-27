@@ -126,7 +126,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 .\scripts\sync-config.ps1              # 可用 -Src 指定源目录
 ```
 
-同步排除 `node_modules`/`.git`/包清单与锁文件；`skills/`/`agents/`/`commands/` 的删除清理走 git 索引 + 全历史，`git rm` 后即使未提交也会在同步时删掉目标目录里的同名副本。
+同步排除 `node_modules`/`.git`/包清单与锁文件；`skills/`/`agents/` 的删除清理走 git 索引 + 全历史，`git rm` 后即使未提交也会在同步时删掉目标目录里的同名副本。
 
 ## 模型分工
 
@@ -236,10 +236,10 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | `reviewer` | flash#high | **只读** | 代码审查升级层：Full 路径 / 高风险触发 / 确认便宜档初检线索 |
 | `ui-builder` | flash | 读写 | 前端与 UI 相关任务 |
 | `consultant` | flash | 读写 | 方案讨论、最佳实践建议 |
-| `explore` | flash | **只读** | 代码库搜索、并行探索 |
+| `explore` | flash | **只读**（仅 `.opencode/codemap.md` 可写） | 代码库搜索、并行探索 |
 | `librarian` | flash | **只读** | 文档检索、Web 搜索 |
 | `light-orchestrator` | flash#low | 读写 | 轻量任务、单文件编辑 |
-| `vision` | flash | 读写 | 多模态：图像/截图/图表/UI 稿理解 |
+| `vision` | flash | 读写（shell 仅限 `ask` 门控的 vision-prep 脚本） | 多模态：图像/截图/图表/UI 稿理解 |
 
 > `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（`#high` 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何便宜档能完成的任务 → 拒接（本档每步都付 reasoning token）。
 >

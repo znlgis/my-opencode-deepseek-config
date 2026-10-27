@@ -10,6 +10,13 @@
  * Usage:
  *   node estimate-cost.js [--input N] [--output N] [--cache-read N] [--cache-write N]
  *
+ * Token-count convention:
+ *   --input       full prompt tokens as reported by the API (cache hits included)
+ *   --cache-read  subset of --input billed at the cache-read rate
+ *   --cache-write subset of --input billed at the cache-write rate
+ * The two cache counts are disjoint subsets of --input, so only the remainder
+ * (input - cache-read - cache-write) is billed at the full input rate.
+ *
  * Defaults match the README worked example: 200K input, 150K cache hits, 30K output.
  * Token counts are in raw tokens (not per-1M); the script divides internally.
  */
@@ -148,6 +155,15 @@ function main() {
     : 'opencode/opencode.jsonc';
   const { input, output, cacheRead, cacheWrite } = parseArgs(process.argv.slice(2));
 
+  if (cacheRead + cacheWrite > input) {
+    console.error(
+      `Invalid token counts: --cache-read (${cacheRead}) + --cache-write (${cacheWrite}) ` +
+      `= ${cacheRead + cacheWrite} exceeds --input (${input}). ` +
+      'Both cache counts are subsets of --input, so together they cannot exceed it.'
+    );
+    process.exit(1);
+  }
+
   const table = loadCostTable(configPath);
   if (table.length === 0) {
     console.error('No cost table found in ' + configPath);
@@ -156,7 +172,7 @@ function main() {
 
   const rows = table.map(({ id, cost }) => {
     const cache = cost.cache || {};
-    const inputCost = Math.max(0, input - cacheRead) * (cost.input || 0) / 1e6;
+    const inputCost = Math.max(0, input - cacheRead - cacheWrite) * (cost.input || 0) / 1e6;
     const cacheCost = cacheRead * (cache.read || 0) / 1e6;
     const writeCost = cacheWrite * (cache.write || 0) / 1e6;
     const outputCost = output * (cost.output || 0) / 1e6;

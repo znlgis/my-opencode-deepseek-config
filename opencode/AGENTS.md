@@ -269,10 +269,11 @@ explicit request wins, but only after it is acknowledged as an override.
 
 ## Skills
 
-Skills live under `skills/<name>/SKILL.md` and load on demand. Before
-reinventing a workflow, check whether a skill covers it. The `superpowers`
-plugin adds process skills (brainstorming, systematic debugging, TDD) — prefer
-those before raw reasoning.
+Skills live under `skills/<name>/SKILL.md` and load on demand; check the
+roster before reinventing a workflow. For superpowers skills versus their
+local distillation, follow the `## Plugins` table below: superpowers entries
+are wired only on `planner`, `deep-worker`, `light-orchestrator`, and `solo`;
+every other agent uses the local equivalent.
 
 - **The `skill` ruleset IS the roster filter.** Core builds each request's
   `<available_skills>` list from the skills a ruleset does not deny, so an

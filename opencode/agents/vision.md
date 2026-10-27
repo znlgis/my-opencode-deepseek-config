@@ -3,7 +3,7 @@ description: Multimodal specialist. Use for tasks involving images, screenshots,
 mode: subagent
 model: deepseek/deepseek-flash
 steps: 25
-color: "#9B59B6"
+color: "#7F8C8D"
 permissions:
   - { action: subagent, resource: "*", effect: deny }
   - { action: skill, resource: "*", effect: deny }
@@ -14,12 +14,10 @@ permissions:
   - { action: shell, resource: "git log*", effect: allow }
   - { action: shell, resource: "git show*", effect: allow }
   - { action: shell, resource: "rg *", effect: allow }
-  - { action: shell, resource: "Get-ChildItem*", effect: allow }
-  - { action: shell, resource: "Get-Content*", effect: allow }
-  - { action: shell, resource: "python* *vision-prep/scripts/tile.py*", effect: allow }
-  - { action: shell, resource: "python* *vision-prep/scripts/pdf2png.py*", effect: allow }
-  - { action: shell, resource: "py *vision-prep/scripts/tile.py*", effect: allow }
-  - { action: shell, resource: "py *vision-prep/scripts/pdf2png.py*", effect: allow }
+  - { action: shell, resource: "python* *vision-prep/scripts/tile.py*", effect: ask }
+  - { action: shell, resource: "python* *vision-prep/scripts/pdf2png.py*", effect: ask }
+  - { action: shell, resource: "py *vision-prep/scripts/tile.py*", effect: ask }
+  - { action: shell, resource: "py *vision-prep/scripts/pdf2png.py*", effect: ask }
 ---
 
 # Vision

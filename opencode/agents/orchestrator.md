@@ -37,24 +37,24 @@ Read-only agents (oracle, reviewer, explore, librarian) never write.
 | "explain X", "how does Y work" | `explore` | flash | search → synthesize → answer |
 | "look into X", "check Y", "investigate" | `explore` | flash | report findings, never edit |
 | "map out X", "show structure" | `explore` (codemap) | flash | structured overview |
-| "implement X", "add Y", "create Z" | `planner` → `deep-worker` | flash → #high | plan before building |
+| "implement X", "add Y", "create Z" | `planner` → `deep-worker` | #low → #high | plan before building |
 | "I'm seeing error X", "Y is broken" | `oracle` → `deep-worker` | #high | diagnose → fix |
 | "analyze X", "audit Y", "diagnose Z", "trace/debug" | `oracle` | #high | deep investigation, report only |
 | "refactor", "improve", "clean up" | `oracle` → `deep-worker` | #high | assess → implement → verify |
 | "optimize X", "make Y faster" | `oracle` → `deep-worker` | #high | profile → implement |
-| "review X" | `light-orchestrator` (code-review) → `reviewer` | flash → #high | flash pre-screen; `reviewer` only when the skill's escalation triggers fire |
+| "review X" | `light-orchestrator` (code-review) → `reviewer` | #low → #high | #low pre-screen; `reviewer` only when the skill's escalation triggers fire |
 | "audit security of Y" | `reviewer` | #high | trust-boundary changes, full pass |
 | "review and fix X" | `reviewer` → `deep-worker` → `reviewer` | #high | bounded loop ≤ 2 |
-| "simplify X", "clean up Y code" | `light-orchestrator` (simplify) → spawns `oracle` | flash → #high | light-orchestrator spawns oracle (read-only) → applies edits |
+| "simplify X", "clean up Y code" | `light-orchestrator` (simplify) → spawns `oracle` | #low → #high | light-orchestrator spawns oracle (read-only) → applies edits |
 | "what do you think about X?", "help me decide" | `consultant` | flash | propose → wait for confirm |
 | "deploy X", "release Y" | `deep-worker` (git-release) | #high | /release command; for complex deploys: `planner` → `deep-worker` |
-| "add tests for X" | `light-orchestrator` → `deep-worker` | flash → #high | one test file → flash; test suite across files → deep-worker |
-| "write docs for X" | `light-orchestrator` | flash | generate docs |
+| "add tests for X" | `light-orchestrator` → `deep-worker` | #low → #high | one test file → #low; test suite across files → deep-worker |
+| "write docs for X" | `light-orchestrator` | #low | generate docs |
 | "research X", "what library for Y" | `librarian` | flash | findings with citations |
 | UI / frontend / CSS / layout work | `ui-builder` | flash | preserve design handoffs |
 | "look at this image", "read this screenshot", multimodal/vision input | `vision` | flash | natively multimodal; never fabricate what's shown |
 | "scope a review", "size a codebase", "map the project before X" | `explore` | flash | delegate scoping, never do it inline |
-| commit / push | `/commit` command | flash | route to `light-orchestrator`; never run git ceremony inline |
+| commit / push | `/commit` command | #low | route to `light-orchestrator`; never run git ceremony inline |
 
 `build` and `plan` inline helpers run on flash; route anything non-trivial to a
 named agent above instead of doing it inline.

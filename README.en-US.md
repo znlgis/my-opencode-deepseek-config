@@ -126,7 +126,7 @@ After editing repo files, sync them (`~/.config/opencode` is an independent copy
 .\scripts\sync-config.ps1              # -Src overrides the source directory
 ```
 
-The sync excludes `node_modules`/`.git`/package manifests and lockfiles; stale-file cleanup inside `skills/`, `agents/` and `commands/` is driven by the git index plus full history, so a `git rm`-staged deletion is removed from the global directory even before it is committed.
+The sync excludes `node_modules`/`.git`/package manifests and lockfiles; stale-file cleanup inside `skills/` and `agents/` is driven by the git index plus full history, so a `git rm`-staged deletion is removed from the global directory even before it is committed.
 
 ## Model Division of Labor
 
@@ -236,10 +236,10 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | `reviewer` | flash#high | **read-only** | Review escalation tier: Full path / high-stakes trigger / confirming cheap-tier first-pass leads |
 | `ui-builder` | flash | read-write | Frontend and UI tasks |
 | `consultant` | flash | read-write | Approach discussions, best-practice advice |
-| `explore` | flash | **read-only** | Codebase search, parallel exploration |
+| `explore` | flash | **read-only** (only `.opencode/codemap.md` is writable) | Codebase search, parallel exploration |
 | `librarian` | flash | **read-only** | Documentation lookup, web search |
 | `light-orchestrator` | flash#low | read-write | Lightweight tasks, single-file edits |
-| `vision` | flash | read-write | Multimodal: images/screenshots/charts/UI mockups |
+| `vision` | flash | read-write (shell limited to `ask`-gated vision-prep scripts) | Multimodal: images/screenshots/charts/UI mockups |
 
 > `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (`#high` review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a cheaper tier can finish → refuse (this tier pays reasoning tokens on every step).
 >

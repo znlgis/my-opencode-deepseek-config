@@ -28,8 +28,10 @@ paid for.
 v2 loads `opencode.json`/`opencode.jsonc` through **two paths**: native decode,
 or — if the file contains ANY v1 key — the official **V1→V2 migration**
 (`isV1` trigger keys: `logLevel`, `server`, `command`, `reference`, `snapshot`,
-`plugin`, `autoshare`, `disabled_providers`, `enabled_providers`, `small_model`,
-`mode`, `agent`, `provider`, `permission`, `tools`, `attachment`, `layout`).
+`plugin`, `autoupdate`, `autoshare`, `disabled_providers`, `enabled_providers`,
+`small_model`, `mode`, `agent`, `provider`, `permission`, `tools`, `attachment`,
+`layout`, `subagent_depth` — the last is a v1 top-level key, while v2 puts it
+under `experimental`).
 This repo standardizes on the native path: keep every v1 key out of the file,
 so the loader never takes the migration branch.
 
@@ -102,7 +104,7 @@ URL even though the published schema only documents the v1 keys (observed
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)
-Only these keys are native. **Any other key sets `legacy = true` and routes the whole file through the V1→V2 migration path** (`core/config/plugin/agent.ts`), so this list is a hard whitelist, not a suggestion:
+Only these keys are native. **A key outside this list is never itself a fatal state: the file's shape decides.** If the file contains any one v2-only key (`permissions`, `request`, `system`, `disabled`), it stays on native decode and each unknown key is only warning-logged and silently dropped. Only a pure-v1 file (no v2-only key) routes the whole file through the V1→V2 migration path (`core/config/plugin/agent.ts`), so treat the list below as the whitelist to stay on:
 
 | Key | Convention |
 | --- | --- |
@@ -113,7 +115,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 | `color` | "#RRGGBB" |
 | `hidden` | optional: hide from @-menu |
 | `disabled` | optional: remove the agent |
-| `permissions` | optional ordered ARRAY `[{action, resource, effect}]`; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) set `{action: edit, resource: "*", effect: deny}` + a read-only `shell` allowlist |
+| `permissions` | optional ordered ARRAY `[{action, resource, effect}]`; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) set `{action: edit, resource: "*", effect: deny}` + a read-only `shell` allowlist. `explore` is the one exception: it additionally allows `edit` on `*.opencode/codemap.md` (the leading `*` also matches the bare `.opencode/codemap.md` at the project root) |
 | `request` | optional `{headers, body}` overlay — **no `settings`**, so no provider setting can live here |
 | `system`, `variant` | supported but not used here (the prompt body *is* the system prompt) |
 
@@ -152,7 +154,7 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 
 ## Permissions (`opencode.jsonc` → `permissions`)
 - Both the root config and agent frontmatter write the native ordered array of `{action, resource, effect}`; they resolve with last-match-wins semantics.
-- Default-ask, not default-allow: keep the `"*"` `ask` catch-all FIRST so an unrecognized destructive variant is put to a human. Never append a catch-all — a trailing one silently shadows every rule above it.
+- Default-ask, not default-allow: `evaluate` is last-match-wins (`findLast`), so the `"*"` `ask` catch-all MUST be the FIRST rule — every later specific rule then overrides it, and any unmatched destructive variant still falls through to a human. `shell` shares that `ask` fallback, so unmatched commands always go to manual approval. Never append a catch-all — a trailing one silently shadows every rule above it.
 - `deny` `.env*` reads (except `.env.example`); `ask` on destructive shell (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
 
 ## Verification (desktop v2)
@@ -169,4 +171,4 @@ Only these keys are native. **Any other key sets `legacy = true` and routes the 
 1. Re-read every changed file end-to-end.
 2. Run `node scripts/validate-jsonc.js`.
 3. Keep `README.md` in sync — agent, skills, and command tables, repo-structure tree.
-4. Confirm no third model. `validate-jsonc.js` fails on any top-level v1 key; agent frontmatter still needs the key whitelist above checked by hand.
+4. Confirm no third model. `validate-jsonc.js` now enforces the key whitelist for both the JSONC config and every `opencode/agents/*.md` frontmatter (unknown or v1 legacy keys fail). Note the lint is deliberately stricter than runtime: at runtime an unknown key in a file that also has a v2-only key is only warning-logged and dropped, while the lint rejects it — do not read a lint pass as proof the file was parsed natively, and do not loosen the lint to match the drop behavior.

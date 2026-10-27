@@ -75,8 +75,9 @@
     // guide, re-checked 2026-10-27). So only the no-suffix tier actually saves
     // reasoning tokens — it must send `disabled` explicitly; `#high` merely
     // restates the default, and `#low` is the one middle rung that exists.
-    // There is no medium effort: `minimal`→low, `medium`/`xhigh`→high,
-    // `max`/`ultra`→max.
+    // The API's `medium` and `xhigh` efforts are both remapped to `high`, so
+    // this config declares only `#low` and `#high` — no `#medium` variant
+    // exists.
     // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
     // and vision variants are now one natively-multimodal model, so it carries
     // the `capabilities` block (image input). Without it OpenCode treats the
@@ -217,9 +218,23 @@
     // (core/skill/instructions.ts), so each agent's `skill` allowlist in
     // `agents/*.md` sets exactly what that agent sees on every request.
     "agents": {
-        "build": { "model": "deepseek/deepseek-flash" },
-        "general": { "model": "deepseek/deepseek-flash" },
-        "plan": { "model": "deepseek/deepseek-flash" },
+        // `build` and `plan` are not one-shot agents, but they deny the whole
+        // skill roster too: their regular flow needs no skill, and the roster
+        // costs per-turn tokens. `plan` keeps its built-in edit sandbox (edit
+        // denied except the plan directory), so never add an edit rule for
+        // `plan`. `general` is superpowers' Task dispatch target and must see
+        // the skill roster, so it deliberately carries no `skill:* deny`.
+        "build": {
+            "model": "deepseek/deepseek-flash",
+            "permissions": [{ "action": "skill", "resource": "*", "effect": "deny" }]
+        },
+        "general": {
+            "model": "deepseek/deepseek-flash"
+        },
+        "plan": {
+            "model": "deepseek/deepseek-flash",
+            "permissions": [{ "action": "skill", "resource": "*", "effect": "deny" }]
+        },
         "title": {
             "model": "deepseek/deepseek-flash",
             "permissions": [{ "action": "skill", "resource": "*", "effect": "deny" }]
