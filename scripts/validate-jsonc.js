@@ -7,7 +7,8 @@
  *
  * An agent-frontmatter lint pass always runs, even when explicit config paths
  * are passed: opencode/agents/*.md may only carry v2-native top-level keys.
- * Any v1 spelling reroutes that agent through the V1->V2 migration path.
+ * A file with none of the v2-only keys (permissions/request/system/disabled)
+ * is decoded as a v1 agent, so a v1 spelling silently changes the parsed shape.
  *
  * Output is ASCII only (OK / FAIL) so it renders in any console encoding.
  *
@@ -18,10 +19,13 @@
 const fs = require('fs');
 const path = require('path');
 
-// Top-level keys that only exist in the v1 dialect. Any one of them makes v2
-// take the V1->V2 migration branch instead of native decode.
-// Hand-maintained mirror of isV1 in packages/core/src/v1/config/migrate.ts
-// (re-checked 2026-10-27).
+// Top-level keys that only exist in the v1 dialect. v2.2.5 normalizes most of
+// them (migrated per key, then merged with the native keys) and drops the
+// four in unsupportedTopLevel (logLevel, server, layout, subagent_depth) with
+// a diagnostic, so the config that runs is not the config that was written.
+// Hand-maintained mirror of unsupportedTopLevel plus the legacy branches in
+// packages/core/src/config/normalize.ts (migrate.ts holds the converters);
+// re-checked 2026-11-03.
 const V1_TOP_LEVEL_KEYS = new Set([
   'logLevel', 'server', 'command', 'reference', 'snapshot', 'plugin',
   'autoupdate', 'autoshare', 'disabled_providers', 'enabled_providers',
@@ -177,13 +181,13 @@ function validate(filePath) {
     }
 
     // The repo's central invariant: never contain a top-level v1 key, because
-    // any one of them silently reroutes the whole file through the V1->V2
-    // migration path. Nested keys are not checked here -- `mode` and `tools`
-    // are legal inside v2 agent/provider objects.
+    // v2 silently migrates or drops them per key, so the config that runs
+    // stops matching this file. Nested keys are not checked here -- `mode` and
+    // `tools` are legal inside v2 agent/provider objects.
     const legacy = Object.keys(parsed).filter((key) => V1_TOP_LEVEL_KEYS.has(key));
     if (legacy.length > 0) {
       console.error(`  FAIL: invalid: ${absPath}`);
-      console.error(`    v1 top-level key(s) trigger the V1->V2 migration path: ${legacy.join(', ')}`);
+      console.error(`    v1 top-level key(s) are silently migrated or dropped by v2: ${legacy.join(', ')}`);
       return false;
     }
 
@@ -228,7 +232,7 @@ function checkAgentFrontmatter(absPath) {
 
     problems.push(
       LEGACY_AGENT_KEYS.has(key)
-        ? `v1 frontmatter key "${key}" at line ${i + 1} routes the agent through the V1->V2 migration path; allowed keys: ${allowed}`
+        ? `v1 frontmatter key "${key}" at line ${i + 1} is not a v2-native agent key; allowed keys: ${allowed}`
         : `frontmatter key "${key}" at line ${i + 1} is not a v2-native agent key (v1 spelling or unknown); allowed keys: ${allowed}`
     );
   }

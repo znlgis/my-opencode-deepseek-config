@@ -10,7 +10,7 @@
 
 1. **单模型**：只有 `deepseek/deepseek-flash`，三个 thinking 档位——默认（thinking 关）、`#low`、`#high`。
 2. **thinking 参数只在模型层**：toggle 进 `providers.deepseek.models.<id>.body`，effort 进同名节点的 `settings.reasoningEffort`；Agent frontmatter 不出现任何思考参数。
-3. **只写 v2 原生键**：文件里出现任一 v1 触发键，v2 就整份改走迁移路径。
+3. **只写 v2 原生键**：v2 的配置正常化器会把 v1 键逐项迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断——不报错，但实际生效的配置与本文描述不一致。
 4. **`$schema` 固定为** `https://opencode.ai/config.json`。
 5. **插件固定 pin**（当前 `#v7.0.1`），不跟 `latest`。
 6. **零额外依赖**：能力只来自 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`；压缩只用内置 compaction。
@@ -22,13 +22,13 @@
 
 | 项 | 当前值 | 最近核验 |
 | --- | --- | --- |
-| 运行时 CLI | `opencode-cli.exe` **2.2.0**（桌面版自带） | 2026-10-27 |
-| PATH 上的 `opencode` | **1.18.4**（WinGet 安装，v1，不要用） | 2026-10-27 |
-| superpowers pin | `#v7.0.1` | 2026-10-27 |
-| DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-10-27 |
-| thinking 语义 | 默认**开**、effort 默认 `high`；思考模式忽略 `temperature` | 2026-10-27 |
-| 结构 | 1 模型 / 3 档 / 12 agents / 18 commands / 23 skills | 2026-10-27 |
-| 压缩窗口 | `limit.input` 131072 − `compaction.buffer` 16000 = 115,072 | 2026-10-27 |
+| 运行时 CLI | `opencode-cli.exe` **2.2.5**（桌面版自带） | 2026-11-03 |
+| PATH 上的 `opencode` | **1.18.4**（WinGet 安装，v1，不要用） | 2026-11-03 |
+| superpowers pin | `#v7.0.1` | 2026-11-03 |
+| DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-11-03 |
+| thinking 语义 | 默认**开**、effort 默认 `high`；思考模式忽略 `temperature` | 2026-11-03 |
+| 结构 | 1 模型 / 3 档 / 12 agents / 18 commands / 23 skills | 2026-11-03 |
+| 压缩窗口 | `limit.input` 131072 − `compaction.buffer` 16000 = 115,072 | 2026-11-03 |
 
 定价附注：peak 时段 = off-peak ×2（UTC 01–04 与 06–10 的周一至周五，不含中国法定节假日）；`cache_write` 无独立官方价，按 cache-miss 输入价映射。
 
@@ -52,9 +52,10 @@ $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.ex
 | 升级对象 | 读哪里 |
 | --- | --- |
 | CLI 行为 / 配置 schema | opencode 源码仓库 `anomalyco/opencode` 的 `packages/core/src/config/`，并对照 `& $cli debug config` 的实际输出 |
-| v1→v2 迁移边界 | 同仓库 `packages/core/src/v1/config/migrate.ts` 的 `isV1` 键表 |
+| CLI 版本 / 发布说明 | 同仓库 GitHub 的 `/releases` 列表（**不要用 `/releases/latest`**，它仍指向 v1 线） |
+| v1 键的处理方式 | 同仓库 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel`（丢弃并记诊断）与 legacy 键分支（逐键迁移后与原生键合并）；转换函数在 `packages/core/src/v1/config/migrate.ts` |
 | 模型合并语义 | 同仓库 `packages/core/src/provider.ts` 的 `mergeRecord` |
-| 请求体如何上线路 | 同仓库 `packages/core/src/ai/protocols/` 下的 `aisdk.ts` 与 `openai-chat.ts` |
+| 请求体如何上线路 | 同仓库 `packages/core/src/aisdk.ts`（`settings` → provider 选项）与 `packages/ai/src/protocols/openai-chat.ts`（选项 → 请求 body） |
 | AGENTS.md 加载范围 | 同仓库 `packages/core/src/config/plugin/instruction.ts` |
 | DeepSeek 定价 | <https://platform.deepseek.com/> 的定价页 |
 | DeepSeek thinking 语义 | <https://api-docs.deepseek.com/zh-cn/guides/thinking_mode> |
@@ -77,11 +78,11 @@ $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.ex
 
 ```powershell
 node scripts/validate-jsonc.js        # 退出码 0
-& $cli debug config                   # 键名与模型清单符合预期（无 v1 迁移痕迹）
+& $cli debug config                   # 键名与模型清单符合预期（无 unsupported / conflict 诊断）
 & $cli debug agents                   # 12 个自定义 Agent，模型引用全部可解析
 ```
 
-再确认没有 v1 触发键——清单以 `migrate.ts` 的 `isV1` 为准，尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。
+再确认没有 v1 触发键——清单以 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel` 与 legacy 键分支为准（与 `scripts/validate-jsonc.js` 的 `V1_TOP_LEVEL_KEYS` 逐项对应），尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。
 
 ### 3.4 同步与重载
 
@@ -112,13 +113,14 @@ node scripts/validate-jsonc.js        # 退出码 0
 1. **`thinking` / `temperature` 写在 `settings` 下不生效** —— `settings` 只承载 provider option（`timeout` / `chunkTimeout` / `reasoningEffort`），其余被静默丢弃（2026-10-16 实测）。
 2. **`reasoningEffort` 写在 Agent 的 `options` 下不生效** —— `options` 只落 `request.body`，且 camelCase 不是 API 认的 `reasoning_effort`。
 3. **变体 body 写 `null` 会覆盖基值** —— `mergeRecord` 只把 `undefined` 当"未设置"；`null` 是合法 JSON 值，会原样出现在请求体里。
-4. **一个 v1 触发键就够** —— 整份配置改走迁移路径，本文件与 README 描述的行为全部失效。
+4. **v1 键不报错，只会被静默改写** —— 2.2.5 把 `provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment` 等 legacy 键逐键迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 记 `unsupported` 诊断后丢弃；文件不会被整体拒绝（只有 JSONC 语法错误或归一化后无法解码才会拒绝，见 `config.ts`）。「看起来生效」不是写对了的证据，以 `scripts/validate-jsonc.js` 的键白名单为准。
 5. **PATH 上的 `opencode` 是 v1.18.4** —— headless 运行必须用桌面版自带 CLI。
 6. **DeepSeek 默认开思考、effort 默认 `high`** —— 不显式写 `disabled` 就一直在付 reasoning token。
 7. **思考模式下 `temperature` / `presence_penalty` / `frequency_penalty` 被忽略**；`top_p` 只在思考模式生效（有效范围 0.95–1.0），非思考模式恒为 1.0。所以这些参数只在默认档有意义。
 8. **带 `tools` 时必须回传历史 `reasoning_content`**，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 9. **`write` 工具落盘带 UTF-8 BOM** —— 用作 commit message 前先剥掉，否则 subject 首字符是 U+FEFF。
 10. **技能名册是每轮常驻成本** —— 新增 skill 或加长 `description` 直接抬高每轮 token；不再使用的 skill 应当合并或删除。
+11. **`/releases/latest` 指错版本线** —— 2026-11-03 核对时 latest 仍解析到 v1 线的 v1.19.5，`/releases` 列表顶部才是 v2 线（当日最新 v2.2.5，发布于 2026-10-30）。判断版本只认 `/releases` 列表 + 桌面版 CLI `--version`，不要用 latest 重定向，也不要用 PATH 上的 1.18.4。
 
 ## 5. 验收清单
 
@@ -126,7 +128,7 @@ node scripts/validate-jsonc.js        # 退出码 0
 
 - [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter 均无报错）
 - [ ] `& $cli --version` 是目标版本
-- [ ] `& $cli debug config` 输出中没有 v1 迁移痕迹；模型只有 `deepseek-flash` 三档
+- [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 三档
 - [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析
 - [ ] `.\scripts\sync-config.ps1` 成功，`& $cli reload` 后 `/models` 与 Agent 列表符合预期
 - [ ] 两份 README 标题逐条对齐，`LF = CRLF`

@@ -3,7 +3,9 @@
     // is the v2 dialect (plugins / providers / agents / commands / permissions
     // / media). The v1 spellings (plugin, provider, agent, command, permission,
     // attachment, small_model, top-level subagent_depth) are never written:
-    // any one of them flips v2's loader onto its V1→V2 migration path. See
+    // v2.2.5 silently migrates most of them per key (and drops the four in
+    // unsupportedTopLevel) instead of rejecting the file, so the config that
+    // runs would stop matching this file. See
     // README「v2 原生键名」for the key map and the verification method.
     "$schema": "https://opencode.ai/config.json",
     "default_agent": "orchestrator",
@@ -72,7 +74,7 @@
     //   #low        thinking ON, effort `low`       — routine planning;
     //   #high       thinking ON, effort `high`      — deep reasoning/review.
     // Upstream default is thinking ON at effort `high` (DeepSeek thinking-mode
-    // guide, re-checked 2026-10-27). So only the no-suffix tier actually saves
+    // guide, re-checked 2026-11-03). So only the no-suffix tier actually saves
     // reasoning tokens — it must send `disabled` explicitly; `#high` merely
     // restates the default, and `#low` is the one middle rung that exists.
     // The API's `medium` and `xhigh` efforts are both remapped to `high`, so
@@ -128,7 +130,7 @@
                     // The two non-default tiers. Effort is a provider setting,
                     // not a body key: `settings.reasoningEffort` is what the
                     // aisdk layer forwards as the API's `reasoning_effort`
-                    // (core/aisdk.ts reads it; ai/protocols/openai-chat.ts maps
+                    // (core/aisdk.ts reads it; ai/src/protocols/openai-chat.ts maps
                     // it into the body), while the toggle rides `body`. Agents
                     // select a variant with `model:
                     // deepseek/deepseek-flash#low` or `#high`. Each variant must
@@ -151,7 +153,7 @@
                         }
                     ],
                     // `cost` is USD per 1M tokens — official off-peak rates,
-                    // re-verified against the pricing page 2026-10-27. Peak
+                    // re-verified against the pricing page 2026-11-03. Peak
                     // hours (UTC 01-04 & 06-10 Mon-Fri, excluding Chinese
                     // public holidays = Beijing 09-12 & 14-18) charge double,
                     // so this table under-reports peak-time spend by ~2x; it
@@ -192,8 +194,8 @@
         }
     },
     // Built-in agents (no .md file). `model` here binds only three surfaces
-    // (verified against v2.0.27 + live runs; source re-checked on v2.2.0
-    // 2026-10-27): subagent/child sessions — incl.
+    // (verified against v2.0.27 + live runs; source re-checked on v2.2.5
+    // 2026-11-03): subagent/child sessions — incl.
     // `general` (the superpowers Task dispatch target) and `/` commands bound
     // to subagent-mode agents — the title/summary/compaction one-shots, and
     // the desktop composer's per-agent default for new sessions (build/plan

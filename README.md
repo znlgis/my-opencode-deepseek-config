@@ -21,7 +21,7 @@
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.2.0**，2026-10-27 核验通过；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.2.5**，2026-11-03 核验通过；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「安装与启动」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
@@ -86,7 +86,7 @@ opencode
 
 ### v2 原生键名（本仓库唯一写法）
 
-本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, keep, buffer}`（`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2 就改走 V1→V2 迁移路径，本文描述的行为不再成立。
+本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, keep, buffer}`（`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2.2.5 会把它逐键迁移后与原生键合并（`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断）——不报错，但实际生效的配置与本文描述不一致。
 
 > `$schema` 保持 `https://opencode.ai/config.json`（v2 应用自身写入的就是该 URL）。
 
@@ -118,7 +118,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-flash`；Agent 列表有 12 个自定义 Agent；输入任意需求，`orchestrator` 会自动分析并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review`）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.2.0** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
+> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.2.5** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
 
 改完仓库文件后必须同步（`~/.config/opencode` 是独立副本，不是符号链接）：
 
@@ -151,7 +151,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **thinking 开关** —— `{"thinking":{"type":"enabled"|"disabled"}}`，是**请求体（body）字段**。默认档关闭（最省），`#low`/`#high` 打开。
 - **thinking 强度** —— `{"reasoning_effort":"low"|"high"|"max"}`，由 **provider setting** `settings.reasoningEffort` 驱动（配置里写 camelCase，线上是 snake_case）——这是 opencode aisdk 层唯一会转成 `reasoning_effort` 的路径。
 
-> **官方文档核对（2026-10-27，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token，`#high` 只是把默认值写明，`#low` 是唯一存在的中间档；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
+> **官方文档核对（2026-11-03，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token，`#high` 只是把默认值写明，`#low` 是唯一存在的中间档；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/src/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 
 > **⚠️ 写法陷阱（2026-10-16 实测修正）**：`thinking`/`temperature` 放在 `settings` 下不生效（openai-chat 协议不实现该 option），`reasoningEffort` 放在 Agent 的 `options` 下也不生效（`options` 只落到 `request.body`，且 camelCase 不是 API 认的 `reasoning_effort`）。两者都必须写在**模型层**：toggle 进 `body`、effort 进 `settings`。修正前 flash 一直开着 thinking 跑，每一步都在付 reasoning token。
 
@@ -168,7 +168,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
 - **自动升级**：thinking off / `#low` agent 无法胜任时自动升级到 `#high`（带完整上下文）
 
-**模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-10-27 于 v2.2.0 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（flash 默认档）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析；要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
+**模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-11-03 于 v2.2.5 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（flash 默认档）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析；要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
 
 用法示例：`「这个库怎么用」` → thinking off（librarian）；`「给用户模块加导出功能」` → `#low`（planner）；`「排查登录接口报错的根因」` → `#high`（oracle）；`/review` → thinking off 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ 初检后升级 `#high`。
 
@@ -185,7 +185,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-10-27 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-11-03 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） |
 | --- | --- | --- | --- | --- |
