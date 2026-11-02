@@ -164,19 +164,19 @@ Thinking strength is driven by two **request parameters**, both declared at the 
 - **Trivial → thinking off**: well-defined light tasks — search, lookup, consultation, UI, exploration, doc retrieval — go to the default tier (cheapest)
 - **Routine-nontrivial → `#low`**: planning and routine multi-file work use `deepseek/deepseek-flash#low` (thinking on + effort `low`)
 - **Deep/uncertain → `#high`**: deep reasoning, root-cause analysis, heavy multi-file implementation use `deepseek/deepseek-flash#high` (thinking on + effort `high`)
-- **Code review → thinking-off first pass, `#high` escalation**: `/review` runs a thinking-off first pass (Abbreviated path) by default and delegates to `reviewer` (`#high`) only when an escalation trigger fires; `/deep-review` forces a full `#high` review
+- **Code review → `#low` first pass, `#high` escalation**: `/review` runs a `#low` first pass (Abbreviated path) by default and delegates to `reviewer` (`#high`) only when an escalation trigger fires; `/deep-review` forces a full `#high` review
 - **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `media.image` to 1600px / 2MiB to avoid wasting base64 bytes
 - **Automatic escalation**: when a thinking-off or `#low` agent can't handle a task, it escalates to `#high` automatically (with full context)
 
 **Model resolution chain (v2.0.24 source + live-verified; re-checked on v2.0.27 on 2026-10-12 with an environment caveat; source re-checked on v2.2.5 on 2026-11-03)**: `agent.model` decides the actual model in exactly three places — ① subagent/child sessions (including `/` commands: a command bound to a subagent-mode agent **spawns a child session** running at that agent's tier, e.g. `/deep`→`#high`, `/quick`→`#low`, and the current session model is untouched); ② the title/summary/compaction one-shot calls; ③ the desktop App's per-agent default for new sessions (build/plan/orchestrator → flash). The main session itself resolves `-m` > stored session model > global `model` (flash, default tier): in the desktop App you switch via the model picker (your pick is remembered); headless `opencode run` **does not read** `agent.model` — the main session resolves the global `model`; pass `-m deepseek/deepseek-flash#high` to pin a thinking tier. **⚠️ 2026-10-12 re-test (v2.0.27)**: on this machine (whose live service only has the `opencode-go` provider) `-m deepseek/*` returns `provider.no-route`, and only the run without `-m` succeeds — so the `-m` semantics depend on the target machine having `/connect deepseek` with a working provider route; re-verify there before relying on it.
 
-Usage examples: "how does this library work?" → thinking off (librarian); "add an export feature to the user module" → `#low` (planner); "what's the root cause of this login error?" → `#high` (oracle); `/review` → thinking-off first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → first pass then `#high` escalation.
+Usage examples: "how does this library work?" → thinking off (librarian); "add an export feature to the user module" → `#low` (planner); "what's the root cause of this login error?" → `#high` (oracle); `/review` → `#low` first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → first pass then `#high` escalation.
 
 #### Two-Tier Code Review (Lightweight Review)
 
 | Tier | Model | Executor | Coverage |
 | --- | --- | --- | --- |
-| Tier 1 (default) | `deepseek/deepseek-flash` (thinking off) | `light-orchestrator` (`/review`) | Abbreviated path: ≤8 logic files and ≤300 effective lines, no high-stakes trigger |
+| Tier 1 (default) | `deepseek/deepseek-flash#low` | `light-orchestrator` (`/review`) | Abbreviated path: ≤8 logic files and ≤300 effective lines, no high-stakes trigger |
 | Tier 2 (escalation) | `deepseek/deepseek-flash#high` | `reviewer` (`/deep-review` or auto-escalation) | Full path, a high-stakes trigger, or a Tier-1 critical/major needing cross-file confirmation |
 
 Escalation triggers (any one): the path is Full (large diff or high-stakes regex hit); Tier 1 found a critical/major it cannot confirm from the diff alone; the diff touches a trust boundary (also load `security-review`); the user explicitly asked for a deep review.
@@ -206,14 +206,14 @@ Two cost levers:
 
 #### Thinking-Tier Cost Comparison
 
-Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hits, 8K visible output; `#high` adds 4K reasoning tokens billed at the output rate):
+Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hits, 8K visible output; `#low` adds 2K and `#high` adds 4K reasoning tokens, both billed at the output rate):
 
 | Tier | Cache hit | Input miss | Output (incl. reasoning) | Total |
 | --- | --- | --- | --- | --- |
-| thinking off (`/review` first pass) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
-| `#high` (`/deep-review`) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.010** |
+| `#low` (`/review` first pass, +2K reasoning) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 10K × 0.60 = $0.0060 | **≈ $0.0084** |
+| `#high` (`/deep-review`) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.0096** |
 
-**Conclusion**: with one model, the gap between the two review tiers is not a "model unit price" but the extra reasoning tokens — on the same input base `#high` costs about 40% more ($0.007 → $0.010), far below the 3.7× pro premium of the two-model era. The reasoning-token count is an assumption; re-measure with `scripts/estimate-cost.js` on a machine holding DeepSeek credentials.
+**Conclusion**: with one model, the gap between the two review tiers is not a "model unit price" but the extra reasoning tokens — on the same input base `#high` costs about 14% more ($0.0084 → $0.0096), far below the 3.7× pro premium of the two-model era. The reasoning-token count is an assumption; re-measure with `scripts/estimate-cost.js` on a machine holding DeepSeek credentials.
 
 ## Agent Structure
 
@@ -243,7 +243,7 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 
 > `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (`#high` review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a cheaper tier can finish → refuse (this tier pays reasoning tokens on every step).
 >
-> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a shell allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: the `shell` ruleset denies everything by default, with no shell allowlist at all.
+> Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a shell allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `node scripts/*` (`reviewer` also `npm test*`), `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: the `shell` ruleset denies everything by default, with no shell allowlist at all.
 >
 > Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`/`writing-plans`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set plus `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans` (the inline executor needs the complete toolchain, still guarded by a `resource: "*"` deny rule). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget. Only 4 superpowers entries are wired (`writing-plans` → `planner`; `test-driven-development`/`verification-before-completion` → `deep-worker`; `verification-before-completion` → `light-orchestrator`); every other superpowers skill has a local equivalent and stays unwired so two competing processes never coexist — the mapping table is in `AGENTS.md`'s Plugins section.
 >
@@ -259,7 +259,7 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | `/quick` | `light-orchestrator` | Lightweight tasks, single-file edits |
 | `/ui` | `ui-builder` | Frontend/UI work |
 | `/vision` | `vision` | Multimodal: image/screenshot/chart understanding |
-| `/review` | `light-orchestrator` (code-review) → escalates to `reviewer` as needed | Code review: thinking-off first pass by default (Abbreviated path reports directly); delegates to `reviewer` (`#high`) with unverified leads when an escalation trigger fires; posts to GitHub (event=COMMENT) with a PR ref/URL |
+| `/review` | `light-orchestrator` (code-review) → escalates to `reviewer` as needed | Code review: `#low` first pass by default (Abbreviated path reports directly); delegates to `reviewer` (`#high`) with unverified leads when an escalation trigger fires; posts to GitHub (event=COMMENT) with a PR ref/URL |
 | `/deep-review` | `reviewer` (code-review + gh-cli) | Forces a full `#high` review, skipping the cheap first pass; posts to GitHub (event=COMMENT) with a PR ref/URL |
 | `/plan` | `planner` | Create plans and technical proposals |
 | `/oracle` | `oracle` | Deep analysis, root-cause tracing |
@@ -295,7 +295,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 
 | Skill | Purpose |
 | --- | --- |
-| `code-review` | Single-pass code review + evidence gating; two tiers — thinking-off first pass / `#high` escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
+| `code-review` | Single-pass code review + evidence gating; two tiers — `#low` first pass / `#high` escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
 | `codemap` | Generates an annotated repository structure map for quick orientation, saving exploration tokens |
 | `gh-cli` | GitHub CLI v2.103+ reference: PR posting, api, rate limits, gh pr checks, gh skill/gh-aw, GHSA security notes |
 | `git-master` | Advanced Git operations: rebase, squash, fixup, bisect, reflog, code archaeology, worktrees |
@@ -343,7 +343,7 @@ When editing config, locate "what to change → which file", so you never change
 | --- | --- | --- |
 | Model list / prices / thinking / temperature | `opencode.jsonc` | `providers.deepseek.models` |
 | Global profile: default agent, nesting depth, tool-output caps, compaction, media resize | `opencode.jsonc` | top-level keys |
-| Permissions (read / shell / skill / external directories) | `opencode.jsonc` | `permissions` |
+| Permissions (read / shell / edit / skill / external directories) | `opencode.jsonc` | `permissions` |
 | Built-in agents (build/plan/title/summary/compaction/general) model, and the one-shot agents' skill denial | `opencode.jsonc` | `agents` (inline `model` / `permissions`; inline permissions are **appended last** and win under last-match-wins ) |
 | Shortcut command agents and templates | `opencode.jsonc` | `commands` |
 | One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |

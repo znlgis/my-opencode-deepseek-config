@@ -138,7 +138,7 @@ function parseArgs(argv) {
 function loadCostTable(configPath) {
   const abs = path.resolve(configPath);
   const raw = fs.readFileSync(abs, 'utf-8');
-  const parsed = JSON.parse(stripJsonc(raw));
+  const parsed = JSON.parse(stripJsonc(raw.replace(/^\uFEFF/, '')));
   const models = parsed.providers && parsed.providers.deepseek
     ? parsed.providers.deepseek.models
     : {};
@@ -150,9 +150,16 @@ function loadCostTable(configPath) {
 }
 
 function main() {
-  const configPath = process.argv.includes('--config')
-    ? process.argv[process.argv.indexOf('--config') + 1]
-    : 'opencode/opencode.jsonc';
+  const configIndex = process.argv.indexOf('--config');
+  if (configIndex !== -1 &&
+      (process.argv[configIndex + 1] === undefined || process.argv[configIndex + 1] === '')) {
+    console.error('Missing value for --config');
+    console.error('Usage: node estimate-cost.js [--config <path>] [--input N] [--output N] [--cache-read N] [--cache-write N]');
+    process.exit(1);
+  }
+  const configPath = configIndex !== -1
+    ? process.argv[configIndex + 1]
+    : path.resolve(__dirname, '..', 'opencode', 'opencode.jsonc');
   const { input, output, cacheRead, cacheWrite } = parseArgs(process.argv.slice(2));
 
   if (cacheRead + cacheWrite > input) {

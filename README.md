@@ -164,19 +164,19 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **Trivial → thinking off**：搜索、查询、咨询、UI、探索、文档检索等明确定义的轻任务走默认档（最省）
 - **Routine-nontrivial → `#low`**：规划、常规多文件实现等稍有难度的任务走 `deepseek/deepseek-flash#low`（thinking 开 + effort `low`）
 - **Deep/uncertain → `#high`**：深度推理、根因分析、重型多文件实现走 `deepseek/deepseek-flash#high`（thinking 开 + effort `high`）
-- **代码审查 → thinking off 初检，`#high` 升级**：`/review` 默认走默认档初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（`#high`）；`/deep-review` 强制 `#high` 全量审查
+- **代码审查 → `#low` 初检，`#high` 升级**：`/review` 默认走 `#low` 初检（Abbreviated 路径），仅在升级触发条件命中时委派 `reviewer`（`#high`）；`/deep-review` 强制 `#high` 全量审查
 - **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
 - **自动升级**：thinking off / `#low` agent 无法胜任时自动升级到 `#high`（带完整上下文）
 
 **模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-11-03 于 v2.2.5 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（flash 默认档）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析；要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
 
-用法示例：`「这个库怎么用」` → thinking off（librarian）；`「给用户模块加导出功能」` → `#low`（planner）；`「排查登录接口报错的根因」` → `#high`（oracle）；`/review` → thinking off 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ 初检后升级 `#high`。
+用法示例：`「这个库怎么用」` → thinking off（librarian）；`「给用户模块加导出功能」` → `#low`（planner）；`「排查登录接口报错的根因」` → `#high`（oracle）；`/review` → `#low` 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ 初检后升级 `#high`。
 
 #### 代码审查的两级档位（轻量化 Review）
 
 | 层级 | 模型 | 执行者 | 覆盖范围 |
 | --- | --- | --- | --- |
-| Tier 1（默认） | `deepseek/deepseek-flash`（thinking off） | `light-orchestrator`（`/review`） | Abbreviated 路径：≤8 个逻辑文件且 ≤300 有效行，且无高风险触发 |
+| Tier 1（默认） | `deepseek/deepseek-flash#low` | `light-orchestrator`（`/review`） | Abbreviated 路径：≤8 个逻辑文件且 ≤300 有效行，且无高风险触发 |
 | Tier 2（升级） | `deepseek/deepseek-flash#high` | `reviewer`（`/deep-review` 或自动升级） | Full 路径、高风险触发、或 Tier 1 发现需跨文件确认的 critical/major |
 
 升级触发条件（命中任一即升级）：路径为 Full（大 diff 或高风险正则命中）；Tier 1 发现 critical/major 但无法仅凭 diff 确认影响；diff 触及信任边界（同时加载 `security-review`）；用户明确要求深度审查。
@@ -206,14 +206,14 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 #### 思考档位的成本对比
 
-以"审查一个 300 有效行的本地 diff"为例（假设 60K 输入 tokens，其中 45K 命中缓存，8K 可见输出；`#high` 额外产生 4K reasoning tokens，按输出价计费）：
+以"审查一个 300 有效行的本地 diff"为例（假设 60K 输入 tokens，其中 45K 命中缓存，8K 可见输出；`#low` 额外产生 2K、`#high` 额外产生 4K reasoning tokens，均按输出价计费）：
 
 | 档位 | 缓存命中 | 输入未命中 | 输出（含 reasoning） | 合计 |
 | --- | --- | --- | --- | --- |
-| thinking off（`/review` 初检） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 8K × 0.60 = $0.0048 | **≈ $0.007** |
-| `#high`（`/deep-review`） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.010** |
+| `#low`（`/review` 初检，+2K reasoning） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 10K × 0.60 = $0.0060 | **≈ $0.0084** |
+| `#high`（`/deep-review`） | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.0096** |
 
-**结论**：单模型下两级审查的价差不是「模型单价」，而是「多出的 reasoning token」——同一输入基数下 `#high` 约贵 40%（$0.007 → $0.010），远小于双模型时 pro 的 3.7×。reasoning token 数是假设值，实际值需在具备 DeepSeek 凭据的机器上用 `scripts/estimate-cost.js` 复测。
+**结论**：单模型下两级审查的价差不是「模型单价」，而是「多出的 reasoning token」——同一输入基数下 `#high` 约贵 14%（$0.0084 → $0.0096），远小于双模型时 pro 的 3.7×。reasoning token 数是假设值，实际值需在具备 DeepSeek 凭据的机器上用 `scripts/estimate-cost.js` 复测。
 
 ## Agent 结构
 
@@ -243,7 +243,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 > `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（`#high` 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何便宜档能完成的任务 → 拒接（本档每步都付 reasoning token）。
 >
-> 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
+> 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `node scripts/*`（`reviewer` 另含 `npm test*`）、`gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
 >
 > 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
@@ -259,7 +259,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | `/quick` | `light-orchestrator` | 轻量任务、单文件编辑 |
 | `/ui` | `ui-builder` | 前端/UI 工作 |
 | `/vision` | `vision` | 多模态：图像/截图/图表理解 |
-| `/review` | `light-orchestrator`（code-review）→ 按需升级 `reviewer` | 代码审查：默认 thinking off 初检（Abbreviated 路径直接出报告）；命中升级触发条件时委派 `reviewer`（`#high`）并传递未验证线索；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
+| `/review` | `light-orchestrator`（code-review）→ 按需升级 `reviewer` | 代码审查：默认 `#low` 初检（Abbreviated 路径直接出报告）；命中升级触发条件时委派 `reviewer`（`#high`）并传递未验证线索；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
 | `/deep-review` | `reviewer`（code-review + gh-cli） | 强制 `#high` 全量审查，跳过便宜档初检；带 PR ref/URL 时回帖 GitHub（event=COMMENT） |
 | `/plan` | `planner` | 制定计划、技术方案 |
 | `/oracle` | `oracle` | 深度分析、问题溯源 |
@@ -291,11 +291,11 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ## 技能（Skills）
 
-OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要时才加载，不占用上下文。
+OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要时才加载，不占用上下文；但名册的 name + description 每轮常驻，见下表后的说明。
 
 | Skill | 作用 |
 | --- | --- |
-| `code-review` | 单遍代码审查 + 证据门控；thinking off 初检 / `#high` 升级两级；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
+| `code-review` | 单遍代码审查 + 证据门控；`#low` 初检 / `#high` 升级两级；大 diff（>~500 行）拆 Standards/Spec 两轴合并报告 |
 | `codemap` | 生成带标注的仓库结构图，快速定向，节省探索 token |
 | `gh-cli` | GitHub CLI v2.103+ 参考：PR 回帖、api、rate limit、gh pr checks、gh skill/gh-aw、GHSA 安全要点 |
 | `git-master` | 高级 Git 操作：rebase、squash、fixup、bisect、reflog、代码考古、worktree |
@@ -342,8 +342,8 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 想改的东西 | 文件 | 位置 |
 | --- | --- | --- |
 | 模型清单 / 价格 / thinking / temperature | `opencode.jsonc` | `providers.deepseek.models` |
-| 画像：默认 Agent、小模型、嵌套深度、工具输出上限、压缩参数、附件缩放 | `opencode.jsonc` | 顶层同名键 |
-| 权限（读 / bash / skill / 外部目录） | `opencode.jsonc` | `permissions` |
+| 画像：默认 Agent、嵌套深度、工具输出上限、压缩参数、附件缩放 | `opencode.jsonc` | 顶层同名键 |
+| 权限（读 / shell / edit / skill / 外部目录） | `opencode.jsonc` | `permissions` |
 | 内置 agent（build/plan/title/summary/compaction/general）的模型、以及一次性 agent 的 skill 屏蔽 | `opencode.jsonc` | `agents`（inline `model` / `permissions`；inline 权限**追加在最后**，last-match-wins） |
 | 快捷命令的 Agent 与模板 | `opencode.jsonc` | `commands` |
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |

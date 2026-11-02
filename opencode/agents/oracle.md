@@ -8,6 +8,7 @@ permissions:
   - { action: edit, resource: "*", effect: deny }
   - { action: subagent, resource: "*", effect: deny }
   - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "node scripts/*", effect: allow }
   - { action: shell, resource: "git status*", effect: allow }
   - { action: shell, resource: "git diff*", effect: allow }
   - { action: shell, resource: "git log*", effect: allow }

@@ -54,7 +54,7 @@ $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.ex
 | CLI 行为 / 配置 schema | opencode 源码仓库 `anomalyco/opencode` 的 `packages/core/src/config/`，并对照 `& $cli debug config` 的实际输出 |
 | CLI 版本 / 发布说明 | 同仓库 GitHub 的 `/releases` 列表（**不要用 `/releases/latest`**，它仍指向 v1 线） |
 | v1 键的处理方式 | 同仓库 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel`（丢弃并记诊断）与 legacy 键分支（逐键迁移后与原生键合并）；转换函数在 `packages/core/src/v1/config/migrate.ts` |
-| 模型合并语义 | 同仓库 `packages/core/src/provider.ts` 的 `mergeRecord` |
+| 模型合并语义 | 同仓库 `packages/core/src/provider.ts` 的 `mergeOverlay` |
 | 请求体如何上线路 | 同仓库 `packages/core/src/aisdk.ts`（`settings` → provider 选项）与 `packages/ai/src/protocols/openai-chat.ts`（选项 → 请求 body） |
 | AGENTS.md 加载范围 | 同仓库 `packages/core/src/config/plugin/instruction.ts` |
 | DeepSeek 定价 | <https://platform.deepseek.com/> 的定价页 |
@@ -70,7 +70,7 @@ $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.ex
 | 路由、拒绝契约、缓存纪律 | `opencode/AGENTS.md` |
 | 快捷命令模板 | `opencode/opencode.jsonc` 的 `commands` |
 
-变体 body 只写实际要覆盖的字段：`mergeRecord` 只在基值为 `undefined` 时保留基值，写 `null` 会原样出现在请求体里。
+变体 body 只写实际要覆盖的字段：`mergeOverlay` 只在基值为 `undefined` 时保留基值，写 `null` 会原样出现在请求体里。
 
 ### 3.3 校验
 
@@ -78,6 +78,7 @@ $cli = "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.ex
 
 ```powershell
 node scripts/validate-jsonc.js        # 退出码 0
+node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 & $cli debug config                   # 键名与模型清单符合预期（无 unsupported / conflict 诊断）
 & $cli debug agents                   # 12 个自定义 Agent，模型引用全部可解析
 ```
@@ -126,7 +127,8 @@ node scripts/validate-jsonc.js        # 退出码 0
 
 全部勾上方可宣告升级完成：
 
-- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter 均无报错）
+- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 23 个 skill frontmatter 均无报错）
+- [ ] `node scripts/estimate-cost.js` 退出码 0，且输出成本估算（默认参数应约 $0.026）
 - [ ] `& $cli --version` 是目标版本
 - [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 三档
 - [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析

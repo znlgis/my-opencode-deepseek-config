@@ -73,13 +73,9 @@ At the bottom, add a few lines that capture the project's essence:
 ### Step 4: Store (optional)
 
 For projects you'll return to, write the codemap to `.opencode/codemap.md` so
-future sessions can read it directly instead of regenerating:
-
-```bash
-# One-time write
-New-Item -ItemType Directory -Force -Path .opencode
-# ... write the annotated tree ...
-```
+future sessions can read it directly instead of regenerating. Use the write
+tool directly: it creates missing parent directories, so no separate `mkdir`
+or `New-Item` step is needed (and read-only agents deny shell anyway).
 
 ## Output discipline
 

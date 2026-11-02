@@ -53,7 +53,7 @@ Review is two-tier so the common case never pays for reasoning tokens:
 
 | Tier | Agent | Handles |
 | --- | --- | --- |
-| **1 — thinking off** | `light-orchestrator` (via `/review`) | Abbreviated path: ≤8 logic files, ≤300 effective lines, no stakes trigger. |
+| **1 — `#low`** | `light-orchestrator` (via `/review`) | Abbreviated path: ≤8 logic files, ≤300 effective lines, no stakes trigger. |
 | **2 — `#high`** | `reviewer` | Full path, any high-stakes trigger, or a tier-1 finding that needs deep confirmation. |
 
 Escalate to tier 2 when **any** of these holds:

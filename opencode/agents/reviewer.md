@@ -8,6 +8,8 @@ permissions:
   - { action: edit, resource: "*", effect: deny }
   - { action: subagent, resource: "*", effect: deny }
   - { action: shell, resource: "*", effect: deny }
+  - { action: shell, resource: "node scripts/*", effect: allow }
+  - { action: shell, resource: "npm test*", effect: allow }
   - { action: shell, resource: "git status*", effect: allow }
   - { action: shell, resource: "git diff*", effect: allow }
   - { action: shell, resource: "git log*", effect: allow }
@@ -41,7 +43,7 @@ parallel axes (Standards + Spec) and merges into one report — no consensus loo
 ## Model tier
 
 You run on flash with thinking at high effort because review is the escalation
-path. The cheap first pass is `/review` on a thinking-off agent
+path. The cheap first pass is `/review` on a `#low` agent
 (`light-orchestrator`), which handles the Abbreviated path and escalates here
 only when the code-review skill's escalation triggers fire. When you receive a flash pre-screen, treat its findings as unverified
 leads: confirm or discard each one, and do not re-derive what it already

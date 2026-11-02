@@ -32,6 +32,9 @@
     // to ask. Known danger patterns are deliberately NOT listed as extra
     // `ask` rules: the catch-all already sends them to a human, and under
     // last-match-wins any later `ask` rule would be a dead rule.
+    // `edit` is the exception to default-ask: the agent baseline already
+    // allows writes, so its rules only deny secret files — never a global
+    // allow (see the `edit` block below).
     "permissions": [
         { "action": "read", "resource": "*", "effect": "allow" },
         { "action": "read", "resource": ".env", "effect": "deny" },
@@ -40,6 +43,18 @@
         { "action": "read", "resource": ".envrc", "effect": "deny" },
         { "action": "read", "resource": "*.envrc", "effect": "deny" },
         { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        // `edit` rules here only forbid writing secret files and env
+        // templates (`*.env.*` also covers `.env.example`). Do NOT add a
+        // global `edit *` allow (or any allow that relaxes a secret path):
+        // these global rules are appended after the built-in `plan` rules and
+        // last-match-wins would override plan's `edit:* deny`, breaking its
+        // read-only sandbox. Ordinary agents already write freely through the
+        // agent baseline, so no allow rule is needed.
+        { "action": "edit", "resource": ".env", "effect": "deny" },
+        { "action": "edit", "resource": "*.env", "effect": "deny" },
+        { "action": "edit", "resource": "*.env.*", "effect": "deny" },
+        { "action": "edit", "resource": ".envrc", "effect": "deny" },
+        { "action": "edit", "resource": "*.envrc", "effect": "deny" },
         { "action": "shell", "resource": "*", "effect": "ask" },
         { "action": "shell", "resource": "git status*", "effect": "allow" },
         { "action": "shell", "resource": "git diff*", "effect": "allow" },
@@ -317,7 +332,7 @@
         "review": {
             "description": "Code review — cheap first pass, #high escalation on complex findings",
             "agent": "light-orchestrator",
-            "template": "Load the code-review skill and run the tier-1 (thinking off) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (flash#high) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
+            "template": "Load the code-review skill and run the tier-1 (`#low`) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (flash#high) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
         },
         "deep-review": {
             "description": "Force a deep (deepseek-flash#high) code review, skipping the cheap first pass",

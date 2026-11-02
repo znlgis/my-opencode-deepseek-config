@@ -163,5 +163,5 @@ Only these keys are native. **A key outside this list is never itself a fatal st
 ## Before you finish
 1. Re-read every changed file end-to-end.
 2. Run `node scripts/validate-jsonc.js`.
-3. Keep `README.md` in sync — agent, skills, and command tables, repo-structure tree.
+3. Keep `README.md` and `README.en-US.md` in sync — same section order and counts, both CRLF.
 4. Confirm no third model. `validate-jsonc.js` now enforces the key whitelist for both the JSONC config and every `opencode/agents/*.md` frontmatter (unknown or v1 legacy keys fail). Note the lint is deliberately stricter than runtime: at runtime an unknown key in a file that also has a v2-only key is only warning-logged and dropped, while the lint rejects it — do not read a lint pass as proof the file was parsed natively, and do not loosen the lint to match the drop behavior.
