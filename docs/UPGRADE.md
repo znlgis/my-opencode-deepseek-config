@@ -6,7 +6,7 @@
 
 ## 1. 不变量
 
-任何一次升级都必须保住这七条。破坏其中一条，就不算升级完成：
+任何一次升级都必须保住这八条。破坏其中一条，就不算升级完成：
 
 1. **单模型**：只有 `deepseek/deepseek-flash`，三个 thinking 档位——默认（thinking 关）、`#low`、`#high`。
 2. **thinking 参数只在模型层**：toggle 进 `providers.deepseek.models.<id>.body`，effort 进同名节点的 `settings.reasoningEffort`；Agent frontmatter 不出现任何思考参数。
@@ -15,6 +15,7 @@
 5. **插件固定 pin**（当前 `#v7.0.2`），不跟 `latest`。
 6. **零额外依赖**：能力只来自 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`；压缩只用内置 compaction。
 7. **README 不当变更记录**：历史在 `git log`，理由在 commit message。
+8. **agent 级 permissions 不得放宽全局 deny**：`agents/*.md` frontmatter 与 `opencode.jsonc` 内 inline agent 的 `edit`/`shell`/`read`/`external_directory` allow 规则，不得命中全局 `permissions` 的 deny 模式；由 `scripts/validate-jsonc.js` 静态检查。
 
 ## 2. 基线
 
@@ -83,7 +84,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 & $cli debug agents                   # 12 个自定义 Agent，模型引用全部可解析
 ```
 
-再确认没有 v1 触发键——清单以 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel` 与 legacy 键分支为准（与 `scripts/validate-jsonc.js` 的 `V1_TOP_LEVEL_KEYS` 逐项对应），尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。
+再确认没有 v1 触发键——清单以 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel` 与 legacy 键分支为准（`scripts/validate-jsonc.js` 的 `V1_TOP_LEVEL_KEYS` 只是手工镜像，以 `normalize.ts` 为准），尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。
 
 ### 3.4 同步与重载
 
@@ -128,7 +129,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 
 全部勾上方可宣告升级完成：
 
-- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 23 个 skill frontmatter 均无报错）
+- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 23 个 skill frontmatter + 权限放宽检查均无报错）
 - [ ] `node scripts/estimate-cost.js` 退出码 0，且输出成本估算（默认参数应约 $0.026）
 - [ ] `& $cli --version` 是目标版本
 - [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 三档

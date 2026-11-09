@@ -221,7 +221,7 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 
 | Agent | Model | Role |
 | --- | --- | --- |
-| `orchestrator` | flash | Default entry point: intent gate + model-aware routing + fallback chains |
+| `orchestrator` | flash | Default entry point: intent classification routing (Routing Table) + model-aware routing + fallback chains |
 | `solo` | flash#high | Single-model inline executor: zero delegation, no background helpers, all work done inline on flash's `#high` tier in the current session |
 
 > `solo` is the second primary agent: `{action: subagent, resource: "*", effect: deny}` (zero delegation — spawns no subagents), an explicit `model: deepseek/deepseek-flash#high` (always the strongest thinking tier), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
@@ -239,7 +239,7 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | `explore` | flash | **read-only** (only `.opencode/codemap.md` is writable) | Codebase search, parallel exploration |
 | `librarian` | flash | **read-only** | Documentation lookup, web search |
 | `light-orchestrator` | flash#low | read-write | Lightweight tasks, single-file edits |
-| `vision` | flash | read-write (shell limited to `ask`-gated vision-prep scripts) | Multimodal: images/screenshots/charts/UI mockups |
+| `vision` | flash | read-write (shell denies all by default; allows `git status/diff/log/show` and `rg`; the four `python`/`py` `vision-prep/scripts/*` calls are `ask`) | Multimodal: images/screenshots/charts/UI mockups |
 
 > `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (`#high` review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a cheaper tier can finish → refuse (this tier pays reasoning tokens on every step).
 >
@@ -352,7 +352,7 @@ When editing config, locate "what to change → which file", so you never change
 | Compression trigger window (per model) / buffer / preserved tail | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction` (`buffer`/`keep`) |
 | A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
 
-> After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode`, then reload (desktop v2: `opencode-cli.exe reload`; or restart opencode). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `opencode-cli.exe debug config`.
+> After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode`, then reload (desktop v2: `& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" reload`; or restart opencode). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" debug config`.
 
 > For an opencode, plugin or model/pricing upgrade, don't change from memory: follow `docs/UPGRADE.md` (invariants, baseline, upstream checks, acceptance list). The repo-root `AGENTS.md` is auto-loaded in every session in this repo and points at it.
 

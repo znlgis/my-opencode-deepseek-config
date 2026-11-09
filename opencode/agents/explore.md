@@ -4,10 +4,9 @@ mode: subagent
 model: deepseek/deepseek-flash
 steps: 40
 color: "#2ECC71"
-hidden: true
 permissions:
   - { action: edit, resource: "*", effect: deny }
-  - { action: edit, resource: "*.opencode/codemap.md", effect: allow }
+  - { action: edit, resource: ".opencode/codemap.md", effect: allow }
   - { action: subagent, resource: "*", effect: deny }
   - { action: shell, resource: "*", effect: deny }
   - { action: shell, resource: "git status*", effect: allow }

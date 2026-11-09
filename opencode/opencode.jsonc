@@ -50,11 +50,20 @@
         // last-match-wins would override plan's `edit:* deny`, breaking its
         // read-only sandbox. Ordinary agents already write freely through the
         // agent baseline, so no allow rule is needed.
+        // `resource` is the location-relative POSIX path (file-access.ts
+        // `Target.resource`) and `*` spans `/` (util/wildcard.ts: `*` -> `.*`),
+        // so `*.env` covers both the root `.env` and any `dir/.env`; the bare
+        // `.env` rule is kept only as an explicit root-level guard.
         { "action": "edit", "resource": ".env", "effect": "deny" },
         { "action": "edit", "resource": "*.env", "effect": "deny" },
         { "action": "edit", "resource": "*.env.*", "effect": "deny" },
         { "action": "edit", "resource": ".envrc", "effect": "deny" },
         { "action": "edit", "resource": "*.envrc", "effect": "deny" },
+        // `shell` resources are the full command text (shell/parse.ts), matched
+        // as wildcard patterns — the trailing `*` in a rule is what makes it a
+        // prefix grant (`git status*` covers `git status --short`). Matching is
+        // not word-by-word; the ARITY table only shapes the `<prefix> *` string
+        // shown in the approval prompt.
         { "action": "shell", "resource": "*", "effect": "ask" },
         { "action": "shell", "resource": "git status*", "effect": "allow" },
         { "action": "shell", "resource": "git diff*", "effect": "allow" },

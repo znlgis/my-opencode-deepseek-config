@@ -4,7 +4,6 @@ mode: subagent
 model: deepseek/deepseek-flash
 steps: 30
 color: "#8E44AD"
-hidden: true
 permissions:
   - { action: edit, resource: "*", effect: deny }
   - { action: subagent, resource: "*", effect: deny }

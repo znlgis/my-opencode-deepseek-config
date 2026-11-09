@@ -221,7 +221,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 | Agent | 模型 | 作用 |
 | --- | --- | --- |
-| `orchestrator` | flash | 默认入口：意图门控（Intent Gate）+ 模型感知路由 + 后备链 |
+| `orchestrator` | flash | 默认入口：意图分类路由（Routing Table）+ 模型感知路由 + 后备链 |
 | `solo` | flash#high | 单模型内联执行器：零委派、不用后台助手，全程在 flash 的 `#high` 档完成 |
 
 > `solo` 是第二个 primary agent：`{action: subagent, resource: "*", effect: deny}`（零委派，不调用任何子智能体）、显式 `model: deepseek/deepseek-flash#high`（全程固定最强思考档）、不用 build/plan 等内置后台助手（其档位只在子会话/一次性调用生效，主会话并不跟随——混用会让「全程单模型」不再成立），分析、规划、实现、验证全部在当前会话内联完成。
@@ -239,7 +239,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 | `explore` | flash | **只读**（仅 `.opencode/codemap.md` 可写） | 代码库搜索、并行探索 |
 | `librarian` | flash | **只读** | 文档检索、Web 搜索 |
 | `light-orchestrator` | flash#low | 读写 | 轻量任务、单文件编辑 |
-| `vision` | flash | 读写（shell 仅限 `ask` 门控的 vision-prep 脚本） | 多模态：图像/截图/图表/UI 稿理解 |
+| `vision` | flash | 读写（shell 默认 deny，仅放行 `git status/diff/log/show`、`rg`；4 条 `python`/`py` 的 `vision-prep/scripts/*` 为 `ask`） | 多模态：图像/截图/图表/UI 稿理解 |
 
 > `deep-worker` 和 `light-orchestrator` 遵循"禁止研究、禁止委托"原则——执行而非探索，上下文由 orchestrator 提供；唯一例外是 `light-orchestrator` 的两种定向升级——`oracle`（只读分析）与 `reviewer`（`#high` 审查），服务 `/simplify` 与 `/review`。`deep-worker` 另带 "What you DON'T handle" 拒绝契约：琐碎单文件编辑 → 拒接（路由 `light-orchestrator`）、纯研究/查询 → 拒接（路由 `oracle`/`explore`）、任何便宜档能完成的任务 → 拒接（本档每步都付 reasoning token）。
 >
@@ -352,7 +352,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 压缩触发窗口（按模型）/ buffer / 保留尾部 | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction`（`buffer`/`keep`） |
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
-> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`opencode-cli.exe reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`opencode-cli.exe debug config`。
+> 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" debug config`。
 
 > 升级 opencode、插件或模型/定价时不要凭记忆改：按 `docs/UPGRADE.md` 走（不变量、基线表、上游核对点、验收命令）。仓库根的 `AGENTS.md` 会在本仓库的每个会话自动加载并指向它。
 

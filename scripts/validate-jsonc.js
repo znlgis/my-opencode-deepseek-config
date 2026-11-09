@@ -8,7 +8,10 @@
  * Two lint passes always run, even when explicit config paths are passed:
  * opencode/agents/*.md may only carry v2-native top-level keys (a file with
  * none of the v2-only keys, permissions/request/system/disabled, is decoded as
- * a v1 agent, so a v1 spelling silently changes the parsed shape), and
+ * a v1 agent, so a v1 spelling silently changes the parsed shape), agent-level
+ * edit/shell/read/external_directory allows must not intersect a global deny
+ * (they are appended after the global list and would re-open the denied path),
+ * and
  * opencode/skills/<name>/SKILL.md must carry a name matching its directory plus
  * a known-key frontmatter block.
  *
@@ -64,6 +67,11 @@ const INERT_SETTINGS_KEYS = new Set([
 ]);
 
 const REASONING_EFFORTS = new Set(['low', 'high', 'max']);
+
+// Permission actions whose allow rules can reach a globally denied resource.
+// skill/subagent are excluded: their allows select a roster entry rather than
+// a path or command, so they never re-open a denied resource.
+const OVERLAP_ACTIONS = new Set(['edit', 'shell', 'read', 'external_directory']);
 
 // Top-level keys a skill file may declare. Anything else is either a v1
 // spelling or does not exist, so the loader drops or migrates it silently.
@@ -191,6 +199,109 @@ function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+// Runtime wildcard matching over location-relative POSIX paths and full shell
+// command text, mirroring packages/core/src/util/wildcard.ts: separators are
+// normalized to `/` on both sides, `*` -> `.*`, `?` -> `.`, and a trailing
+// ` .*` becomes `( .*)?` so `cmd *` also matches the bare `cmd`. Windows
+// permission checks are case-insensitive, so the probe matcher is too; the `s`
+// flag matches upstream even though probes never contain a newline.
+function wildcardToRegExp(pattern) {
+  let escaped = pattern
+    .replace(/\\/g, '/')
+    .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '.*')
+    .replace(/\?/g, '.');
+  if (escaped.endsWith(' .*')) escaped = escaped.slice(0, -3) + '( .*)?';
+  return new RegExp(`^${escaped}$`, process.platform === 'win32' ? 'si' : 's');
+}
+
+function normalizeSlashes(value) {
+  return value.replace(/\\/g, '/');
+}
+
+// Concrete strings an allow pattern can produce. A probe that also matches a
+// deny pattern proves the two overlap. Up to three wildcards get the full
+// cross product of empty / one-char / path-segment fillers; beyond that the
+// search is bounded to the literal skeleton and the all-`a` / all-`b` fills.
+// Best-effort by construction: a hit proves the overlap exists, a miss never
+// proves it does not (the >3-wildcard fallback is a skeleton approximation).
+function allowProbes(pattern) {
+  const stars = (pattern.match(/\*/g) || []).length;
+  if (stars === 0) return [pattern.replace(/\?/g, 'x')];
+  if (stars > 3) {
+    return [
+      pattern.replace(/[*?]/g, ''),
+      pattern.replace(/\*/g, 'a').replace(/\?/g, 'x'),
+      pattern.replace(/\*/g, 'b').replace(/\?/g, 'x'),
+    ];
+  }
+  const fillers = ['', 'x', 'a/b'];
+  let probes = [''];
+  for (const ch of pattern) {
+    if (ch === '*') {
+      probes = probes.flatMap((probe) => fillers.map((filler) => probe + filler));
+    } else {
+      probes = probes.map((probe) => probe + (ch === '?' ? 'x' : ch));
+    }
+  }
+  return probes;
+}
+
+// Returns the first global deny rule an allow rule overlaps, or null.
+function findDenyOverlap(action, allow, globalDenies) {
+  return globalDenies.find((deny) => {
+    if (deny.action !== action) return false;
+    if (allow === '*') return true;
+    const denyRe = wildcardToRegExp(deny.resource);
+    return allowProbes(allow).some((probe) => denyRe.test(normalizeSlashes(probe)));
+  }) || null;
+}
+
+function collectGlobalDenies(parsed) {
+  const rules = Array.isArray(parsed.permissions) ? parsed.permissions : [];
+  return rules.filter((rule) => isRecord(rule)
+    && rule.effect === 'deny'
+    && OVERLAP_ACTIONS.has(rule.action)
+    && typeof rule.resource === 'string');
+}
+
+// Parses one `- { action: ..., resource: ..., effect: ... }` frontmatter line.
+// Quotes around values are optional; an unquoted resource runs to the next
+// comma or brace.
+function parsePermissionRule(line) {
+  if (!line.includes('{') || !/\beffect:/.test(line)) return null;
+  const action = /\baction:\s*"?([A-Za-z_][\w-]*)"?/.exec(line);
+  const effect = /\beffect:\s*"?([A-Za-z_][\w-]*)"?/.exec(line);
+  const resource = /\bresource:\s*(?:"([^"]*)"|'([^']*)'|([^,}]+))/.exec(line);
+  if (!action || !effect || !resource) return null;
+  return {
+    action: action[1],
+    effect: effect[1],
+    resource: (resource[1] ?? resource[2] ?? resource[3] ?? '').trim(),
+  };
+}
+
+function checkInlineAgents(parsed) {
+  const agents = isRecord(parsed.agents) ? parsed.agents : {};
+  const globalDenies = collectGlobalDenies(parsed);
+  const problems = [];
+  for (const [agentID, agent] of Object.entries(agents)) {
+    if (!isRecord(agent) || !Array.isArray(agent.permissions)) continue;
+    for (const rule of agent.permissions) {
+      if (!isRecord(rule) || rule.effect !== 'allow') continue;
+      if (!OVERLAP_ACTIONS.has(rule.action)) continue;
+      if (typeof rule.resource !== 'string') continue;
+      const deny = findDenyOverlap(rule.action, rule.resource, globalDenies);
+      if (deny) {
+        problems.push(
+          `agent ${agentID}: allow ${rule.action} "${rule.resource}" overlaps global deny "${deny.resource}"`
+        );
+      }
+    }
+  }
+  return problems;
+}
+
 // mergeRecord/mergeOverlay treat only `undefined` as "unset", so a null is a
 // value: it is serialized onto the wire and shadows the base it was meant to
 // clear. Walks the whole subtree, not just the first level.
@@ -315,6 +426,13 @@ function validate(filePath) {
       return false;
     }
 
+    const inlineProblems = checkInlineAgents(parsed);
+    if (inlineProblems.length > 0) {
+      console.error(`  FAIL: invalid: ${absPath}`);
+      for (const problem of inlineProblems) console.error(`    ${problem}`);
+      return false;
+    }
+
     console.log(`  OK: ${absPath}`);
     return true;
   } catch (e) {
@@ -325,7 +443,9 @@ function validate(filePath) {
 }
 
 // Returns the list of problems found in one agent file; empty means valid.
-function checkAgentFrontmatter(absPath) {
+// globalDenies is required: a caller without it could not run the overlap
+// check, so a default here would let a new call point skip it silently.
+function checkAgentFrontmatter(absPath, globalDenies) {
   const blocks = fs.readFileSync(absPath, 'utf-8').replace(/^\uFEFF/, '').split(/\r?\n/);
 
   if (blocks[0].trim() !== '---') {
@@ -346,9 +466,44 @@ function checkAgentFrontmatter(absPath) {
   const problems = [];
   const allowed = [...AGENT_FRONTMATTER_KEYS].join(', ');
   for (let i = 1; i < end; i++) {
+    const line = blocks[i];
+
+    // A rule-looking line the line parser cannot read would otherwise be
+    // skipped, so an allow could slip past the deny-overlap check. The same
+    // parser reads one rule per line, so a flow-list `permissions:` key would
+    // silently drop every rule after the first.
+    const rule = parsePermissionRule(line);
+    if (/^\s*-\s*\{/.test(line) && !rule) {
+      problems.push(
+        `line ${i + 1}: cannot parse permission rule; keep one permission rule per line`
+      );
+      continue;
+    }
+    if (/^\s*permissions:\s*\[.*\{/.test(line)) {
+      problems.push(
+        `line ${i + 1}: permissions flow list is not supported; keep one permission rule per line`
+      );
+      continue;
+    }
+
+    // Agent rules are appended after the global `permissions` list, so an
+    // allow here wins over a global deny under last-match-wins. Flag any
+    // edit/shell/read/external_directory allow that can reach a globally
+    // denied resource.
+    if (rule && rule.effect === 'allow' && OVERLAP_ACTIONS.has(rule.action)) {
+      const deny = findDenyOverlap(rule.action, rule.resource, globalDenies);
+      if (deny) {
+        const id = path.basename(absPath).replace(/\.md$/, '');
+        problems.push(
+          `agent ${id}:${i + 1}: allow ${rule.action} "${rule.resource}" ` +
+          `overlaps global deny "${deny.resource}"`
+        );
+      }
+    }
+
     // Top-level keys only: the pattern is anchored at column 0, so nested keys
     // (pushed under `permissions:` and indented) are never collected.
-    const match = /^([A-Za-z_][\w-]*):/.exec(blocks[i]);
+    const match = /^([A-Za-z_][\w-]*):/.exec(line);
     if (!match) continue;
 
     const key = match[1];
@@ -363,6 +518,26 @@ function checkAgentFrontmatter(absPath) {
   return problems;
 }
 
+// The md-agent lint always compares against the repo's default config, even
+// when the caller validated some other path. Returns null when that config
+// cannot be read: an empty deny set would let every overlap check pass
+// vacuously, which reads as "All checks passed" without checking anything.
+function loadGlobalDenies() {
+  const configPath = path.join(REPO_ROOT, 'opencode', 'opencode.jsonc');
+  if (!fs.existsSync(configPath)) {
+    console.error(`  FAIL: default config not found: ${configPath}`);
+    return null;
+  }
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8').replace(/^\uFEFF/, '');
+    return collectGlobalDenies(JSON.parse(stripJsonc(raw)));
+  } catch (e) {
+    console.error(`  FAIL: cannot parse default config: ${configPath}`);
+    console.error(`    ${e.message}`);
+    return null;
+  }
+}
+
 function lintAgentFrontmatter() {
   if (!fs.existsSync(AGENTS_DIR)) {
     console.error(`  FAIL: agent directory not found: ${AGENTS_DIR}`);
@@ -375,10 +550,15 @@ function lintAgentFrontmatter() {
     return false;
   }
 
+  const globalDenies = loadGlobalDenies();
+  if (globalDenies === null) {
+    console.error('  FAIL: deny-overlap check skipped: no readable default config');
+    return false;
+  }
   let ok = true;
   for (const name of files) {
     const absPath = path.join(AGENTS_DIR, name);
-    const problems = checkAgentFrontmatter(absPath);
+    const problems = checkAgentFrontmatter(absPath, globalDenies);
     if (problems.length === 0) {
       console.log(`  OK: ${absPath}`);
       continue;
