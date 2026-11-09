@@ -3,7 +3,7 @@
     // is the v2 dialect (plugins / providers / agents / commands / permissions
     // / media). The v1 spellings (plugin, provider, agent, command, permission,
     // attachment, small_model, top-level subagent_depth) are never written:
-    // v2.2.5 silently migrates most of them per key (and drops the four in
+    // v2.2.6 silently migrates most of them per key (and drops the four in
     // unsupportedTopLevel) instead of rejecting the file, so the config that
     // runs would stop matching this file. See
     // README「v2 原生键名」for the key map and the verification method.
@@ -70,13 +70,17 @@
         { "action": "skill", "resource": "*", "effect": "allow" },
         { "action": "external_directory", "resource": "*", "effect": "ask" }
     ],
-    // Pinned to an immutable tag on purpose: a plugin bump can rewrite the
-    // bootstrap it injects into the first user message, which busts the prompt
-    // cache prefix of every session. Bump deliberately, re-read the release
-    // notes, then confirm `.opencode/plugins/superpowers.js` is still
-    // byte-identical (that file is the whole opencode integration).
+    // Pinned to an immutable tag on purpose — never track `latest`: a plugin
+    // bump can rewrite the bootstrap injected into the prompt, which busts the
+    // cache prefix of every session. Bump deliberately: read the target tag's
+    // release notes and diff `.opencode/plugins/superpowers.js` between the
+    // two tags. That file is the whole opencode integration; v7.0.2 changed it
+    // materially (BOOTSTRAP_MARKER, a startsWith guard matching the bootstrap
+    // first line, V2 hooks widened from context to context/compaction/generate,
+    // bare skill ids in the bootstrap text) — confirm those changes are wanted
+    // before bumping.
     "plugins": [
-        "superpowers@git+https://github.com/obra/superpowers.git#v7.0.1"
+        "superpowers@git+https://github.com/obra/superpowers.git#v7.0.2"
     ],
     // No `instructions` entry: AGENTS.md is already loaded by discovery — the
     // global config dir plus the project-root walk (core/instruction-discovery.ts,
@@ -89,7 +93,7 @@
     //   #low        thinking ON, effort `low`       — routine planning;
     //   #high       thinking ON, effort `high`      — deep reasoning/review.
     // Upstream default is thinking ON at effort `high` (DeepSeek thinking-mode
-    // guide, re-checked 2026-11-03). So only the no-suffix tier actually saves
+    // guide, re-checked 2026-11-09). So only the no-suffix tier actually saves
     // reasoning tokens — it must send `disabled` explicitly; `#high` merely
     // restates the default, and `#low` is the one middle rung that exists.
     // The API's `medium` and `xhigh` efforts are both remapped to `high`, so
@@ -168,7 +172,7 @@
                         }
                     ],
                     // `cost` is USD per 1M tokens — official off-peak rates,
-                    // re-verified against the pricing page 2026-11-03. Peak
+                    // re-verified against the pricing page 2026-11-09. Peak
                     // hours (UTC 01-04 & 06-10 Mon-Fri, excluding Chinese
                     // public holidays = Beijing 09-12 & 14-18) charge double,
                     // so this table under-reports peak-time spend by ~2x; it
@@ -209,8 +213,8 @@
         }
     },
     // Built-in agents (no .md file). `model` here binds only three surfaces
-    // (verified against v2.0.27 + live runs; source re-checked on v2.2.5
-    // 2026-11-03): subagent/child sessions — incl.
+    // (verified against v2.0.27 + live runs; source re-checked on v2.2.6
+    // 2026-11-09): subagent/child sessions — incl.
     // `general` (the superpowers Task dispatch target) and `/` commands bound
     // to subagent-mode agents — the title/summary/compaction one-shots, and
     // the desktop composer's per-agent default for new sessions (build/plan
@@ -224,8 +228,10 @@
     // built-in rules and after the global `permissions` list above, so under
     // last-match-wins they always win. The three hidden one-shot agents never
     // load a skill, and denying the skill action strips the whole
-    // `<available_skills>` roster (30 entries, ~11.8 KB ≈ 3.3K tokens,
-    // measured 2026-10-16) out of every title / summary / compaction request.
+    // `<available_skills>` roster out of every title / summary / compaction
+    // request. Measured 2026-10-16 with every entry allowed: 12,186 chars /
+    // 11,927 bytes ≈ 3.3K tokens. No agent allows all of them now — the
+    // widest whitelist (`solo`) covers 28 entries.
     // This also repairs a real defect: title and summary ship a built-in
     // `*:* deny` lock, but the global `skill:* allow` below it was silently
     // re-opening the roster.

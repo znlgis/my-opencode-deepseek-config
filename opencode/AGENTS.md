@@ -313,15 +313,16 @@ change.
   plans, TDD, verification); skill-first discipline. Pin lives in
   `opencode.jsonc`. The plugin exposes **no model-mapping config** (its
   `superpowers.js` only registers the skills path and injects a ~3 KB bootstrap
-  into the first user message), so superpowers workflows map to models through
-  the agent layer:
+  into the first user message); since v7.0.2 that bootstrap is also injected
+  into compaction and generate requests, fixing the cold-cache compaction path.
+  Superpowers workflows therefore map to models through the agent layer:
 
 | Superpowers skill | Wired on | Tier |
 | --- | --- | --- |
-| `writing-plans` | `planner` | `#low`; deep or architectural design escalates to `#high` |
-| `test-driven-development` | `deep-worker` | `#high` |
-| `verification-before-completion` | `deep-worker`, `light-orchestrator` | `#high` / `#low` |
-| `brainstorming`, `executing-plans` | `solo` only | `#high` |
+| `writing-plans` | `planner`, `solo` | `#low`; deep or architectural design escalates to `#high` (solo runs `#high`) |
+| `test-driven-development` | `deep-worker`, `solo` | `#high` |
+| `verification-before-completion` | `deep-worker`, `light-orchestrator`, `solo` | `#high` / `#low` |
+| `brainstorming`, `executing-plans` | `solo` | `#high` |
 
 - **Prefer the local distillation when both exist** (these stay unwired on
   routing agents): `systematic-debugging` → `diagnosing-bugs`, `brainstorming` →

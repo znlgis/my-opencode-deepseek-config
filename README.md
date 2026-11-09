@@ -15,13 +15,13 @@
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
-- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.1`，经 v2 原生 `plugins` 数组加载）——纯 skill 注入，**不提供模型映射**，skill → Agent → 档位映射只存在于 `AGENTS.md` 的 Plugins 小节；固定 pin 以保字节稳定前缀，避免自动更新造成前缀漂移。子会话（task subagent）不注入 bootstrap，委派链路不付这份常驻成本。
+- 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.2`，经 v2 原生 `plugins` 数组加载）——纯 skill 注入，**不提供模型映射**，skill → Agent → 档位映射只存在于 `AGENTS.md` 的 Plugins 小节；固定 pin 以保字节稳定前缀，避免自动更新造成前缀漂移。子会话（task subagent）不注入 bootstrap，委派链路不付这份常驻成本。
 
 ## DeepSeek 模型配置
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.2.5**，2026-11-03 核验通过；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.2.6**，2026-11-09 核验通过；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「安装与启动」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（`background: true` 的委派）需要环境变量 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`（PowerShell：`$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`）；未设置时后台委派会直接报错，应退回前台串行委派
@@ -86,7 +86,7 @@ opencode
 
 ### v2 原生键名（本仓库唯一写法）
 
-本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, keep, buffer}`（`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2.2.5 会把它逐键迁移后与原生键合并（`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断）——不报错，但实际生效的配置与本文描述不一致。
+本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, keep, buffer}`（`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2.2.6 会把它逐键迁移后与原生键合并（`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断）——不报错，但实际生效的配置与本文描述不一致。
 
 > `$schema` 保持 `https://opencode.ai/config.json`（v2 应用自身写入的就是该 URL）。
 
@@ -118,7 +118,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-flash`；Agent 列表有 12 个自定义 Agent；输入任意需求，`orchestrator` 会自动分析并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review`）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.2.5** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
+> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.2.6** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
 
 改完仓库文件后必须同步（`~/.config/opencode` 是独立副本，不是符号链接）：
 
@@ -151,13 +151,13 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **thinking 开关** —— `{"thinking":{"type":"enabled"|"disabled"}}`，是**请求体（body）字段**。默认档关闭（最省），`#low`/`#high` 打开。
 - **thinking 强度** —— `{"reasoning_effort":"low"|"high"|"max"}`，由 **provider setting** `settings.reasoningEffort` 驱动（配置里写 camelCase，线上是 snake_case）——这是 opencode aisdk 层唯一会转成 `reasoning_effort` 的路径。
 
-> **官方文档核对（2026-11-03，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token，`#high` 只是把默认值写明，`#low` 是唯一存在的中间档；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/src/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
+> **官方文档核对（2026-11-09，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token，`#high` 只是把默认值写明，`#low` 是唯一存在的中间档；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/src/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 
 > **⚠️ 写法陷阱（2026-10-16 实测修正）**：`thinking`/`temperature` 放在 `settings` 下不生效（openai-chat 协议不实现该 option），`reasoningEffort` 放在 Agent 的 `options` 下也不生效（`options` 只落到 `request.body`，且 camelCase 不是 API 认的 `reasoning_effort`）。两者都必须写在**模型层**：toggle 进 `body`、effort 进 `settings`。修正前 flash 一直开着 thinking 跑，每一步都在付 reasoning token。
 
 **成本结构**：三个档位共用 flash 的同一份费率（in 0.15 / out 0.60 / cache_read 0.003 USD per 1M，off-peak），没有模型溢价；档位差异只体现在 **reasoning token 数量**，而 reasoning token 按输出价计费。所以「升档」是多花输出 token，不是换更贵的单价——深度任务不再付 4.4× 输入价。
 
-> **未验证项**：`reasoningEffort: "high"` 在 flash 上的实际推理深度与 token 增量未实测（本机 live service 只有 `opencode-go` provider，`-m deepseek/*` 返回 `provider.no-route`）；请在具备 DeepSeek 凭据的机器上跑一次 `/deep-review` 复核。
+> **未验证项（2026-11-09 复核）**：`reasoningEffort: "high"` 在 flash 上的实际推理深度与 reasoning token 增量仍未实测——档位只改变 reasoning token 数量，本仓库按输出价线性估算；请在具备 DeepSeek 凭据的机器上跑一次 `/deep-review` 复核。
 
 ### 路由策略
 
@@ -168,7 +168,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **Vision 专责多模态**：仅在用户明确提供图像/截图或明确要求时，路由到 `vision` agent（`deepseek-flash`，原生多模态）。**视觉输入是 opt-in**：非视觉任务不主动传图、不生成图、不调用视觉能力（`AGENTS.md`「Constraints」已把这条写成硬约束）；附件统一先经 `media.image` 缩到 1600px / 2MiB，避免 base64 字节浪费
 - **自动升级**：thinking off / `#low` agent 无法胜任时自动升级到 `#high`（带完整上下文）
 
-**模型解析链（v2.0.24 源码核验 + 本机实测；2026-10-12 于 v2.0.27 复核 + 环境告警；2026-11-03 于 v2.2.5 源码复核）**：`agent.model` 只在三处决定实际模型——① subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）；② title/summary/compaction 一次性调用；③ 桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）。主会话自身按 `-m` > 会话已存模型 > 全局 `model`（flash 默认档）解析：桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析；要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。**⚠️ 2026-10-12 复测（v2.0.27）**：在本机（live service 只配置了 `opencode-go` provider）`-m deepseek/*` 返回 `provider.no-route`，只有省略 `-m` 的运行成功——该结论依赖「目标机已 `/connect deepseek` 并具备 provider 路由」，请在具备 DeepSeek 凭据的机器上复核后再依赖 `-m` 语义。
+**模型解析链（2026-11-09 于 v2.2.6 复核）**：实际生效的模型由三处决定——① `agent.model`：subagent/子会话（含 `/` 命令：命令绑定 subagent agent 时会**创建子会话**并按该 agent 档位运行，如 `/deep`→`#high`、`/quick`→`#low`，当前会话模型不受影响）、title/summary/compaction 一次性调用、桌面 App 新会话的随 agent 联动默认值（build/plan/orchestrator → flash）；② 全局 `config.model`：主会话的兜底模型（flash 默认档）；③ `-m`：命令行显式覆盖，优先级 `-m` > 会话已存模型 > 全局 `model`。桌面 App 用模型选择器切换（选择被记住）；headless `opencode run` **不读** `agent.model`——主会话按全局 `model` 解析，要指定思考档位就显式加 `-m deepseek/deepseek-flash#high`。
 
 用法示例：`「这个库怎么用」` → thinking off（librarian）；`「给用户模块加导出功能」` → `#low`（planner）；`「排查登录接口报错的根因」` → `#high`（oracle）；`/review` → `#low` 初检（小 diff 直接出报告）；`/review #123`（大 diff / 触及信任边界）→ 初检后升级 `#high`。
 
@@ -185,7 +185,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-11-03 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-11-09 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） |
 | --- | --- | --- | --- | --- |
@@ -245,7 +245,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `node scripts/*`（`reviewer` 另含 `npm test*`）、`gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧只有这 4 项接线（`writing-plans`→`planner`，`test-driven-development`/`verification-before-completion`→`deep-worker`，`verification-before-completion`→`light-orchestrator`），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧共 5 个 distinct skill 接线（`writing-plans`→`planner`，`test-driven-development`→`deep-worker`，`verification-before-completion`→`deep-worker` 与 `light-orchestrator`，`brainstorming`/`executing-plans`→`solo`；`solo` 放行全部五项），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
 > **思考分档（thinking tiers）**：全部声明在 `opencode.jsonc` 的**模型层**，Agent 只选模型引用（详见「模型分工」）。`explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking 关（最省，模型层 body `{"type":"disabled"}`）；`planner`/`light-orchestrator` = `deepseek/deepseek-flash#low`（thinking 开 + `settings.reasoningEffort: low`）；`deep-worker`/`oracle`/`reviewer`/`solo` = `deepseek/deepseek-flash#high`（thinking 开 + `settings.reasoningEffort: high`）。**Agent frontmatter 里不再出现任何思考参数**——`options.*` 既装不下 provider setting，也会把该 agent 打回 V1 迁移路径（见「模型分工」的写法陷阱）。
 
