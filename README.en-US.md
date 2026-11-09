@@ -7,7 +7,7 @@
 ## Current Configuration Overview
 
 - Default primary agent: `orchestrator`
-- Sole model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal); agents differ only by thinking tier — default (thinking off) / `#low` / `#high`
+- Sole model: `deepseek/deepseek-flash` (V4.1 Flash, natively multimodal); agents differ only by thinking tier — default (thinking off) / `#low` / `#high` / `#max`
 - Agent nesting: `experimental.subagent_depth: 2` (v2-native key; the v1 top-level `subagent_depth` is dropped by v2 and no longer written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: `read` allowed by default, `shell` set to `ask` (unmatched commands go to a human; dangerous patterns are not enumerated); sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get shell rules (deny all by default + allow read-only subcommands only)
@@ -54,7 +54,7 @@ Permanent setup: add `DEEPSEEK_API_KEY` to your system environment variables.
 }
 ```
 
-This config keeps only `deepseek-flash` and splits thinking at the `providers` layer with **variants**: the default tier disables thinking and pins `temperature: 0` (fastest, cheapest), while `#low`/`#high` turn thinking on and set `settings.reasoningEffort` to `low`/`high`. `deepseek-flash` is the merged V4.1 Flash model — the former text-only and vision variants are now one natively multimodal model, so it declares `capabilities` (image input). Example (v2-native keys):
+This config keeps only `deepseek-flash` and splits thinking at the `providers` layer with **variants**: the default tier disables thinking and pins `temperature: 0` (fastest, cheapest), while the three non-default variants `#low`/`#high`/`#max` turn thinking on and set `settings.reasoningEffort` to `low`/`high`/`max`. `deepseek-flash` is the merged V4.1 Flash model — the former text-only and vision variants are now one natively multimodal model, so it declares `capabilities` (image input). Example (v2-native keys):
 
 ```jsonc
 "providers": {
@@ -72,7 +72,8 @@ This config keeps only `deepseek-flash` and splits thinking at the `providers` l
         },
         "variants": [
           { "id": "low",  "settings": { "reasoningEffort": "low" },  "body": { "thinking": { "type": "enabled" } } },
-          { "id": "high", "settings": { "reasoningEffort": "high" }, "body": { "thinking": { "type": "enabled" } } }
+          { "id": "high", "settings": { "reasoningEffort": "high" }, "body": { "thinking": { "type": "enabled" } } },
+          { "id": "max",  "settings": { "reasoningEffort": "max" },  "body": { "thinking": { "type": "enabled" } } }
         ]
       }
     }
@@ -82,7 +83,7 @@ This config keeps only `deepseek-flash` and splits thinking at the `providers` l
 
 > `thinking`/`temperature` must live under `body`: `settings` carries provider options only (`timeout`/`chunkTimeout`/`reasoningEffort`, …), and keys placed there are silently dropped.
 
-> **Model ID naming convention**: `provider_id/model_id`, with variants as a `#` suffix. This repo has exactly `deepseek/deepseek-flash`, `deepseek/deepseek-flash#low`, and `deepseek/deepseek-flash#high`.
+> **Model ID naming convention**: `provider_id/model_id`, with variants as a `#` suffix. This repo has exactly `deepseek/deepseek-flash`, `deepseek/deepseek-flash#low`, `deepseek/deepseek-flash#high`, and `deepseek/deepseek-flash#max`.
 
 ### v2-native keys (the only dialect this repo writes)
 
@@ -135,53 +136,55 @@ The sync excludes `node_modules`/`.git`/package manifests and lockfiles; stale-f
 - **Everyday development is not bounded by the model's ceiling.** Reading code, editing files, running tests, writing docs, reviewing a diff — these want speed, reliability and low unit cost, not maximum reasoning. Paying pro rates for them buys no matching output.
 - **Flash is where every vendor is concentrating investment.** Competition is clustered at this tier, so capability at a given price is still climbing fast; pinning the config to flash means riding the fastest-moving curve.
 - **Pro's capability and price both overshoot daily work.** It serves a minority of hard problems, while a config pays for every ordinary call — keeping a pricier model resident for the occasional hard task is the wrong cost structure.
-- **When more reasoning is needed, the same model supplies it via a thinking tier.** `#high` deepens reasoning through reasoning tokens: cost is incurred per task and grows linearly at the output rate, with no second price sheet and no second cache prefix.
-- **The trade-off is stated, not hidden: ceiling in exchange for cost.** On extreme problems flash may need one more round or an escalation to `#high` instead of landing in one shot — and that cost falls on a minority of tasks rather than taxing every ordinary call.
+- **When more reasoning is needed, the same model supplies it via a thinking tier.** `#high`/`#max` deepen reasoning through reasoning tokens: cost is incurred per task and grows linearly at the output rate, with no second price sheet and no second cache prefix.
+- **The trade-off is stated, not hidden: ceiling in exchange for cost.** On extreme problems flash may need one more round or an escalation to `#high` or even `#max` instead of landing in one shot — and that cost falls on a minority of tasks rather than taxing every ordinary call.
 
 This repo uses exactly **one model**, `deepseek/deepseek-flash`, and introduces no other model. Agents differ along a single dimension — the **thinking tier** — expressed as model variants:
 
 | Tier | Model reference | Mechanism | Typical agents |
 | --- | --- | --- | --- |
-| Cheap (trivial) | `deepseek/deepseek-flash` | body `{"type":"disabled"}` + `temperature: 0` | `orchestrator`/`explore`/`librarian`/`consultant`/`ui-builder`/`vision` |
-| Mid (routine) | `deepseek/deepseek-flash#low` | thinking on + `settings.reasoningEffort: low` | `planner`/`light-orchestrator` |
-| Deep | `deepseek/deepseek-flash#high` | thinking on + `settings.reasoningEffort: high` | `deep-worker`/`oracle`/`reviewer`/`solo` |
+| Cheap (trivial) | `deepseek/deepseek-flash` | body `{"type":"disabled"}` + `temperature: 0` | `orchestrator`/`explore`/`librarian`/`vision` |
+| Low (routine) | `deepseek/deepseek-flash#low` | thinking on + `settings.reasoningEffort: low` | `light-orchestrator`/`consultant`/`ui-builder` |
+| Deep | `deepseek/deepseek-flash#high` | thinking on + `settings.reasoningEffort: high` | `planner`/`deep-worker`/`solo` |
+| Top (escalation) | `deepseek/deepseek-flash#max` | thinking on + `settings.reasoningEffort: max` | `oracle`/`reviewer` (escalation-only, read-only) |
 
 Thinking strength is driven by two **request parameters**, both declared at the **model layer** in `opencode.jsonc`; agents only choose a model reference and write no thinking parameters at all:
 
-- **thinking toggle** — `{"thinking":{"type":"enabled"|"disabled"}}`, a **request BODY field**. The default tier is off (cheapest); `#low`/`#high` turn it on.
+- **thinking toggle** — `{"thinking":{"type":"enabled"|"disabled"}}`, a **request BODY field**. The default tier is off (cheapest); `#low`/`#high`/`#max` turn it on.
 - **thinking effort** — `{"reasoning_effort":"low"|"high"|"max"}`, driven by the **provider setting** `settings.reasoningEffort` (camelCase in config, snake_case on the wire) — the only path the aisdk layer turns into `reasoning_effort`.
 
-> **Checked against the official guide (2026-11-09, `guides/thinking_mode`)**: ① thinking is **on by default with effort `high`** — so only the default tier (explicit `disabled`) actually saves reasoning tokens; `#high` merely spells out the default, and `#low` is the only middle rung that exists. There is no medium effort: `minimal`→low, `medium`/`xhigh`→high, `max`/`ultra`→max. ② Thinking mode **does not support** `temperature`/`presence_penalty`/`frequency_penalty` — passing them raises no error and has no effect, so the `temperature: 0` in the table binds only on the default tier while `#low`/`#high` inherit it inertly. ③ `top_p` is the opposite: on `deepseek-flash` it applies only with thinking on (valid range 0.95–1.0, values below are treated as 0.95), and is pinned to 1.0 with passed values ignored when thinking is off — so this config sets no `top_p`. ④ When a request carries `tools`, every historical `reasoning_content` must be sent back or the API returns 400; opencode forces the replay for all deepseek models (`requireReasoning` in `ai/src/protocols/openai-chat.ts`), so nothing extra is needed here.
+> **Checked against the official guide (2026-11-09, `guides/thinking_mode`)**: ① thinking is **on by default with effort `high`** — so only the default tier (explicit `disabled`) actually saves reasoning tokens: `#high` merely spells out the default, `#low` is the only rung below it, and `#max` is the only rung above it. There is no medium effort: `minimal`→low, `medium`/`xhigh`→high, `max`/`ultra`→max. ② Thinking mode **does not support** `temperature`/`presence_penalty`/`frequency_penalty` — passing them raises no error and has no effect, so the `temperature: 0` in the table binds only on the default tier while `#low`/`#high`/`#max` inherit it inertly. ③ `top_p` is the opposite: on `deepseek-flash` it applies only with thinking on (valid range 0.95–1.0, values below are treated as 0.95), and is pinned to 1.0 with passed values ignored when thinking is off — so this config sets no `top_p`. ④ When a request carries `tools`, every historical `reasoning_content` must be sent back or the API returns 400; opencode forces the replay for all deepseek models (`requireReasoning` in `ai/src/protocols/openai-chat.ts`), so nothing extra is needed here.
 
 > **⚠️ Spelling trap (measured 2026-10-16)**: `thinking`/`temperature` under `settings` are inert (the openai-chat protocol implements no such option), and `reasoningEffort` under an agent's `options` is inert too (`options` only reaches `request.body`, and camelCase is not the `reasoning_effort` the API reads). Both must live at the **model layer**: the toggle in `body`, the effort in `settings`. Before the fix flash ran with thinking on all along, paying reasoning tokens on every step.
 
-**Cost structure**: all three tiers share flash's single price sheet (in 0.15 / out 0.60 / cache_read 0.003 USD per 1M, off-peak) — no model premium. A tier difference shows up only in the **number of reasoning tokens**, which bill at the output rate. "Escalating" therefore buys more output tokens, not a more expensive unit price — deep work no longer pays a 4.4× input premium.
+**Cost structure**: all four tiers share flash's single price sheet (in 0.15 / out 0.60 / cache_read 0.003 USD per 1M, off-peak) — no model premium. A tier difference shows up only in the **number of reasoning tokens**, which bill at the output rate. "Escalating" therefore buys more output tokens, not a more expensive unit price — deep work no longer pays a 4.4× input premium. **Step count multiplies that bill**: effort is paid per step, so running `#max` on a writer that takes thirty steps means paying the top rate thirty times. The top rung therefore goes only to short, few-step read-only escalation agents (`oracle`/`reviewer`); writers stop at `#high`, and thinking off is for pure transduction and routing, where added reasoning buys nothing.
 
-> **Not yet verified (re-checked 2026-11-09)**: `reasoningEffort: "high"` on flash has still not been measured for actual reasoning depth or reasoning-token delta — the tier only changes the reasoning-token count, which this repo estimates linearly at the output rate. Re-check with one `/deep-review` run on a machine that holds DeepSeek credentials.
+> **Not yet verified (re-checked 2026-11-09)**: the actual reasoning depth and reasoning-token delta of `reasoningEffort` at `low`/`high`/`max` on flash are still unmeasured — the tier only changes the reasoning-token count, which this repo estimates linearly at the output rate. Re-check with one `/deep-review` run on a machine that holds DeepSeek credentials.
 
 ### Routing Strategy
 
 - **Trivial → thinking off**: well-defined light tasks — search, lookup, consultation, UI, exploration, doc retrieval — go to the default tier (cheapest)
-- **Routine-nontrivial → `#low`**: planning and routine multi-file work use `deepseek/deepseek-flash#low` (thinking on + effort `low`)
-- **Deep/uncertain → `#high`**: deep reasoning, root-cause analysis, heavy multi-file implementation use `deepseek/deepseek-flash#high` (thinking on + effort `high`)
-- **Code review → `#low` first pass, `#high` escalation**: `/review` runs a `#low` first pass (Abbreviated path) by default and delegates to `reviewer` (`#high`) only when an escalation trigger fires; `/deep-review` forces a full `#high` review
+- **Routine-nontrivial → `#low`**: lightweight multi-file work, single-file edits, approach discussions and UI work use `deepseek/deepseek-flash#low` (thinking on + effort `low`) — `light-orchestrator`/`consultant`/`ui-builder`
+- **Deep/uncertain → `#high`**: planning, deep reasoning and heavy multi-file implementation use `deepseek/deepseek-flash#high` (thinking on + effort `high`, the upstream default) — `planner`/`deep-worker`/`solo`
+- **Escalation-only → `#max`**: reserved for the two read-only escalation agents — `oracle` (root-cause analysis) and `reviewer` (critical/security review), thinking on + effort `max`
+- **Code review → `#low` first pass, `#max` escalation**: `/review` runs a `#low` first pass (Abbreviated path) by default and delegates to `reviewer` (`#max`) only when an escalation trigger fires; `/deep-review` forces a full `#max` review
 - **Vision owns multimodal**: only when the user explicitly provides an image/screenshot or explicitly asks, route to the `vision` agent (`deepseek-flash`, natively multimodal). **Vision input is opt-in**: non-visual tasks never attach images, generate images, or invoke vision (enforced as a hard constraint in `AGENTS.md` → "Constraints"); attachments are first resized by `media.image` to 1600px / 2MiB to avoid wasting base64 bytes
-- **Automatic escalation**: when a thinking-off or `#low` agent can't handle a task, it escalates to `#high` automatically (with full context)
+- **Automatic escalation**: escalation always means **switching agents**, never raising one agent's effort — when a thinking-off or `#low` agent can't handle a task, it hands it to a stronger agent with full context: writers to `#high` (`planner`/`deep-worker`/`solo`), root-cause/review work to `#max` (`oracle`/`reviewer`)
 
 **Model resolution chain (re-checked on v2.2.6 on 2026-11-09)**: the model that actually runs is decided in three places — ① `agent.model`: subagent/child sessions (including `/` commands: a command bound to a subagent-mode agent **spawns a child session** running at that agent's tier, e.g. `/deep`→`#high`, `/quick`→`#low`, leaving the current session model untouched), the title/summary/compaction one-shot calls, and the desktop App's per-agent default for new sessions (build/plan/orchestrator → flash); ② the global `config.model`: the main session's fallback model (flash, default tier); ③ `-m`: an explicit CLI override, with precedence `-m` > stored session model > global `model`. In the desktop App you switch via the model picker (your pick is remembered); headless `opencode run` **does not read** `agent.model` — the main session resolves the global `model`, so pass `-m deepseek/deepseek-flash#high` to pin a thinking tier.
 
-Usage examples: "how does this library work?" → thinking off (librarian); "add an export feature to the user module" → `#low` (planner); "what's the root cause of this login error?" → `#high` (oracle); `/review` → `#low` first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → first pass then `#high` escalation.
+Usage examples: "how does this library work?" → thinking off (librarian); "add an export feature to the user module" → `#high` (planner); "what's the root cause of this login error?" → `#max` (oracle); `/review` → `#low` first pass (small diffs report directly); `/review #123` (large diff / trust boundary) → first pass then `#max` escalation.
 
 #### Two-Tier Code Review (Lightweight Review)
 
 | Tier | Model | Executor | Coverage |
 | --- | --- | --- | --- |
 | Tier 1 (default) | `deepseek/deepseek-flash#low` | `light-orchestrator` (`/review`) | Abbreviated path: ≤8 logic files and ≤300 effective lines, no high-stakes trigger |
-| Tier 2 (escalation) | `deepseek/deepseek-flash#high` | `reviewer` (`/deep-review` or auto-escalation) | Full path, a high-stakes trigger, or a Tier-1 critical/major needing cross-file confirmation |
+| Tier 2 (escalation) | `deepseek/deepseek-flash#max` | `reviewer` (`/deep-review` or auto-escalation) | Full path, a high-stakes trigger, or a Tier-1 critical/major needing cross-file confirmation |
 
 Escalation triggers (any one): the path is Full (large diff or high-stakes regex hit); Tier 1 found a critical/major it cannot confirm from the diff alone; the diff touches a trust boundary (also load `security-review`); the user explicitly asked for a deep review.
 
-A Tier-1 report is a **complete review**, not a preview — a clean result is never escalated merely to double-check. On escalation, Tier-1 findings are passed as **unverified leads** so the `#high` tier confirms rather than re-derives them, avoiding duplicate token spend.
+A Tier-1 report is a **complete review**, not a preview — a clean result is never escalated merely to double-check. On escalation, Tier-1 findings are passed as **unverified leads** so the `#max` tier confirms rather than re-derives them, avoiding duplicate token spend.
 
 ### Cost Comparison
 
@@ -193,7 +196,7 @@ Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1
 
 Two cost levers:
 
-- **Thinking tier**: all three tiers bill at the same unit price; the only difference is the number of reasoning tokens (billed at the output rate) — escalating spends more output tokens, not a higher unit price.
+- **Thinking tier**: all four tiers bill at the same unit price; the only difference is the number of reasoning tokens (billed at the output rate) — escalating spends more output tokens, not a higher unit price.
 - **Prompt cache**: `cache_read` is **50×** cheaper than the input price (0.003 vs 0.15). This config's byte-stable prefix + volatile-zone discipline (see `AGENTS.md`) exists precisely to maximize the cache-hit rate.
 
 **Typical session cost estimate** (assume 200K input tokens, 150K cache hits, 30K output):
@@ -202,18 +205,18 @@ Two cost levers:
 | --- | --- | --- | --- | --- |
 | thinking off | 150K × 0.003 = $0.0005 | 50K × 0.15 = $0.0075 | 30K × 0.60 = $0.018 | **≈ $0.026** |
 
-`#low` / `#high` add only the extra reasoning tokens on top of the same visible token volume, billed linearly at the output rate. Use `scripts/estimate-cost.js` to estimate from actual token counts.
+`#low` / `#high` / `#max` add only the extra reasoning tokens on top of the same visible token volume, billed linearly at the output rate. Use `scripts/estimate-cost.js` to estimate from actual token counts.
 
 #### Thinking-Tier Cost Comparison
 
-Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hits, 8K visible output; `#low` adds 2K and `#high` adds 4K reasoning tokens, both billed at the output rate):
+Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hits, 8K visible output; `#low` adds 2K and `#max` adds 4K reasoning tokens, both billed at the output rate):
 
 | Tier | Cache hit | Input miss | Output (incl. reasoning) | Total |
 | --- | --- | --- | --- | --- |
 | `#low` (`/review` first pass, +2K reasoning) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 10K × 0.60 = $0.0060 | **≈ $0.0084** |
-| `#high` (`/deep-review`) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.0096** |
+| `#max` (`/deep-review`) | 45K × 0.003 = $0.0001 | 15K × 0.15 = $0.0023 | 12K × 0.60 = $0.0072 | **≈ $0.0096** |
 
-**Conclusion**: with one model, the gap between the two review tiers is not a "model unit price" but the extra reasoning tokens — on the same input base `#high` costs about 14% more ($0.0084 → $0.0096), far below the 3.7× pro premium of the two-model era. The reasoning-token count is an assumption; re-measure with `scripts/estimate-cost.js` on a machine holding DeepSeek credentials.
+**Conclusion**: with one model, the gap between the two review tiers is not a "model unit price" but the extra reasoning tokens — on the same input base `#max` costs about 14% more ($0.0084 → $0.0096), far below the 3.7× pro premium of the two-model era. The reasoning-token count is an assumption; re-measure with `scripts/estimate-cost.js` on a machine holding DeepSeek credentials.
 
 ## Agent Structure
 
@@ -224,30 +227,30 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | `orchestrator` | flash | Default entry point: intent classification routing (Routing Table) + model-aware routing + fallback chains |
 | `solo` | flash#high | Single-model inline executor: zero delegation, no background helpers, all work done inline on flash's `#high` tier in the current session |
 
-> `solo` is the second primary agent: `{action: subagent, resource: "*", effect: deny}` (zero delegation — spawns no subagents), an explicit `model: deepseek/deepseek-flash#high` (always the strongest thinking tier), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
+> `solo` is the second primary agent: `{action: subagent, resource: "*", effect: deny}` (zero delegation — spawns no subagents), an explicit `model: deepseek/deepseek-flash#high` (pinned to `#high` throughout), and no build/plan built-in helpers (their configured tier binds only child sessions and one-shot calls — the main session never follows it, so mixing them would break the single-model guarantee). Analysis, planning, implementation, and verification all happen inline in the current session.
 
 ### Subagents
 
 | Agent | Model | Permission | Role |
 | --- | --- | --- | --- |
-| `planner` | flash#low | read-write | Planning, architecture, task breakdown |
+| `planner` | flash#high | read-write | Planning, architecture, task breakdown |
 | `deep-worker` | flash#high | read-write | Heavy implementation, multi-file changes, complex debugging |
-| `oracle` | flash#high | **read-only** | Root-cause analysis, deep code understanding |
-| `reviewer` | flash#high | **read-only** | Review escalation tier: Full path / high-stakes trigger / confirming cheap-tier first-pass leads |
-| `ui-builder` | flash | read-write | Frontend and UI tasks |
-| `consultant` | flash | read-write | Approach discussions, best-practice advice |
+| `oracle` | flash#max | **read-only** | Root-cause analysis, deep code understanding |
+| `reviewer` | flash#max | **read-only** | Review escalation tier: Full path / high-stakes trigger / confirming cheap-tier first-pass leads |
+| `ui-builder` | flash#low | read-write | Frontend and UI tasks |
+| `consultant` | flash#low | read-write | Approach discussions, best-practice advice |
 | `explore` | flash | **read-only** (only `.opencode/codemap.md` is writable) | Codebase search, parallel exploration |
 | `librarian` | flash | **read-only** | Documentation lookup, web search |
 | `light-orchestrator` | flash#low | read-write | Lightweight tasks, single-file edits |
 | `vision` | flash | read-write (shell denies all by default; allows `git status/diff/log/show` and `rg`; the four `python`/`py` `vision-prep/scripts/*` calls are `ask`) | Multimodal: images/screenshots/charts/UI mockups |
 
-> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (`#high` review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a cheaper tier can finish → refuse (this tier pays reasoning tokens on every step).
+> `deep-worker` and `light-orchestrator` follow a "no research, no delegation" principle — they execute, not explore; context is provided by the orchestrator; the sole exception is `light-orchestrator`'s two escalation paths — `oracle` (read-only analysis) and `reviewer` (`#max` review), serving `/simplify` and `/review`. `deep-worker` also carries a "What you DON'T handle" rejection contract: trivial single-file edits → refuse (route to `light-orchestrator`), pure research/lookups → refuse (route to `oracle`/`explore`), anything a cheaper tier can finish → refuse (this tier pays reasoning tokens on every step).
 >
 > Read-only agents (`oracle`/`reviewer`/`explore`) are truly read-only: `edit: deny` + a shell allowlist (deny all by default, allow only read-only subcommands such as `git status/diff/log/show/blame/grep` and `rg`; `oracle`/`reviewer` additionally allow `node scripts/*` (`reviewer` also `npm test*`), `gh pr view/diff`, `gh issue view`, and `gh api` to support `/review` replies). `librarian` is stricter: the `shell` ruleset denies everything by default, with no shell allowlist at all.
 >
 > Each agent carries a `skills` allowlist (deny by default + allow by role, to prevent loading heavyweight skills): `orchestrator` → `codemap`/`grilling`; `planner` → `spec-workflow`/`codebase-design`/`writing-plans`; `deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`; `oracle` → `reflect`/`simplify`/`diagnosing-bugs`; `reviewer` → `code-review`/`security-review`/`gh-cli`; `explore` → `codemap`; `librarian` → `verify-with-docs`; `light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`; `consultant` → `domain-modeling`; `ui-builder` → `codebase-design`; `vision` → `vision-prep`; `solo` → the full local skill set plus `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans` (the inline executor needs the complete toolchain, still guarded by a `resource: "*"` deny rule). The allowlist is not just permissions — **a denied skill never enters that agent's skill roster**, so the list is simultaneously its always-loaded context budget. Five distinct superpowers skills are wired (`writing-plans` → `planner`; `test-driven-development` → `deep-worker`; `verification-before-completion` → `deep-worker` and `light-orchestrator`; `brainstorming`/`executing-plans` → `solo`; `solo` allows all five); every other superpowers skill has a local equivalent and stays unwired so two competing processes never coexist — the mapping table is in `AGENTS.md`'s Plugins section.
 >
-> **Thinking tiers**: all declared at the **model layer** in `opencode.jsonc`; agents only choose a model reference (see "Model Division of Labor"). `explore`/`librarian`/`consultant`/`ui-builder`/`orchestrator`/`vision` = flash · thinking off (cheapest, model-level body `{"type":"disabled"}`); `planner`/`light-orchestrator` = `deepseek/deepseek-flash#low` (thinking on + `settings.reasoningEffort: low`); `deep-worker`/`oracle`/`reviewer`/`solo` = `deepseek/deepseek-flash#high` (thinking on + `settings.reasoningEffort: high`). **No thinking parameter ever appears in agent frontmatter** — `options.*` cannot hold a provider setting and additionally pushes that agent back onto the V1 migration path (see the spelling-trap note under "Model Division of Labor").
+> **Thinking tiers**: all declared at the **model layer** in `opencode.jsonc`; agents only choose a model reference (see "Model Division of Labor"). `explore`/`librarian`/`orchestrator`/`vision` = flash · thinking off (cheapest, model-level body `{"type":"disabled"}`); `light-orchestrator`/`consultant`/`ui-builder` = `deepseek/deepseek-flash#low` (thinking on + `settings.reasoningEffort: low`); `planner`/`deep-worker`/`solo` = `deepseek/deepseek-flash#high` (thinking on + `settings.reasoningEffort: high`, the upstream default); `oracle`/`reviewer` = `deepseek/deepseek-flash#max` (thinking on + `settings.reasoningEffort: max`, used only on escalation). **No thinking parameter ever appears in agent frontmatter** — `options.*` cannot hold a provider setting and additionally pushes that agent back onto the V1 migration path (see the spelling-trap note under "Model Division of Labor").
 
 ## Quick Commands
 
@@ -259,8 +262,8 @@ Reviewing a 300-effective-line local diff (assume 60K input tokens, 45K cache hi
 | `/quick` | `light-orchestrator` | Lightweight tasks, single-file edits |
 | `/ui` | `ui-builder` | Frontend/UI work |
 | `/vision` | `vision` | Multimodal: image/screenshot/chart understanding |
-| `/review` | `light-orchestrator` (code-review) → escalates to `reviewer` as needed | Code review: `#low` first pass by default (Abbreviated path reports directly); delegates to `reviewer` (`#high`) with unverified leads when an escalation trigger fires; posts to GitHub (event=COMMENT) with a PR ref/URL |
-| `/deep-review` | `reviewer` (code-review + gh-cli) | Forces a full `#high` review, skipping the cheap first pass; posts to GitHub (event=COMMENT) with a PR ref/URL |
+| `/review` | `light-orchestrator` (code-review) → escalates to `reviewer` as needed | Code review: `#low` first pass by default (Abbreviated path reports directly); delegates to `reviewer` (`#max`) with unverified leads when an escalation trigger fires; posts to GitHub (event=COMMENT) with a PR ref/URL |
+| `/deep-review` | `reviewer` (code-review + gh-cli) | Forces a full `#max` review, skipping the cheap first pass; posts to GitHub (event=COMMENT) with a PR ref/URL |
 | `/plan` | `planner` | Create plans and technical proposals |
 | `/oracle` | `oracle` | Deep analysis, root-cause tracing |
 
@@ -295,7 +298,7 @@ OpenCode exposes skills on demand via the native `skill` tool — agents load th
 
 | Skill | Purpose |
 | --- | --- |
-| `code-review` | Single-pass code review + evidence gating; two tiers — `#low` first pass / `#high` escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
+| `code-review` | Single-pass code review + evidence gating; two tiers — `#low` first pass / `#max` escalation; large diffs (>~500 lines) split into Standards/Spec two axes merged into one report |
 | `codemap` | Generates an annotated repository structure map for quick orientation, saving exploration tokens |
 | `gh-cli` | GitHub CLI v2.103+ reference: PR posting, api, rate limits, gh pr checks, gh skill/gh-aw, GHSA security notes |
 | `git-master` | Advanced Git operations: rebase, squash, fixup, bisect, reflog, code archaeology, worktrees |
@@ -361,16 +364,16 @@ When editing config, locate "what to change → which file", so you never change
 Orchestrator routes automatically and picks the tier by task difficulty:
 
 ```text
-"Help me debug the login API error"   → oracle analyzes root cause (flash#high)
-"Optimize this loop, performance is poor" → oracle analyzes → deep-worker implements (flash#high)
-"Review this PR for me"               → light-orchestrator pre-screen (reviewer#high only on a trigger)
-"I want to add an export feature to the user module" → planner drafts → deep-worker implements (flash#low → flash#high)
+"Help me debug the login API error"   → oracle analyzes root cause (flash#max)
+"Optimize this loop, performance is poor" → oracle analyzes → deep-worker implements (flash#max → flash#high)
+"Review this PR for me"               → light-orchestrator pre-screen (reviewer#max only on a trigger)
+"I want to add an export feature to the user module" → planner drafts → deep-worker implements (both flash#high)
 "How to use React 19's use() API"     → librarian checks docs (thinking off)
 ```
 
 For direct access: `/deep` (complex implementation), `/quick` (single file), `/plan` (proposal), `/oracle` (debugging), `/review` (code review), `/ui`, `/vision`; the full list is under "Quick Commands".
 
-**When to escalate to `#high`**: touches ≥3 modules, a decision needs 5+ files read, a bug resists one attempt, or real design trade-offs. Single file, an error message that already points at the line, mechanical replacement, or an existing pattern to copy — don't escalate. Let a cheaper tier take one pass; escalate only when you can state the reason.
+**When to escalate**: touches ≥3 modules, a decision needs 5+ files read, a bug resists one attempt, or real design trade-offs. Single file, an error message that already points at the line, mechanical replacement, or an existing pattern to copy — don't escalate. Let a cheaper tier take one pass; escalate only when you can state the reason. Escalation always switches agents rather than raising one agent's effort: writers go to `#high` (`planner`/`deep-worker`/`solo`), root-cause analysis and critical/security review go to `#max` (`oracle`/`reviewer`; `#max` belongs to those two read-only agents only).
 
 ## Sources
 
@@ -379,11 +382,11 @@ The core ideas draw on [oh-my-openagent](https://github.com/code-yeongyu/oh-my-o
 ## Design Philosophy
 
 - **Pure config-driven, zero extra dependencies** — every capability comes from `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`
-- **One model + thinking tiers** — `deepseek-flash` only: thinking off for routing and routine execution, `#low` for planning, `#high` for deep reasoning and heavy implementation; no second model's price sheet resident for an occasional hard task
+- **One model + thinking tiers** — `deepseek-flash` only: thinking off for routing and routine execution, `#low` for lightweight execution, approach discussions and UI, `#high` for planning, deep reasoning and heavy implementation, `#max` reserved for escalation-only read-only analysis by `oracle`/`reviewer`; no second model's price sheet resident for an occasional hard task
 - **Token efficiency first** — path references instead of pasted files, skills loaded on demand; each agent's `skill` allowlist also sets its roster size, and a denied skill never enters the always-loaded context
 - **Plugins add value without stealing the spotlight** — the only plugin, superpowers, provides process discipline only (pinned to keep the prefix byte-stable); compression is 100% built-in compaction
 - **Execution separated from exploration** — deep-worker/light-orchestrator must not research or delegate; explore/librarian must not modify
-- **Cache + thinking discipline** — stable static prefixes to hit the prompt cache, with volatile content (timestamps, random IDs, dynamic lists) at the payload tail; the default tier disables thinking + `temperature: 0`, `#low`/`#high` turn it on
+- **Cache + thinking discipline** — stable static prefixes to hit the prompt cache, with volatile content (timestamps, random IDs, dynamic lists) at the payload tail; the default tier disables thinking + `temperature: 0` (the `disabled` toggle, not the tier label, is what actually saves reasoning tokens), while `#low`/`#high`/`#max` turn it on
 - **Scope First + Delegate Always** — scope first (2+ steps / multi-file / architecture changes go through planner), then delegate; top-level tokens are reserved for routing and hard problems
 - **Explicit compression window** — `limit.input` declares the working window: `131072−16000=115,072`; the trigger point is computed, not inherited
 - **Vision is opt-in** — images enter the payload only when the user supplies them; `media.image` resizes oversized images before upload

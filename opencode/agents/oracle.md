@@ -1,7 +1,7 @@
 ---
 description: Deep code analyst and debugger. Use for root cause analysis, understanding complex code, reading and interpreting diffs, tracing bugs, and deep comprehension tasks. Avoid for simple lookups or first-attempt fixes.
 mode: subagent
-model: deepseek/deepseek-flash#high
+model: deepseek/deepseek-flash#max
 steps: 40
 color: "#F39C12"
 permissions:

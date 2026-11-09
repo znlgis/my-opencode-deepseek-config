@@ -99,15 +99,19 @@
     // only in thinking mode, expressed as model variants so the choice stays
     // at the model layer:
     //   (no suffix) thinking OFF + temperature 0   — cheapest, router/simple;
-    //   #low        thinking ON, effort `low`       — routine planning;
-    //   #high       thinking ON, effort `high`      — deep reasoning/review.
+    //   #low        thinking ON, effort `low`       — routine single-file work;
+    //   #high       thinking ON, effort `high`      — planning, deep reasoning;
+    //   #max        thinking ON, effort `max`       — escalation-only,
+    //                                                 read-only agents.
     // Upstream default is thinking ON at effort `high` (DeepSeek thinking-mode
     // guide, re-checked 2026-11-09). So only the no-suffix tier actually saves
     // reasoning tokens — it must send `disabled` explicitly; `#high` merely
-    // restates the default, and `#low` is the one middle rung that exists.
-    // The API's `medium` and `xhigh` efforts are both remapped to `high`, so
-    // this config declares only `#low` and `#high` — no `#medium` variant
-    // exists.
+    // restates the default, `#low` sits one rung below it, and `#max` is the
+    // top rung reserved for escalation.
+    // The API remaps efforts the upstream guide doesn't mirror one-to-one:
+    // `minimal`→`low`, `medium`/`xhigh`→`high`, and `max`/`ultra`→`max`, so
+    // this config declares only `#low`, `#high` and `#max` — no `#medium` or
+    // `#xhigh` variant exists.
     // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
     // and vision variants are now one natively-multimodal model, so it carries
     // the `capabilities` block (image input). Without it OpenCode treats the
@@ -155,19 +159,19 @@
                         "input": ["text", "image"],
                         "output": ["text"]
                     },
-                    // The two non-default tiers. Effort is a provider setting,
+                    // The three non-default tiers. Effort is a provider setting,
                     // not a body key: `settings.reasoningEffort` is what the
                     // aisdk layer forwards as the API's `reasoning_effort`
                     // (core/aisdk.ts reads it; ai/src/protocols/openai-chat.ts maps
                     // it into the body), while the toggle rides `body`. Agents
                     // select a variant with `model:
-                    // deepseek/deepseek-flash#low` or `#high`. Each variant must
-                    // restate `thinking: enabled`: the model level disables it
-                    // and the overlay deep-merges, so a variant that omitted the
-                    // toggle would inherit `disabled`. `top_p` stays unset on
-                    // purpose — on flash it applies only with thinking on
-                    // (0.95-1.0, values below clamp to 0.95) and is pinned to
-                    // 1.0 when thinking is off.
+                    // deepseek/deepseek-flash#low`, `#high` or `#max`. Each
+                    // variant must restate `thinking: enabled`: the model level
+                    // disables it and the overlay deep-merges, so a variant that
+                    // omitted the toggle would inherit `disabled`. `top_p` stays
+                    // unset on purpose — on flash it applies only with thinking
+                    // on (0.95-1.0, values below clamp to 0.95) and is pinned
+                    // to 1.0 when thinking is off.
                     "variants": [
                         {
                             "id": "low",
@@ -177,6 +181,11 @@
                         {
                             "id": "high",
                             "settings": { "reasoningEffort": "high" },
+                            "body": { "thinking": { "type": "enabled" } }
+                        },
+                        {
+                            "id": "max",
+                            "settings": { "reasoningEffort": "max" },
                             "body": { "thinking": { "type": "enabled" } }
                         }
                     ],
@@ -345,12 +354,12 @@
             "template": "Read the attached image(s) and describe what you see. Report findings with concrete details (text, layout, colors, positions). If the task requires code changes beyond visual interpretation, escalate to deep-worker."
         },
         "review": {
-            "description": "Code review — cheap first pass, #high escalation on complex findings",
+            "description": "Code review — cheap first pass, #max escalation on complex findings",
             "agent": "light-orchestrator",
-            "template": "Load the code-review skill and run the tier-1 (`#low`) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (flash#high) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
+            "template": "Load the code-review skill and run the tier-1 (`#low`) pass. Scope the change set, compute effective size, and pick the path per the skill. If the path is Abbreviated and no escalation trigger fires, complete the review here and report findings by severity. If any escalation trigger fires (Full path, high-stakes override, trust boundary, or a critical/major finding you cannot confirm from the diff alone), delegate to the `reviewer` subagent (flash#max) and pass your findings as unverified leads. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Do not modify code."
         },
         "deep-review": {
-            "description": "Force a deep (deepseek-flash#high) code review, skipping the cheap first pass",
+            "description": "Force a deep (deepseek-flash#max) code review, skipping the cheap first pass",
             "agent": "reviewer",
             "template": "Load the code-review skill and run the Full path regardless of size. If a PR ref or URL is present in the arguments, also load the gh-cli skill and post findings as a pending GitHub review per its 'Reviewing PRs' section (event=COMMENT, never auto-approve). Report findings by severity. Do not modify code."
         },

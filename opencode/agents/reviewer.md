@@ -1,7 +1,7 @@
 ---
 description: Code reviewer (escalation, not a default step). Use for code reviews, finding bugs, assessing quality, and reviewing PRs/changes. Never modifies code.
 mode: subagent
-model: deepseek/deepseek-flash#high
+model: deepseek/deepseek-flash#max
 steps: 40
 color: "#27AE60"
 permissions:
@@ -42,7 +42,7 @@ parallel axes (Standards + Spec) and merges into one report — no consensus loo
 
 ## Model tier
 
-You run on flash with thinking at high effort because review is the escalation
+You run on flash with thinking at max effort because review is the escalation
 path. The cheap first pass is `/review` on a `#low` agent
 (`light-orchestrator`), which handles the Abbreviated path and escalates here
 only when the code-review skill's escalation triggers fire. When you receive a flash pre-screen, treat its findings as unverified

@@ -49,4 +49,4 @@ Reject the task immediately — do not attempt a degraded version — when:
 - Follow AGENTS.md — especially Comment Discipline, Quality Bar, and Progress & Failure Discipline (retry cap 3, strategy change, mark blocked units instead of hard-carrying)
 - Be fast, be correct, be minimal
 - If the task is more complex than expected or involves 2+ non-trivial files, escalate to `deep-worker` (flash#high) immediately
-- **No research, no delegation.** You have the full task context from the orchestrator. The only subagents you may spawn are `oracle` (read-only analysis — e.g. the `/simplify` two-stage flow) and `reviewer` (deep review, flash#high — the `/review` escalation path). Never spawn any other subagent.
+- **No research, no delegation.** You have the full task context from the orchestrator. The only subagents you may spawn are `oracle` (read-only analysis — e.g. the `/simplify` two-stage flow) and `reviewer` (deep review, flash#max — the `/review` escalation path). Never spawn any other subagent.

@@ -20,10 +20,10 @@ the stricter instruction. Routing tables and fallback chains live in
 6. **Don't create files unless asked.** Never proactively create documentation,
    README files, or any new file without explicit user request.
 7. **Right-size the thinking tier to the task.** Thinking off for routing,
-   search, lookup, and simple edits; `#low` for planning and routine
-   implementation; `#high` for deep reasoning, root-cause analysis, code
-   review, and heavy multi-file implementation. When borderline, start
-   cheaper, then escalate.
+   search, lookup, and simple edits; `#low` for routine single-file work and
+   bounded judgment; `#high` for planning, deep reasoning, and volume
+   implementation; `#max` for escalation-only read-only analysis (root cause,
+   critical/security review). When borderline, start cheaper, then escalate.
 8. **Know your stop condition.** Before starting, define the observable
    condition that means "done". Once it holds and the change is verified,
    stop — no bonus polish or extra verification loops.
@@ -49,9 +49,9 @@ the stricter instruction. Routing tables and fallback chains live in
   pinned to 1.0 when thinking is off. Do not set either on a variant.
 - **Thinking.** The upstream default is **ON at effort `high`**, so the default
   tier must send `disabled` explicitly — that is where the saving comes from;
-  `#high` only restates the default, and `#low` is the one tier that actually
-  cuts reasoning tokens. The toggle is a REQUEST BODY field under
-  `providers.deepseek.models.<id>.body`: a
+  `#high` restates the upstream default, `#low` cuts below it, and `#max`
+  raises above it, so `#max` costs reasoning tokens by design. The toggle is
+  a REQUEST BODY field under `providers.deepseek.models.<id>.body`: a
   `settings.thinking`/`settings.temperature` entry is inert, because the
   openai-chat protocol implements no such option. Select a tier through the
   variant suffix (`deepseek/deepseek-flash#low`) — never an agent-level
@@ -70,14 +70,18 @@ the stricter instruction. Routing tables and fallback chains live in
   `settings.reasoningEffort`, which the aisdk layer forwards as the API's
   `reasoning_effort`. Both live in `opencode.jsonc`, so agents only choose a
   model reference.
-- **Tiers:** trivial (orchestrator/explore/librarian/consultant/ui-builder/
-  vision) = flash, thinking off; mid (planner/light-orchestrator) =
-  `deepseek/deepseek-flash#low`; deep
-  (deep-worker/oracle/reviewer/solo) = `deepseek/deepseek-flash#high`.
-- **Routing:** trivial → thinking off; routine-but-nontrivial multi-file →
-  `#low`; deep/uncertain → `#high`.
-- **One model only.** `deepseek-flash` is the sole model; `#low`/`#high` are
-  thinking modes of it, never additional models.
+- **Tiers:** off (orchestrator/explore/librarian/vision, plus the inline
+  one-shots — build/general/plan/title/summary/compaction) = flash, thinking
+  off; `#low` (light-orchestrator/consultant/ui-builder) =
+  `deepseek/deepseek-flash#low`; `#high` (deep-worker/planner/solo) =
+  `deepseek/deepseek-flash#high`; `#max` (oracle/reviewer — escalation-only,
+  read-only, few steps) = `deepseek/deepseek-flash#max`.
+- **Routing:** trivial → thinking off; single-file or bounded-judgment
+  → `#low`; multi-step, planning, or volume implementation → `#high`;
+  escalation-only → `#max`. Escalation names a different agent — never the
+  same agent at higher effort, and writers never run `#max`.
+- **One model only.** `deepseek-flash` is the sole model; `#low`/`#high`/`#max`
+  are thinking modes of it, never additional models.
 
 ## Scope First + Delegate Always
 
@@ -105,8 +109,8 @@ zh-CN Windows system, Chinese; en-US, English. Never force English unless asked.
 ## Constraints (this repository)
 
 - **No new models.** Only the natively multimodal `deepseek/deepseek-flash`
-  may be used, with its `#low`/`#high` thinking variants. Do not introduce
-  others.
+  may be used, with its `#low`/`#high`/`#max` thinking variants. Do not
+  introduce others.
 - **Vision input is opt-in.** `deepseek-flash` accepts images, but an image
   enters the payload only when the user supplied one or explicitly asked about
   one. Never attach, generate, or request images for a non-visual task; route
@@ -319,9 +323,9 @@ change.
 
 | Superpowers skill | Wired on | Tier |
 | --- | --- | --- |
-| `writing-plans` | `planner`, `solo` | `#low`; deep or architectural design escalates to `#high` (solo runs `#high`) |
+| `writing-plans` | `planner`, `solo` | `#high` (both); architectural design escalates to `oracle` at `#max`, not a switch on the same agent |
 | `test-driven-development` | `deep-worker`, `solo` | `#high` |
-| `verification-before-completion` | `deep-worker`, `light-orchestrator`, `solo` | `#high` / `#low` |
+| `verification-before-completion` | `deep-worker`, `light-orchestrator`, `solo` | `#high` (deep-worker, solo) / `#low` (light-orchestrator) |
 | `brainstorming`, `executing-plans` | `solo` | `#high` |
 
 - **Prefer the local distillation when both exist** (these stay unwired on

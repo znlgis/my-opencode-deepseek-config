@@ -8,7 +8,7 @@
 
 任何一次升级都必须保住这八条。破坏其中一条，就不算升级完成：
 
-1. **单模型**：只有 `deepseek/deepseek-flash`，三个 thinking 档位——默认（thinking 关）、`#low`、`#high`。
+1. **单模型**：只有 `deepseek/deepseek-flash`，四个 thinking 档位——默认（thinking 关）、`#low`、`#high`、`#max`。
 2. **thinking 参数只在模型层**：toggle 进 `providers.deepseek.models.<id>.body`，effort 进同名节点的 `settings.reasoningEffort`；Agent frontmatter 不出现任何思考参数。
 3. **只写 v2 原生键**：v2 的配置正常化器会把 v1 键逐项迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断——不报错，但实际生效的配置与本文描述不一致。
 4. **`$schema` 固定为** `https://opencode.ai/config.json`。
@@ -28,7 +28,7 @@
 | superpowers pin | `#v7.0.2` | 2026-11-09 |
 | DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-11-09 |
 | thinking 语义 | 默认**开**、effort 默认 `high`；思考模式忽略 `temperature` | 2026-11-09 |
-| 结构 | 1 模型 / 3 档 / 12 agents / 18 commands / 23 skills | 2026-11-09 |
+| 结构 | 1 模型 / 4 档 / 12 agents / 18 commands / 23 skills | 2026-11-09 |
 | 压缩窗口 | `limit.input` 131072 − `compaction.buffer` 16000 = 115,072 | 2026-11-09 |
 
 定价附注：peak 时段 = off-peak ×2（UTC 01–04 与 06–10 的周一至周五，不含中国法定节假日）；`cache_write` 无独立官方价，按 cache-miss 输入价映射。
@@ -124,6 +124,9 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 10. **技能名册是每轮常驻成本** —— 新增 skill 或加长 `description` 直接抬高每轮 token；不再使用的 skill 应当合并或删除。
 11. **`/releases/latest` 指错版本线** —— 2026-11-09 核对：`/releases` 顶部最新 v2 为 v2.2.6（2026-11-06 发布）；`/releases/latest` 仍指 v1 线。判断版本只认 `/releases` 列表 + 桌面版 CLI `--version`，不要用 latest 重定向，也不要用 PATH 上的 1.18.4。
 12. **插件 bump 的闸门不是字节一致** —— 要读目标 tag 的 release notes，并 diff `.opencode/plugins/superpowers.js` 在两个 tag 间的变化；该文件是整套 opencode 集成。v7.0.1→v7.0.2 为 +61/−39（BOOTSTRAP_MARKER、startsWith 守卫、钩子扩到 context/compaction/generate、裸 skill id），注入请求类型变化会改变 compaction payload（2026-11-09 核对）。
+13. **`max`/`ultra` 归一到 `max`，`medium`/`xhigh` 归一到 `high`** —— 上游模型有四个真实等级，`#max` 与 `#high` 有实质差别。
+14. **自建 id 为 `max` 的变体与内置 `deepseekChat` 的同名变体合并** —— `mergeOverlay` 是合并，不会多出一条。
+15. **`reasoning_effort` 按输出 token 计费** —— `#max` 只改变 reasoning token 数，不改变单价。
 
 ## 5. 验收清单
 
@@ -132,7 +135,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 - [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 23 个 skill frontmatter + 权限放宽检查均无报错）
 - [ ] `node scripts/estimate-cost.js` 退出码 0，且输出成本估算（默认参数应约 $0.026）
 - [ ] `& $cli --version` 是目标版本
-- [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 三档
+- [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 四档（默认 / `#low` / `#high` / `#max`）
 - [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析
 - [ ] `.\scripts\sync-config.ps1` 成功，`& $cli reload` 后 `/models` 与 Agent 列表符合预期
 - [ ] 两份 README 标题逐条对齐，`LF = CRLF`

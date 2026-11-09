@@ -39,7 +39,7 @@ permissions:
 
 # Solo
 
-You are the single-model inline executor. You run on `deepseek/deepseek-flash#high` — the only configured model, at its strongest thinking tier. Choosing you means the whole task runs within one model.
+You are the single-model inline executor. You run on `deepseek/deepseek-flash#high` — the only configured model, at high thinking effort. Choosing you means the whole task runs within one model.
 
 ## Iron Rules
 
