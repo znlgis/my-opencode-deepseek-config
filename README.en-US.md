@@ -21,10 +21,10 @@
 
 ### Prerequisites
 
-- OpenCode v2 (desktop app's bundled CLI **2.2.6**, verified 2026-11-09; 1.18.x and older are **no longer supported**)
+- OpenCode v2 (desktop app's bundled CLI **2.3.0**, verified 2026-11-13; 1.18.x and older are **no longer supported**)
 - **Runtime caveat**: the `opencode` on `PATH` (WinGet install) is **1.18.4**, not this config's runtime — it takes the V1→V2 migration path. For headless runs use the desktop app's bundled CLI (path in the Install and Start ⚠️ note)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
-- Background subagents (delegation with `background: true`) require the environment variable `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true` (PowerShell: `$env:OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS="true"`); when unset, background delegation errors out and should fall back to foreground/serial dispatch
+- Background subagents (since v2.3.0 every `task` delegation **always runs in the background**: the call returns a `sessionID` immediately and the child reports back to the parent when idle); no environment variable is needed — the old `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` flag is obsolete
 
 ### Option 1: Interactive TUI Setup (Recommended)
 
@@ -87,7 +87,7 @@ This config keeps only `deepseek-flash` and splits thinking at the `providers` l
 
 ### v2-native keys (the only dialect this repo writes)
 
-This repo is an **OpenCode v2-only config** and writes only v2-native keys: `plugins` (not `plugin`), `providers`/`models` (not `provider`), `agents`/`commands` (not `agent`/`command`), `permissions` (ordered `{action, resource, effect}`, not `permission`; the action names are `shell`/`subagent`, not `bash`/`task`), `media.image` (not `attachment`), nesting depth as `experimental.subagent_depth`, and compaction as `{auto, keep, buffer}` (`prune`/`tail_turns`/`reserved` are v1 spellings v2 does not read). If any v1 trigger key appears (`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model`, …), v2.2.6 migrates it per key and merges the result with the native keys (while `logLevel`/`server`/`layout`/top-level `subagent_depth` are dropped with a diagnostic) — no error, but the config that actually runs no longer matches what this document describes.
+This repo is an **OpenCode v2-only config** and writes only v2-native keys: `plugins` (not `plugin`), `providers`/`models` (not `provider`), `agents`/`commands` (not `agent`/`command`), `permissions` (ordered `{action, resource, effect}`, not `permission`; the action names are `shell`/`subagent`, not `bash`/`task`), `media.image` (not `attachment`), nesting depth as `experimental.subagent_depth`, and compaction as `{auto, keep, buffer}` (`prune`/`tail_turns`/`reserved` are v1 spellings v2 does not read). If any v1 trigger key appears (`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model`, …), v2.3.0 migrates it per key and merges the result with the native keys (while `logLevel`/`server`/`layout`/top-level `subagent_depth` are dropped with a diagnostic) — no error, but the config that actually runs no longer matches what this document describes.
 
 > `$schema` stays `https://opencode.ai/config.json` (the URL the v2 app itself writes).
 
@@ -119,7 +119,7 @@ Linux / macOS: append `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-dee
 
 Three self-checks after launch: `/models` shows `deepseek/deepseek-flash`; the agent list has all 12 custom agents; describe any task in plain language and `orchestrator` classifies and routes it (to skip routing, use `/quick`, `/deep`, `/review`, … directly).
 
-> **⚠️ Must run on OpenCode V2.x**: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4**, while the runtime actually in use is the desktop app **v2.2.6** and its bundled CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`. Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds; for headless runs use that CLI.
+> **⚠️ Must run on OpenCode V2.x**: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4**, while the runtime actually in use is the desktop app **v2.3.0** and its bundled CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`. Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds; for headless runs use that CLI.
 
 After editing repo files, sync them (`~/.config/opencode` is an independent copy, not a symlink):
 

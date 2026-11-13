@@ -29,13 +29,13 @@
 const fs = require('fs');
 const path = require('path');
 
-// Top-level keys that only exist in the v1 dialect. v2.2.6 normalizes most of
+// Top-level keys that only exist in the v1 dialect. v2.3.0 normalizes most of
 // them (migrated per key, then merged with the native keys) and drops the
 // four in unsupportedTopLevel (logLevel, server, layout, subagent_depth) with
 // a diagnostic, so the config that runs is not the config that was written.
 // Hand-maintained mirror of unsupportedTopLevel plus the legacy branches in
 // packages/core/src/config/normalize.ts (migrate.ts holds the converters);
-// re-checked 2026-11-09.
+// re-checked 2026-11-13.
 const V1_TOP_LEVEL_KEYS = new Set([
   'logLevel', 'server', 'command', 'reference', 'snapshot', 'plugin',
   'autoupdate', 'autoshare', 'disabled_providers', 'enabled_providers',

@@ -3,7 +3,7 @@
     // is the v2 dialect (plugins / providers / agents / commands / permissions
     // / media). The v1 spellings (plugin, provider, agent, command, permission,
     // attachment, small_model, top-level subagent_depth) are never written:
-    // v2.2.6 silently migrates most of them per key (and drops the four in
+    // v2.3.0 silently migrates most of them per key (and drops the four in
     // unsupportedTopLevel) instead of rejecting the file, so the config that
     // runs would stop matching this file. See
     // README「v2 原生键名」for the key map and the verification method.

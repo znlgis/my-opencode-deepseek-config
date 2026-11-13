@@ -23,7 +23,7 @@
 
 | 项 | 当前值 | 最近核验 |
 | --- | --- | --- |
-| 运行时 CLI | `opencode-cli.exe` **2.2.6**（桌面版自带） | 2026-11-09 |
+| 运行时 CLI | `opencode-cli.exe` **2.3.0**（桌面版自带） | 2026-11-13 |
 | PATH 上的 `opencode` | **1.18.4**（WinGet 安装，v1，不要用） | 2026-11-09 |
 | superpowers pin | `#v7.0.2` | 2026-11-09 |
 | DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-11-09 |
@@ -115,18 +115,19 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 1. **`thinking` / `temperature` 写在 `settings` 下不生效** —— `settings` 只承载 provider option（`timeout` / `chunkTimeout` / `reasoningEffort`），其余被静默丢弃（2026-10-16 实测）。
 2. **`reasoningEffort` 写在 Agent 的 `options` 下不生效** —— `options` 只落 `request.body`，且 camelCase 不是 API 认的 `reasoning_effort`。
 3. **变体 body 写 `null` 会覆盖基值** —— `mergeRecord` 只把 `undefined` 当"未设置"；`null` 是合法 JSON 值，会原样出现在请求体里。
-4. **v1 键不报错，只会被静默改写** —— 2.2.6 把 `provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment` 等 legacy 键逐键迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 记 `unsupported` 诊断后丢弃；文件不会被整体拒绝（只有 JSONC 语法错误或归一化后无法解码才会拒绝，见 `config.ts`）。「看起来生效」不是写对了的证据，以 `scripts/validate-jsonc.js` 的键白名单为准。
+4. **v1 键不报错，只会被静默改写** —— 2.3.0 把 `provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment` 等 legacy 键逐键迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 记 `unsupported` 诊断后丢弃；文件不会被整体拒绝（只有 JSONC 语法错误或归一化后无法解码才会拒绝，见 `config.ts`）。「看起来生效」不是写对了的证据，以 `scripts/validate-jsonc.js` 的键白名单为准。
 5. **PATH 上的 `opencode` 是 v1.18.4** —— headless 运行必须用桌面版自带 CLI。
 6. **DeepSeek 默认开思考、effort 默认 `high`** —— 不显式写 `disabled` 就一直在付 reasoning token。
 7. **思考模式下 `temperature` / `presence_penalty` / `frequency_penalty` 被忽略**；`top_p` 只在思考模式生效（有效范围 0.95–1.0），非思考模式恒为 1.0。所以这些参数只在默认档有意义。
 8. **带 `tools` 时必须回传历史 `reasoning_content`**，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 9. **`write` 工具落盘带 UTF-8 BOM** —— 用作 commit message 前先剥掉，否则 subject 首字符是 U+FEFF。
 10. **技能名册是每轮常驻成本** —— 新增 skill 或加长 `description` 直接抬高每轮 token；不再使用的 skill 应当合并或删除。
-11. **`/releases/latest` 指错版本线** —— 2026-11-09 核对：`/releases` 顶部最新 v2 为 v2.2.6（2026-11-06 发布）；`/releases/latest` 仍指 v1 线。判断版本只认 `/releases` 列表 + 桌面版 CLI `--version`，不要用 latest 重定向，也不要用 PATH 上的 1.18.4。
+11. **`/releases/latest` 指错版本线** —— 2026-11-13 核对：`/releases` 顶部最新 v2 为 v2.3.0（2026-11-13 发布）；`/releases/latest` 仍指 v1 线。判断版本只认 `/releases` 列表 + 桌面版 CLI `--version`，不要用 latest 重定向，也不要用 PATH 上的 1.18.4。
 12. **插件 bump 的闸门不是字节一致** —— 要读目标 tag 的 release notes，并 diff `.opencode/plugins/superpowers.js` 在两个 tag 间的变化；该文件是整套 opencode 集成。v7.0.1→v7.0.2 为 +61/−39（BOOTSTRAP_MARKER、startsWith 守卫、钩子扩到 context/compaction/generate、裸 skill id），注入请求类型变化会改变 compaction payload（2026-11-09 核对）。
 13. **`max`/`ultra` 归一到 `max`，`medium`/`xhigh` 归一到 `high`** —— 上游模型有四个真实等级，`#max` 与 `#high` 有实质差别。
 14. **自建 id 为 `max` 的变体与内置 `deepseekChat` 的同名变体合并** —— `mergeOverlay` 是合并，不会多出一条。
 15. **`reasoning_effort` 按输出 token 计费** —— `#max` 只改变 reasoning token 数，不改变单价。
+16. **v2.3.0 起子代理始终后台运行** —— 委派立即返回 `sessionID`，子会话空闲时向父会话上报（#63382）；`OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 不再是开关，「未设置则退回前台」在 2.3.0 上不成立。父会话按 `sessionID` 收集结果，不要轮询。
 
 ## 5. 验收清单
 

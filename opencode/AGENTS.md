@@ -87,9 +87,11 @@ the stricter instruction. Routing tables and fallback chains live in
 
 - **Size the scope first.** 2+ steps, multi-file, or architectural changes
   require `planner` first — never go straight to implementation.
-- **BACKGROUND FIRST.** Independent subtasks dispatch in parallel, background.
-  Requires `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`; when unset,
-  dispatch foreground instead.
+- **BACKGROUND FIRST.** Independent subtasks dispatch in parallel, in the
+  background. Since v2.3.0 every `task` delegation runs in the background: the
+  call returns a `sessionID` immediately and the child reports back to the
+  parent when it goes idle. `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` is
+  obsolete — there is no foreground-only path to fall back to.
 - **Delegate, don't do.** Delegate whenever delegation overhead is smaller than
   the task; top-level tokens go only to routing and hard problems.
 - **Subagent empty-result fallback.** A subagent returns an empty result with no
