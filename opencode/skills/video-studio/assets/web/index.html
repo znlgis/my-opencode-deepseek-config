@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, height=1080">
+  <title>DSH Video Studio · Canvas2D 逐帧渲染模板（v0.8.0）</title>
+  <!-- 本地样式与脚本：不引 CDN、不连任何网络 -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 画布默认 1920x1080，必须与 webengine.py 的 viewport 一致，截图才是 1:1 像素。
+       v0.8.0：webengine.open_page(style=...) 注入 window.__STYLE__.canvas 时，engine.js 会把
+       canvas 宽高与 CSS 尺寸改成注入值（只允许 16:9 横屏或 9:16 竖屏，与 webengine 校验一致）；
+       没有 __STYLE__ 时就是下面这组（1920x1080 写死在 index.html / style.css 里，
+       所以 style=None 时请用横屏；竖屏必须注入 canvas）。 -->
+  <canvas id="stage" width="1920" height="1080"></canvas>
+
+  <script src="engine.js"></script>
+  <!-- 页面契约（references/web-engine.md §3）：DURATION 必须等于成片秒数。
+       模板默认由场景表自动推导（film.js 的 resolveDuration）；
+       要锁死就取消下面这行注释并改成 timeline.json 的 total：
+  <script>window.WINDOW_DURATION = 12.0;</script>
+  -->
+  <script src="film.js"></script>
+  <script src="qa_text.js"></script>
+  <script>
+    // 场景与文字登记都建好、字体度量稳定后才把 window.ready 置 true
+    window.FK.boot();
+  </script>
+</body>
+</html>

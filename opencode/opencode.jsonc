@@ -28,9 +28,10 @@
     // The catch-all `*` goes FIRST — every specific rule below overrides it.
     // The allow list covers high-frequency read-only or local operations
     // (git status/diff/log/show, git add/commit, npm run/test, rg, node
-    // scripts/*); anything else, destructive variants included, falls through
-    // to ask. Known danger patterns are deliberately NOT listed as extra
-    // `ask` rules: the catch-all already sends them to a human, and under
+    // scripts/*, python <skill>/scripts/*); anything else, destructive
+    // variants included, falls through to ask. Known danger patterns are
+    // deliberately NOT listed as extra `ask` rules: the catch-all already
+    // sends them to a human, and under
     // last-match-wins any later `ask` rule would be a dead rule.
     // `edit` is the exception to default-ask: the agent baseline already
     // allows writes, so its rules only deny secret files — never a global
@@ -76,6 +77,10 @@
         { "action": "shell", "resource": "npm run *", "effect": "allow" },
         { "action": "shell", "resource": "npm test*", "effect": "allow" },
         { "action": "shell", "resource": "rg *", "effect": "allow" },
+        // The video-studio skill executes its bundled Python scripts by absolute
+        // path (`python <...>\skills\video-studio\scripts\render.py --stage ...`).
+        // Scoped to the skill name plus scripts/ so unrelated python stays on ask.
+        { "action": "shell", "resource": "python *video-studio*scripts*", "effect": "allow" },
         { "action": "skill", "resource": "*", "effect": "allow" },
         { "action": "external_directory", "resource": "*", "effect": "ask" }
     ],
@@ -249,7 +254,7 @@
     // `<available_skills>` roster out of every title / summary / compaction
     // request. Measured 2026-10-16 with every entry allowed: 12,186 chars /
     // 11,927 bytes ≈ 3.3K tokens. No agent allows all of them now — the
-    // widest whitelist (`solo`) covers 28 entries.
+    // widest whitelist (`solo`) covers 29 entries.
     // This also repairs a real defect: title and summary ship a built-in
     // `*:* deny` lock, but the global `skill:* allow` below it was silently
     // re-opening the roster.

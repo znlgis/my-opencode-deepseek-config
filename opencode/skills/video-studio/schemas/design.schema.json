@@ -1,0 +1,739 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/design.schema.json",
+ "title": "video-studio design（v1.0 设计 DSL）",
+ "description": "一份 design.json 描述'这一版长什么样'：结构、视觉、声音、节奏。由 propose.py --confirm 冻结，render 阶段作为唯一画面/声音依据。",
+ "type": "object",
+ "required": [
+  "schema",
+  "id",
+  "structure",
+  "visual",
+  "audio",
+  "pacing"
+ ],
+ "additionalProperties": false,
+ "properties": {
+  "schema": {
+   "type": "integer",
+   "const": 1
+  },
+  "id": {
+   "type": "string",
+   "pattern": "^[a-z0-9][a-z0-9._-]{1,63}$"
+  },
+  "label": {
+   "type": "string",
+   "maxLength": 40
+  },
+  "pitch": {
+   "type": "string",
+   "maxLength": 120,
+   "description": "一句话立意（给用户看）"
+  },
+  "_unmatched_constraints": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   },
+   "description": "采样期附加信息：brief 里没能识别的约束（例如用户写了「要有科幻感」）。不参与指纹、不影响渲染，但它必须被契约接纳，否则采样器吐出的设计自己就过不了校验。"
+  },
+  "structure": {
+   "type": "object",
+   "required": [
+    "segments"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "segments": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 40
+    },
+    "beats": {
+     "type": "array",
+     "items": {
+      "type": "string"
+     },
+     "description": "每段叙事用途，如 hook/stat/compare/outro"
+    },
+    "hold_policy": {
+     "type": "string",
+     "enum": [
+      "none",
+      "readable",
+      "long"
+     ]
+    },
+    "target_sec": {
+     "type": [
+      "number",
+      "null"
+     ],
+     "minimum": 3,
+     "maximum": 1800,
+     "description": "目标/下限时长的秒数。配合 target_mode 解释：exact=精确目标，at_least=下限。"
+    },
+    "target_mode": {
+     "type": [
+      "string",
+      "null"
+     ],
+     "enum": [
+      "exact",
+      "at_least",
+      null
+     ],
+     "description": "时长语义：exact=精确目标（双向对账）；at_least=下限（只有不足才告警）。null/缺省按 exact。"
+    }
+   }
+  },
+  "visual": {
+   "type": "object",
+   "required": [
+    "palette",
+    "typography",
+    "motif",
+    "transition",
+    "motion",
+    "bias",
+    "layout",
+    "hud"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "palette": {
+     "type": "object",
+     "required": [
+      "bg",
+      "bg2",
+      "surface",
+      "ink",
+      "muted",
+      "dim",
+      "accent",
+      "accent2",
+      "good",
+      "bad",
+      "rule"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "bg": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "bg2": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "surface": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "ink": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "muted": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "dim": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "accent": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "accent2": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "good": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "bad": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      },
+      "rule": {
+       "type": "array",
+       "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+       },
+       "minItems": 3,
+       "maxItems": 3
+      }
+     }
+    },
+    "family": {
+     "type": "string",
+     "enum": [
+      "sans",
+      "serif",
+      "kai",
+      "round"
+     ]
+    },
+    "typography": {
+     "type": "object",
+     "required": [
+      "tracking",
+      "line_gap",
+      "number",
+      "ratio"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "tracking": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 8
+      },
+      "line_gap": {
+       "type": "number",
+       "minimum": 1.15,
+       "maximum": 1.55
+      },
+      "number": {
+       "type": "string",
+       "enum": [
+        "dim",
+        "serif",
+        "cn",
+        "block",
+        "roman",
+        "timecode",
+        "dot",
+        "gilt"
+       ]
+      },
+      "ratio": {
+       "type": "number",
+       "minimum": 1,
+       "maximum": 3.6
+      },
+      "align": {
+       "type": "string",
+       "enum": [
+        "left",
+        "center",
+        "right"
+       ]
+      }
+     }
+    },
+    "motif": {
+     "type": "object",
+     "required": [
+      "kind",
+      "density"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "kind": {
+       "type": "string",
+       "enum": [
+        "plain",
+        "brackets",
+        "hairlines",
+        "handdrawn",
+        "slabs",
+        "minimal",
+        "letterbox",
+        "signal",
+        "rays"
+       ]
+      },
+      "density": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "detail": {
+       "type": "object"
+      }
+     }
+    },
+    "transition": {
+     "type": "object",
+     "required": [
+      "kind",
+      "dur"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "kind": {
+       "type": "string",
+       "enum": [
+        "dip",
+        "wash",
+        "paper",
+        "wipe",
+        "cut",
+        "iris"
+       ]
+      },
+      "dur": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 0.6
+      }
+     }
+    },
+    "motion": {
+     "type": "object",
+     "required": [
+      "ease",
+      "push",
+      "breathe_hz"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "ease": {
+       "type": "string",
+       "enum": [
+        "out3",
+        "out5",
+        "inOut3",
+        "outBack"
+       ]
+      },
+      "push": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 0.16
+      },
+      "breathe_hz": {
+       "type": "number",
+       "minimum": 0.2,
+       "maximum": 1.2
+      },
+      "enter": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     }
+    },
+    "bias": {
+     "type": "object",
+     "required": [
+      "x",
+      "y"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "x": {
+       "type": "integer",
+       "minimum": -240,
+       "maximum": 240
+      },
+      "y": {
+       "type": "integer",
+       "minimum": -240,
+       "maximum": 240
+      },
+      "inset": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 120
+      }
+     }
+    },
+    "layout": {
+     "type": "string",
+     "enum": [
+      "left-stack",
+      "center-stack",
+      "split-right"
+     ]
+    },
+    "hud": {
+     "type": "string",
+     "enum": [
+      "chip-left",
+      "corner-line",
+      "none"
+     ]
+    },
+    "layout_cycle": {
+     "type": "array",
+     "minItems": 2,
+     "uniqueItems": true,
+     "items": {
+      "type": "string",
+      "enum": [
+       "left-stack",
+       "center-stack",
+       "split-right"
+      ]
+     },
+     "description": "片内版式轮换顺序（可选）。grammar.plan_scenes 在 plan 没有显式 chapter_layout 时，按「章节首次出现的顺序」依次取 cycle[0]、cycle[1]… 循环；同一章内版式固定（观众视角一章是一段整体），换章才换版式——这正是「同一视频内部不要大面积重复」的实现。至少 2 种不同版式（只写一种等于不轮换，designkit.validate_design 报错）。不写 = design_to_plan 按设计指纹自动派生 2–3 种；没有这个键时 grammar 走 layout_default。"
+    },
+    "subtitle": {
+     "type": "object",
+     "additionalProperties": false,
+     "description": "字幕样式（可选）。字号 / 位置 / 背板透明度 / 圆角 / 字族 / 颜色 / 折行数全部可写：不写就是 filmkit.py 的默认值（不写时任何两条片子确实会得到同样的字幕带，所以要不同就该改这里）。默认值：size=46、y=null、align=center、plate_alpha=170、radius=10、family=null、color=null、max_lines=2。",
+     "properties": {
+      "size": {
+       "type": "integer",
+       "minimum": 20,
+       "maximum": 96,
+       "default": 46,
+       "description": "字幕字号（像素，默认 46）。范围 20–96 与 designkit.validate_design 同源；采样器只在 40–56 之间取「好看」的值，手写可越过但别越界。"
+      },
+      "y": {
+       "type": [
+        "integer",
+        "null"
+       ],
+       "minimum": 0,
+       "maximum": 1030,
+       "default": null,
+       "description": "字幕基线 y（像素；默认 null = 底部安全区，由 filmkit 按画布高度算）。范围 0–1030 与 designkit.validate_design 同源。"
+      },
+      "align": {
+       "type": "string",
+       "enum": [
+        "center",
+        "left"
+       ],
+       "default": "center",
+       "description": "字幕对齐方式（默认 center；left = 左对齐，适合左侧长文版式）。"
+      },
+      "plate_alpha": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 255,
+       "default": 170,
+       "description": "字幕背板不透明度 0–255（默认 170；0 = 完全透明 = 不画背板）。"
+      },
+      "radius": {
+       "type": "integer",
+       "minimum": 0,
+       "maximum": 48,
+       "default": 10,
+       "description": "背板圆角半径（像素，默认 10；0 = 直角）。范围 0–48 与 designkit.validate_design 同源。"
+      },
+      "family": {
+       "type": [
+        "string",
+        "null"
+       ],
+       "enum": [
+        "sans",
+        "serif",
+        "kai",
+        "round",
+        null
+       ],
+       "default": null,
+       "description": "字幕字体族（默认 null = 随主题字体族；sans 可读性最好）。取值同 visual.family 的四族。"
+      },
+      "color": {
+       "type": [
+        "array",
+        "string",
+        "null"
+       ],
+       "default": null,
+       "description": "字幕颜色（默认 null = 随主题墨色低一档）。两种写法都认：[r,g,b] 整数三元素，或 \"#rrggbb\"（与 visual.palette 同口径）。"
+      },
+      "max_lines": {
+       "type": "integer",
+       "enum": [
+        1,
+        2,
+        3
+       ],
+       "default": 2,
+       "description": "字幕最多折几行（默认 2；1 = 强单行，超长会被省略/缩字）。范围 1–3 与 designkit.validate_design 同源。"
+      }
+     }
+    },
+    "size": {
+     "type": "string",
+     "enum": [
+      "1920x1080",
+      "1280x720",
+      "960x540",
+      "1080x1920",
+      "720x1280",
+      "540x960"
+     ],
+     "description": "画幅。**横屏 16:9（1920x1080 / 1280x720 / 960x540）与竖屏 9:16（1080x1920 / 720x1280 / 540x960）都支持**：内部构图跟随 layoutkit 的 profile（--layout portrait 切到 1080x1920），只允许 lanczos 下采样，非当前画布比例或上采样一律拒绝。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。与 film.json 的 video 块（width/height/fps）冲突时报错（fail-closed，绝不静默取其一）。"
+    },
+    "fps": {
+     "type": "integer",
+     "enum": [
+      24,
+      25,
+      30,
+      50,
+      60
+     ],
+     "description": "帧率。与 film.json 的 video.fps 冲突时报错（fail-closed）。缺省 30。"
+    }
+   }
+  },
+  "audio": {
+   "type": "object",
+   "required": [
+    "voice",
+    "music"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "voice": {
+     "description": "两种形态都接受：裸 edge voice id 字符串（如 zh-CN-YunxiNeural），或对象 {mode,id,map,jitter,max_distinct}",
+     "type": [
+      "object",
+      "string"
+     ],
+     "required": [
+      "mode"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "mode": {
+       "type": "string",
+       "enum": [
+        "edge_id",
+        "wav"
+       ]
+      },
+      "id": {
+       "type": "string",
+       "description": "edge voice id，如 zh-CN-YunxiNeural"
+      },
+      "rate": {
+       "type": "string",
+       "default": "+0%"
+      },
+      "pitch": {
+       "type": "string",
+       "default": "+0Hz"
+      },
+      "map": {
+       "type": "object",
+       "description": "kind -> voice id 或 {mode,id}"
+      },
+      "jitter": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 1
+      },
+      "max_distinct": {
+       "type": "integer",
+       "minimum": 1,
+       "maximum": 5
+      }
+     }
+    },
+    "music": {
+     "type": "object",
+     "required": [
+      "mode"
+     ],
+     "additionalProperties": false,
+     "properties": {
+      "mode": {
+       "type": "string",
+       "enum": [
+        "params",
+        "file",
+        "off"
+       ]
+      },
+      "arranger": {
+       "type": "string",
+       "description": "参数化编排器的配置 id（P2 实现）"
+      },
+      "style": {
+       "type": "string",
+       "description": "已废弃：配乐没有风格表，这个键不决定任何东西（保留只为老 design.json / 既有 fixture 能继续通过契约校验；designkit.validate_design 也接受它）"
+      },
+      "bpm": {
+       "type": [
+        "number",
+        "string"
+       ]
+      },
+      "key": {
+       "type": "string"
+      },
+      "scale": {
+       "type": "string",
+       "enum": [
+        "minor",
+        "major"
+       ],
+       "description": "调式（designkit 会校验；audio.music.scale 决定大调/小调）"
+      },
+      "mood": {
+       "type": "string"
+      },
+      "seed": {
+       "type": "integer"
+      },
+      "gain_db": {
+       "type": "number",
+       "minimum": -60,
+       "maximum": 12
+      },
+      "duck_db": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 24
+      },
+      "sections": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      },
+      "file": {
+       "type": "string",
+       "description": "mode=file 时的音频路径"
+      }
+     }
+    },
+    "sfx": {
+     "type": "object",
+     "additionalProperties": false,
+     "properties": {
+      "enabled": {
+       "type": "boolean"
+      },
+      "density": {
+       "type": "string",
+       "enum": [
+        "none",
+        "sparse",
+        "normal",
+        "rich"
+       ]
+      },
+      "gain_db": {
+       "type": "number",
+       "minimum": -40,
+       "maximum": 12
+      },
+      "cues": {
+       "type": "array",
+       "items": {
+        "type": "object"
+       }
+      }
+     }
+    }
+   }
+  },
+  "pacing": {
+   "type": "object",
+   "required": [
+    "lead",
+    "tail",
+    "min_dur",
+    "hold"
+   ],
+   "additionalProperties": false,
+   "properties": {
+    "lead": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 3
+    },
+    "tail": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 3
+    },
+    "min_dur": {
+     "type": "number",
+     "minimum": 1,
+     "maximum": 12
+    },
+    "hold": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 5
+    },
+    "item_stagger": {
+     "type": "number",
+     "minimum": 0.05,
+     "maximum": 1.2
+    }
+   }
+  }
+ }
+}

@@ -42,7 +42,7 @@ $Src = (Resolve-Path -LiteralPath $Src).Path
 
 # Copy every file except node_modules and package manifests: plugin
 # dependencies and lockfiles belong to the global install, not the repo.
-$excludedFromSync = '(^|[\\/])node_modules([\\/]|$)|(^|[\\/])\.git([\\/]|$)|(package(-lock)?\.json|bun\.lockb?|pnpm-lock\.yaml)$'
+$excludedFromSync = '(^|[\\/])node_modules([\\/]|$)|(^|[\\/])\.git([\\/]|$)|(^|[\\/])__pycache__([\\/]|$)|\.py[co]$|(package(-lock)?\.json|bun\.lockb?|pnpm-lock\.yaml)$'
 $filesToCopy = @(Get-ChildItem -Recurse -File -LiteralPath $Src | Where-Object {
     $rel = $_.FullName.Substring($Src.Length + 1)
     $rel -notmatch $excludedFromSync

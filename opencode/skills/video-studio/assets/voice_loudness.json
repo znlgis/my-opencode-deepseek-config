@@ -1,0 +1,16 @@
+{
+ "schema": 1,
+ "_comment": "音色响度补偿（数据，不是身份）：gain_db = 目标响度 - 该音色实测 rms_db，夹在 ±3 dB。换机/换 voice 必须重测（python voicekit.py --calibrate 会对表里的音色重新合成校准句）。designkit 与 voicekit 共用这一份：两处各存一份必然漂移——实测采样器会产出 4 把表里没有的音色。",
+ "target_dbfs": -20.97,
+ "voices": {
+  "zh-CN-YunyangNeural": 3.0,
+  "zh-CN-XiaoxiaoNeural": -2.7,
+  "zh-TW-HsiaoChenNeural": -3.0,
+  "zh-CN-XiaoyiNeural": -0.6,
+  "zh-CN-YunjianNeural": 1.0,
+  "zh-CN-YunxiNeural": 1.9,
+  "zh-CN-YunxiaNeural": 0.3,
+  "zh-CN-liaoning-XiaobeiNeural": 0.0,
+  "zh-CN-shaanxi-XiaoniNeural": -0.3
+ }
+}

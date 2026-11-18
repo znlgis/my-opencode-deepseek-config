@@ -1,0 +1,133 @@
+{
+ "$schema": "http://json-schema.org/draft-07/schema#",
+ "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/proposal.schema.json",
+ "title": "video-studio proposal（v1.0 提案）",
+ "description": "work/proposal.json：一次提案的 N 个候选 + 用户确认状态。status=confirmed 才允许出片。",
+ "type": "object",
+ "required": [
+  "schema",
+  "rev",
+  "status",
+  "candidates"
+ ],
+ "additionalProperties": true,
+ "properties": {
+  "schema": {
+   "type": "integer",
+   "const": 1
+  },
+  "rev": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "parentRev": {
+   "type": [
+    "integer",
+    "null"
+   ]
+  },
+  "at": {
+   "type": "string"
+  },
+  "status": {
+   "type": "string",
+   "enum": [
+    "draft",
+    "confirmed",
+    "rejected"
+   ]
+  },
+  "chosen": {
+   "type": [
+    "string",
+    "null"
+   ],
+   "description": "confirmed 时必填的候选 id"
+  },
+  "confirmedAt": {
+   "type": "string"
+  },
+  "confirmedBy": {
+   "type": "string"
+  },
+  "confirmNote": {
+   "type": "string"
+  },
+  "designHash": {
+   "type": "string",
+   "description": "确认时 design.json 的指纹（用于判 stale）"
+  },
+  "brief": {
+   "type": "object"
+  },
+  "feedback": {
+   "type": "string"
+  },
+  "seed": {},
+  "wall_s": {
+   "type": "number"
+  },
+  "candidates": {
+   "type": "array",
+   "minItems": 2,
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "design",
+     "design_fp"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-H][0-9]*$"
+     },
+     "label": {
+      "type": "string"
+     },
+     "pitch": {
+      "type": "string"
+     },
+     "design": {
+      "type": "object"
+     },
+     "design_fp": {
+      "type": "string"
+     },
+     "preview": {
+      "type": "object"
+     },
+     "cost": {
+      "type": "object"
+     },
+     "diversity": {
+      "type": [
+       "object",
+       "null"
+      ]
+     }
+    }
+   }
+  }
+ },
+ "allOf": [
+  {
+   "if": {
+    "properties": {
+     "status": {
+      "const": "confirmed"
+     }
+    },
+    "required": [
+     "status"
+    ]
+   },
+   "then": {
+    "required": [
+     "chosen",
+     "designHash"
+    ]
+   }
+  }
+ ]
+}

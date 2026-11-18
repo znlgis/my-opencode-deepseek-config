@@ -1,0 +1,22 @@
+/* style.css — 1920x1080 固定画布（v0.3.0）
+ *
+ * 为什么写死 1920x1080：webengine.py 用 viewport 1920x1080 / devicePixelRatio=1 截图，
+ * 画布必须 1:1 铺满视口，截图才是"所见即所得"的 1080p 帧。
+ * 页面不引任何网络字体 / CDN，字体在 canvas 内 fallback 到系统字体（微软雅黑等）。
+ */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: #0b0e14;
+}
+
+#stage {
+  display: block;
+  width: 1920px;
+  height: 1080px;
+  image-rendering: auto;
+}

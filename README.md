@@ -13,7 +13,7 @@
 - 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）
 - 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（`131072−16000=115,072` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
-- 技能：`skills/` 目录下 **23 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
+- 技能：`skills/` 目录下 **24 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
 - 插件：仅 `superpowers`（git URL 固定 tag `#v7.0.2`，经 v2 原生 `plugins` 数组加载）——纯 skill 注入，**不提供模型映射**，skill → Agent → 档位映射只存在于 `AGENTS.md` 的 Plugins 小节；固定 pin 以保字节稳定前缀，避免自动更新造成前缀漂移。子会话（task subagent）不注入 bootstrap，委派链路不付这份常驻成本。
 
@@ -248,7 +248,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 >
 > 只读 Agent（`oracle`/`reviewer`/`explore`）真只读化：`edit: deny` + shell 白名单（默认 deny 全部，仅放行 `git status/diff/log/show/blame/grep`、`rg` 等只读子命令；`oracle`/`reviewer` 另允许 `node scripts/*`（`reviewer` 另含 `npm test*`）、`gh pr view/diff`、`gh issue view`、`gh api` 以支持 `/review` 回帖）。`librarian` 更严格：`shell` 规则集默认全部 deny，且没有任何 shell 白名单。
 >
-> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧共 5 个 distinct skill 接线（`writing-plans`→`planner`，`test-driven-development`→`deep-worker`，`verification-before-completion`→`deep-worker` 与 `light-orchestrator`，`brainstorming`/`executing-plans`→`solo`；`solo` 放行全部五项），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
+> 各 agent 带 `skills` 白名单（默认 deny + 按职责放行，防误加载重型 skill）：`orchestrator` → `codemap`/`grilling`；`planner` → `spec-workflow`/`codebase-design`/`writing-plans`；`deep-worker` → `remove-deadcode`/`spec-workflow`/`git-release`/`to-tickets`/`triage`/`git-master`/`resolving-merge-conflicts`/`opencode-config`/`writing-for-agents`/`diagnosing-bugs`/`codebase-design`/`domain-modeling`/`test-driven-development`/`verification-before-completion`/`video-studio`；`oracle` → `reflect`/`simplify`/`diagnosing-bugs`；`reviewer` → `code-review`/`security-review`/`gh-cli`；`explore` → `codemap`；`librarian` → `verify-with-docs`；`light-orchestrator` → `handoff`/`simplify`/`spec-workflow`/`code-review`/`gh-cli`/`verification-before-completion`；`consultant` → `domain-modeling`；`ui-builder` → `codebase-design`；`vision` → `vision-prep`；`solo` → 全部本地 skill + `brainstorming`/`test-driven-development`/`verification-before-completion`/`writing-plans`/`executing-plans`（内联执行器需要完整工具链，仍以 `resource: "*"` 的 deny 规则兜底）。白名单不只是权限——**被 deny 的 skill 不会出现在该 Agent 的 skill 名册里**，所以这份名单同时就是常驻上下文预算。superpowers 侧共 5 个 distinct skill 接线（`writing-plans`→`planner`，`test-driven-development`→`deep-worker`，`verification-before-completion`→`deep-worker` 与 `light-orchestrator`，`brainstorming`/`executing-plans`→`solo`；`solo` 放行全部五项），其余 skill 在本仓库都有等价物，一律不接线以免两套流程打架——映射表见 `AGENTS.md` Plugins 小节。
 >
 > **思考分档（thinking tiers）**：全部声明在 `opencode.jsonc` 的**模型层**，Agent 只选模型引用（详见「模型分工」）。`explore`/`librarian`/`orchestrator`/`vision` = flash · thinking 关（最省，模型层 body `{"type":"disabled"}`）；`light-orchestrator`/`consultant`/`ui-builder` = `deepseek/deepseek-flash#low`（thinking 开 + `settings.reasoningEffort: low`）；`planner`/`deep-worker`/`solo` = `deepseek/deepseek-flash#high`（thinking 开 + `settings.reasoningEffort: high`，上游默认档）；`oracle`/`reviewer` = `deepseek/deepseek-flash#max`（thinking 开 + `settings.reasoningEffort: max`，仅升级路径使用）。**Agent frontmatter 里不再出现任何思考参数**——`options.*` 既装不下 provider setting，也会把该 agent 打回 V1 迁移路径（见「模型分工」的写法陷阱）。
 
@@ -314,6 +314,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `spec-workflow` | 轻量规约驱动变更：proposal → delta specs → tasks → update 三问决策树 → verify → archive |
 | `verify-with-docs` | 编码前核对 API 文档，检索优先，防幻觉 |
 | `vision-prep` | 大图/PDF 送入视觉模型前的预处理：大图切块、PDF 栅格化，规避 ~800x800 降采样损失 |
+| `video-studio` | 用代码从零生成中文视频：问诊 → 提案 → 设计冻结 → TTS 实测排轴 → 逐帧渲染 → 采样级混音 → 四层质检；脚本自包含（ffmpeg + numpy/Pillow/edge-tts） |
 | `grilling` | 需求对齐访谈：一次一问、多选优先，歧义收敛后再动手；并含「消息完全没听懂 → 一句话重述确认」与「领域术语模糊 → 协同 `domain-modeling` 锐化」两条分支（已合并原 `wait-what`/`grill-with-docs`） |
 | `writing-for-agents` | 写给 agent 看的文档（skill/AGENTS.md/指针文档）的写作杠杆 |
 | `to-tickets` | 把 spec/plan 拆解为可追踪的 GitHub issue（每单一个可独立完成+验收的单元，带验收标准） |
@@ -322,7 +323,9 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `codebase-design` | 架构词汇表：module/interface/depth/seam/adapter/leverage/locality，删除测试、深度测试，评估模块边界是否合理 |
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
-> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文。2026-10-16 实测（当时全部放行）：名册 **30 条**（23 个本地 + 7 个 superpowers 接线项），渲染后的名册块 **12,186 字符 / 11,927 字节 ≈ 3.3K tokens**——`orchestrator` 只放行 2 个 skill，名册仅 804 字符 ≈ 223 tokens，差 **15×**。2026-10-20 起 `solo` 裁掉 2 个与本地 skill 语义重复的接线项（`systematic-debugging` → `diagnosing-bugs`、`writing-skills` → `writing-for-agents`），其名册降到 28 条，已无任何 Agent 放行全部 30 条。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。**被 deny 的 skill 不会出现在该 Agent 的名册里**（core 用 `skill` 权限规则集过滤名册），所以每个 Agent 的 allowlist 就是它的常驻上下文预算。**隐藏的一次性 agent（title/summary/compaction）已显式 `skill:* deny`——它们永远不加载 skill，名册对它们纯属浪费**。
+> **`video-studio` 的前置条件**：ffmpeg（PATH 或 `FILMKIT_FFMPEG`）、缺依赖时 `pip install -r skills/video-studio/requirements.txt`（numpy / Pillow / edge-tts；cv2、scipy 可选；本机已装齐，Pillow 13 实测通过），旁白合成需要联网。脚本留在技能目录直接执行，工程目录里只需要一个 `film.json`；上游为 [dsh-video-studio-skill](https://github.com/znlgis/dsh-video-studio-skill)（MIT），差异与重新 vendor 步骤见 `skills/video-studio/VENDOR.md`。
+
+> **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文。2026-10-16 实测（当时全部放行）：名册 **30 条**（23 个本地 + 7 个 superpowers 接线项），渲染后的名册块 **12,186 字符 / 11,927 字节 ≈ 3.3K tokens**——`orchestrator` 只放行 2 个 skill，名册仅 804 字符 ≈ 223 tokens，差 **15×**。2026-10-20 起 `solo` 裁掉 2 个与本地 skill 语义重复的接线项（`systematic-debugging` → `diagnosing-bugs`、`writing-skills` → `writing-for-agents`），其名册降到 28 条；2026-11-18 收编 `video-studio` 后为 29 条，已无任何 Agent 放行全部 skill。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。**被 deny 的 skill 不会出现在该 Agent 的名册里**（core 用 `skill` 权限规则集过滤名册），所以每个 Agent 的 allowlist 就是它的常驻上下文预算。**隐藏的一次性 agent（title/summary/compaction）已显式 `skill:* deny`——它们永远不加载 skill，名册对它们纯属浪费**。
 
 ## 仓库结构
 
@@ -377,11 +380,11 @@ Orchestrator 默认自动路由，按任务难度选档：
 
 ## 借鉴来源
 
-核心思路借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)（意图门控、只读隔离、反模式）、[oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)（调度器优先、后备链、拒绝契约、提示词缓存安全）、[anomalyco/opencode](https://github.com/anomalyco/opencode)（配置 Schema、技能体系）、[cli/cli](https://github.com/cli/cli)（gh v2.103 命令集）、[OpenSpec](https://github.com/Fission-AI/OpenSpec)（delta specs）、[mattpocock/skills](https://github.com/mattpocock/skills)（冲突解析、交接文档、排障/架构/领域建模技能）、[pi](https://github.com/earendil-works/pi)（先答后改、精简响应）、[deepreview](https://github.com/mechanai/deepreview)（有效大小路由）。纯配置实现，零额外依赖。**借鉴而非照搬**：只汲取轻量化设计理念，精简优先于新增。
+核心思路借鉴 [oh-my-openagent](https://github.com/code-yeongyu/oh-my-openagent)（意图门控、只读隔离、反模式）、[oh-my-opencode-slim](https://github.com/alvinunreal/oh-my-opencode-slim)（调度器优先、后备链、拒绝契约、提示词缓存安全）、[anomalyco/opencode](https://github.com/anomalyco/opencode)（配置 Schema、技能体系）、[cli/cli](https://github.com/cli/cli)（gh v2.103 命令集）、[OpenSpec](https://github.com/Fission-AI/OpenSpec)（delta specs）、[mattpocock/skills](https://github.com/mattpocock/skills)（冲突解析、交接文档、排障/架构/领域建模技能）、[pi](https://github.com/earendil-works/pi)（先答后改、精简响应）、[deepreview](https://github.com/mechanai/deepreview)（有效大小路由）、[dsh-video-studio-skill](https://github.com/znlgis/dsh-video-studio-skill)（`video-studio` 技能本体，MIT，已收编）。纯配置实现，零 npm 依赖。**借鉴而非照搬**：只汲取轻量化设计理念，精简优先于新增。
 
 ## 设计哲学
 
-- **纯配置驱动，零额外依赖** —— 能力全部由 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现
+- **纯配置驱动，零额外依赖** —— 能力全部由 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md` 实现（`video-studio` 例外：脚本原生自带，运行时需要 ffmpeg + numpy/Pillow/edge-tts，不引入 npm 依赖）
 - **单模型 + thinking 档位** —— 只用 `deepseek-flash`：thinking 关做路由与常规执行，`#low` 做轻量执行、方案讨论与 UI，`#high` 做规划、深度推理与重型实现，`#max` 只留给 `oracle`/`reviewer` 的升级式只读分析；不为偶尔的难题常驻第二个模型的单价
 - **Token 效率优先** —— 路径引用替代粘贴文件、技能按需加载；每个 Agent 的 `skill` 白名单同时决定它的名册大小，被 deny 的 skill 不进每轮常驻上下文
 - **插件增效但不喧宾夺主** —— 唯一插件 superpowers 只提供过程纪律（固定 pin 保字节稳定前缀）；压缩 100% 交给内置 compaction

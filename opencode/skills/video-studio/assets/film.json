@@ -1,0 +1,149 @@
+{
+ "_comment": "自测/演示样例剧本（仓库测试夹具，不是给用户抄的模板）。外观由 work/design.json 决定（propose.py --brief 现场生成后 --confirm 冻结），这里没有 style 字段。文本仅用于跑通全链与金帧/门禁回归，换题材请自己写 lines[]。",
+ "title": "测试片 demo",
+ "end_text": "完",
+ "voice": "zh-CN-YunxiNeural",
+ "rate": "+6%",
+ "pitch": "+0Hz",
+ "bar": 0,
+ "sub_max_hold": null,
+ "trim_silence": true,
+ "tts_workers": 4,
+ "chunk_frames": 0,
+ "crf": 17,
+ "preset": "medium",
+ "engine": "pil",
+ "bpm": 120,
+ "music": {
+  "enabled": true,
+  "mode": "score",
+  "mood": "auto",
+  "bpm": "auto",
+  "key": "auto",
+  "seed": 7,
+  "seed_from_content": true,
+  "gain_db": -12,
+  "duck_db": 4,
+  "voice_duck_db": 6,
+  "voice_duck_sfx_db": 3,
+  "guard_snr_db": 12,
+  "seg": 4,
+  "amp": 0.05,
+  "gain": 0.9,
+  "xfade": 1.2,
+  "chords": [
+   [
+    220,
+    261.63,
+    329.63
+   ],
+   [
+    174.61,
+    220,
+    261.63
+   ],
+   [
+    196,
+    246.94,
+    293.66
+   ]
+  ]
+ },
+ "sfx": {
+  "enabled": true,
+  "gain_db": 0,
+  "content_seed": true,
+  "_comment": "夹具只留 1 条转场 whoosh 作示例（见 references/audio-variation.md §3.4）；具体提示点交给 assets/scenes.py 的 cues() 钩子按画面内容生成（hook=impact+riser；body=ui_blip 按条目文本定音高 + answer_chime + 段尾 whoosh；quote=reverse_swell+impact；outro=answer_chime+sub_drop）。content_seed=true（默认）= 每条 cue 的 seed 由 style/content_fp 派生（不同片子同一位置也不同），显式 false 时按 seed_base+i 只跟 cue 顺序。",
+  "cues": [
+   {
+    "at": "l02-0.15",
+    "type": "whoosh",
+    "dur": 0.9,
+    "gain": -2
+   }
+  ]
+ },
+ "web": {
+  "entry": "",
+  "chunk_s": 30
+ },
+ "whoosh": true,
+ "whoosh_amp": 0.055,
+ "lines": [
+  {
+   "id": "l01",
+   "kind": "hook",
+   "chapter": "01 · 开场",
+   "text": "这是用 DeepSeek 4.1 Flash 在 DeepSeek Harness 里，从零生成的画面与声音。",
+   "sub": "零素材，全代码生成",
+   "big": "零素材，全代码生成"
+  },
+  {
+   "id": "l02",
+   "kind": "body",
+   "chapter": "02 · 怎么做到的",
+   "kicker": "PIPELINE",
+   "text": "整条管线只有五步：写剧本、生成旁白、排时间轴、逐帧渲染、混音合成。",
+   "sub": "五步成片，每步落盘",
+   "big": "五步成片",
+   "hold": 0.6,
+   "items": [
+    {
+     "text": "剧本 film.json",
+     "ok": true
+    },
+    {
+     "text": "旁白 edge-tts 实测时长",
+     "ok": true
+    },
+    {
+     "text": "时间轴 timeline.json",
+     "ok": true
+    },
+    {
+     "text": "逐帧 PIL 渲染",
+     "ok": true
+    },
+    {
+     "text": "numpy 采样级混音",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "l03",
+   "kind": "body",
+   "chapter": "03 · 画质关键",
+   "kicker": "QUALITY",
+   "text": "画质的关键不是特效，而是原始帧直通编码、字幕安全区、响度标准化。",
+   "sub": "直通编码 / 安全区 / 响度",
+   "big": "画质三件事",
+   "items": [
+    {
+     "text": "rawvideo -> libx264 CRF17",
+     "ok": true
+    },
+    {
+     "text": "字幕不越出安全区",
+     "ok": true
+    },
+    {
+     "text": "-16 LUFS / -1.5 dBTP",
+     "ok": true
+    },
+    {
+     "text": "每帧确定性可复现",
+     "ok": true
+    }
+   ]
+  },
+  {
+   "id": "l04",
+   "kind": "outro",
+   "chapter": "99 · 收尾",
+   "text": "先定脚本，再定声音，最后才是画面。顺序对了，返工就少。",
+   "sub": "顺序比努力重要",
+   "big": "顺序比努力重要"
+  }
+ ]
+}

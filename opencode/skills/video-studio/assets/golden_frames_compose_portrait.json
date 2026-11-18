@@ -1,0 +1,123 @@
+{
+ "version": 1,
+ "generator": "golden_frames.py compose v1.1.0",
+ "comment": "构图层基线：按 scene_type 逐类渲一帧。与 golden_frames*.json（整片时刻基线）互补——夹具片只有 hook/body/outro，覆盖不到 compare/process/chart 这些分派绘制器。",
+ "profile": "portrait",
+ "canvas": [
+  1080,
+  1920
+ ],
+ "scenes": "skills/video-studio/assets/scenes.py",
+ "design": "skills/video-studio/assets/design_fixture.json",
+ "font_fp": "05c853d0eb28bcca3125d81c1ce27c9436f66a55",
+ "fonts": [
+  {
+   "name": "msyh.ttc",
+   "sha1": "e5a993b85dd99da4930bb8d7b9da53ae89fef3c6"
+  },
+  {
+   "name": "msyhbd.ttc",
+   "sha1": "e142fd01e96fea9365b5c6e053a0a1e0d309e218"
+  },
+  {
+   "name": "msyhl.ttc",
+   "sha1": "5444a8bab4b57604f6420ea4e60194f41459f9f8"
+  }
+ ],
+ "env_fp": "e4bca653965cf664adf46784abe93e8519df8d00",
+ "env": {
+  "python": "3.12.14",
+  "pillow": "13.0.0",
+  "numpy": "2.5.4",
+  "os": "Windows",
+  "platform": "Windows 11"
+ },
+ "inputs": {
+  "scenes_sha1": "79da254233cbcdd818b8ac9be626fb3693e65cc8",
+  "filmkit_sha1": "e3b6492065df73e6ba53b38454634ac06790a70d",
+  "stylekit_sha1": "daf7d5af499287fdcf2b8ab969f399494d095100",
+  "design_sha1": "38af167000934ff80b0ea10d82b135050ac91a33"
+ },
+ "frames": [
+  {
+   "name": "hero",
+   "sha256": "24f723743d638f7a562cbf9fb1e78161d3460ba08bed2338665411cb09d289fc",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "statement",
+   "sha256": "810ff4127e6b39b86fc960e208c8d6d413fa26ba4e6a0078e77377b8f33b922e",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "list",
+   "sha256": "69fd04282e836b11823f574b9a956b298cbf0a351e180ce70cb4ae24ce5ee290",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "stat",
+   "sha256": "9a08be4d10364f77fba6aed668368023d60ad57528edb14a0a3da22172dfc861",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "compare",
+   "sha256": "d8a51e6480848d323114f8a0bc065f872c3cb1dd9a9f66f40869f49a1859d99c",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "process",
+   "sha256": "db3562710532e295bb55a2d8bd647d6ab4f555f8bbd969f0e8d3362c5a2e260f",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "quote",
+   "sha256": "3f847dc4ae7a59cc0ff69c07c72f171ed8dca7c7ada43de17e52f252affe5256",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "chapter",
+   "sha256": "ff0b4ad5e54d3b80ecd0560a2f6bd21c67bd8a8444586a6aea4a6780e41fa858",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "chart",
+   "sha256": "f65b0b9d905f65c79059559886997bb2310f4e099aae085bf438d7f8a39df33e",
+   "size": [
+    1080,
+    1920
+   ]
+  },
+  {
+   "name": "outro",
+   "sha256": "1828ce171daf55a8fe8edc34b0a08eaec314dcb8e200e2ddca2c8f23c40e4ca4",
+   "size": [
+    1080,
+    1920
+   ]
+  }
+ ]
+}

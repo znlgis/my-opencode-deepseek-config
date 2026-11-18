@@ -1,0 +1,141 @@
+{
+ "schema": 1,
+ "id": "fixture-golden",
+ "label": "金帧基准设计",
+ "pitch": "验收基准：固定设计，用于像素回归（不是给人看的方案）",
+ "structure": {
+  "segments": 4,
+  "beats": [
+   "hook",
+   "body",
+   "body",
+   "outro"
+  ],
+  "hold_policy": "readable",
+  "target_sec": 30.0
+ },
+ "visual": {
+  "palette": {
+   "bg": [
+    7,
+    14,
+    26
+   ],
+   "bg2": [
+    17,
+    33,
+    54
+   ],
+   "surface": [
+    26,
+    42,
+    64
+   ],
+   "ink": [
+    230,
+    216,
+    207
+   ],
+   "muted": [
+    178,
+    157,
+    143
+   ],
+   "dim": [
+    153,
+    135,
+    122
+   ],
+   "accent": [
+    230,
+    106,
+    23
+   ],
+   "accent2": [
+    92,
+    230,
+    216
+   ],
+   "good": [
+    71,
+    178,
+    98
+   ],
+   "bad": [
+    178,
+    97,
+    89
+   ],
+   "rule": [
+    255,
+    255,
+    255
+   ]
+  },
+  "family": "sans",
+  "typography": {
+   "tracking": 0.0,
+   "line_gap": 1.3,
+   "number": "dim",
+   "ratio": 1.5,
+   "align": "left"
+  },
+  "motif": {
+   "kind": "brackets",
+   "density": 1.0,
+   "detail": {}
+  },
+  "transition": {
+   "kind": "dip",
+   "dur": 0.28
+  },
+  "motion": {
+   "ease": "out3",
+   "enter": [
+    0.45,
+    0.85
+   ],
+   "push": 0.04,
+   "breathe_hz": 0.85
+  },
+  "bias": {
+   "x": 0,
+   "y": 0,
+   "inset": 0
+  },
+  "layout": "left-stack",
+  "hud": "chip-left",
+  "size": "1920x1080",
+  "fps": 30
+ },
+ "audio": {
+  "voice": {
+   "mode": "edge_id",
+   "id": "zh-CN-YunyangNeural",
+   "map": {},
+   "jitter": 0.0,
+   "max_distinct": 1
+  },
+  "music": {
+   "mode": "params",
+   "style": "tech-deep",
+   "scale": "minor",
+   "bpm": 96.0,
+   "key": "Dm",
+   "mood": "steady",
+   "seed": 7
+  },
+  "sfx": {
+   "enabled": false,
+   "density": "none",
+   "gain_db": -6
+  }
+ },
+ "pacing": {
+  "lead": 0.62,
+  "tail": 0.92,
+  "min_dur": 3.0,
+  "hold": 0.0,
+  "item_stagger": 0.3
+ }
+}

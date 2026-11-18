@@ -21,6 +21,7 @@ permissions:
   - { action: skill, resource: domain-modeling, effect: allow }
   - { action: skill, resource: test-driven-development, effect: allow }
   - { action: skill, resource: verification-before-completion, effect: allow }
+  - { action: skill, resource: video-studio, effect: allow }
 ---
 
 # Deep Worker

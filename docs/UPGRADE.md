@@ -13,7 +13,7 @@
 3. **只写 v2 原生键**：v2 的配置正常化器会把 v1 键逐项迁移后与原生键合并，`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断——不报错，但实际生效的配置与本文描述不一致。
 4. **`$schema` 固定为** `https://opencode.ai/config.json`。
 5. **插件固定 pin**（当前 `#v7.0.2`），不跟 `latest`。
-6. **零额外依赖**：能力只来自 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`；压缩只用内置 compaction。
+6. **零额外依赖**：能力只来自 `opencode.jsonc` + `agents/*.md` + `skills/*/SKILL.md` + `AGENTS.md`；压缩只用内置 compaction。唯一例外是 `video-studio` 技能自带 Python 脚本（不引入 npm 依赖；运行时另需 ffmpeg + numpy/Pillow/edge-tts，见 README「技能」）。
 7. **README 不当变更记录**：历史在 `git log`，理由在 commit message。
 8. **agent 级 permissions 不得放宽全局 deny**：`agents/*.md` frontmatter 与 `opencode.jsonc` 内 inline agent 的 `edit`/`shell`/`read`/`external_directory` allow 规则，不得命中全局 `permissions` 的 deny 模式；由 `scripts/validate-jsonc.js` 静态检查。
 
@@ -28,7 +28,7 @@
 | superpowers pin | `#v7.0.2` | 2026-11-09 |
 | DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-11-09 |
 | thinking 语义 | 默认**开**、effort 默认 `high`；思考模式忽略 `temperature` | 2026-11-09 |
-| 结构 | 1 模型 / 4 档 / 12 agents / 18 commands / 23 skills | 2026-11-09 |
+| 结构 | 1 模型 / 4 档 / 12 agents / 18 commands / 24 skills | 2026-11-18 |
 | 压缩窗口 | `limit.input` 131072 − `compaction.buffer` 16000 = 115,072 | 2026-11-09 |
 
 定价附注：peak 时段 = off-peak ×2（UTC 01–04 与 06–10 的周一至周五，不含中国法定节假日）；`cache_write` 无独立官方价，按 cache-miss 输入价映射。
@@ -133,7 +133,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 
 全部勾上方可宣告升级完成：
 
-- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 23 个 skill frontmatter + 权限放宽检查均无报错）
+- [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 24 个 skill frontmatter + 权限放宽检查均无报错）
 - [ ] `node scripts/estimate-cost.js` 退出码 0，且输出成本估算（默认参数应约 $0.026）
 - [ ] `& $cli --version` 是目标版本
 - [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 四档（默认 / `#low` / `#high` / `#max`）

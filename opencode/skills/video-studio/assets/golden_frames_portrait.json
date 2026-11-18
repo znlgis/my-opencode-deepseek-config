@@ -1,0 +1,68 @@
+{
+ "version": 1,
+ "generator": "golden_frames.py v1.1.0",
+ "comment": "金帧基线：字体指纹+环境指纹一致时，每一帧像素 sha256 必须相同；换机/字体/Pillow 版本不同判 skipped（不误报），同环境像素变了才是 fail。改动夹具（film.json / scenes.py / 设计）后请 --write 重录并提交本文件。",
+ "canvas": [
+  1080,
+  1920
+ ],
+ "fps": 30,
+ "script": "skills/video-studio/assets/film.json",
+ "scenes": "skills/video-studio/assets/scenes.py",
+ "design": "skills/video-studio/assets/design_fixture.json",
+ "font_fp": "05c853d0eb28bcca3125d81c1ce27c9436f66a55",
+ "fonts": [
+  {
+   "name": "msyh.ttc",
+   "sha1": "e5a993b85dd99da4930bb8d7b9da53ae89fef3c6"
+  },
+  {
+   "name": "msyhbd.ttc",
+   "sha1": "e142fd01e96fea9365b5c6e053a0a1e0d309e218"
+  },
+  {
+   "name": "msyhl.ttc",
+   "sha1": "5444a8bab4b57604f6420ea4e60194f41459f9f8"
+  }
+ ],
+ "env_fp": "e4bca653965cf664adf46784abe93e8519df8d00",
+ "env": {
+  "python": "3.12.16",
+  "pillow": "13.0.0",
+  "numpy": "2.5.4",
+  "os": "Windows",
+  "platform": "Windows 11"
+ },
+ "inputs": {
+  "script_sha1": "16c2299bb73b0bbeb66f83ecb5ec6bf60e1e8254",
+  "scenes_sha1": "80dc7ba4ddf09cab758bc98c97571b16d18aca64",
+  "filmkit_sha1": "4217e16a0c69c5dfb16e4e80c76a227a5195d142",
+  "stylekit_sha1": "6b35df52efec7d695417556eee9bdb45160c44ab",
+  "design_sha1": "38af167000934ff80b0ea10d82b135050ac91a33",
+  "designkit_sha1": "cc41ac1e918af38960093748f8f5c14ef7304102",
+  "golden_tool_sha1": "9080cf1dc356e1bc71170c3ef2359f4f9a5ea01f"
+ },
+ "frames": [
+  {
+   "frame": 36,
+   "scene": "l01",
+   "t_local": 1.2,
+   "label": "hook",
+   "sha256": "9254f335ed891de8cfbf66cc680008ea3c15c1c566434469cbf5dc88d63a4f8f"
+  },
+  {
+   "frame": 270,
+   "scene": "l03",
+   "t_local": 1.6,
+   "label": "body",
+   "sha256": "e72c2147d3a9f2bb9cc244a278e9ca18a45e0311b8a9d680907baea55f8d5d88"
+  },
+  {
+   "frame": 369,
+   "scene": "l04",
+   "t_local": 1.5,
+   "label": "outro",
+   "sha256": "ad41bc4e930e686ef91552bedd3194403dc28f4f9543de2c34fc839d2d0d6c74"
+  }
+ ]
+}

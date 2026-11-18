@@ -1,0 +1,54 @@
+# video-studio 技能的 Python 依赖
+#
+#   pip install -r requirements.txt     # 必需 + 强烈建议（可选项默认注释，按需打开）
+#
+# 分三档，与 README「环境前提」（必需 / 可选两段）对应；SKILL.md §10 的脚本表写了每个文件依赖谁。
+# 强烈建议档在这里单独列出（README 把它并进"可选"一句话里，档位以本文件为准）。
+
+# ---- 必需：缺任何一条，主体流程跑不起来 ----
+# 上界与下界一起给：这个项目以"可复现"为卖点，而 Pillow 的字体度量、
+# numpy 的 FFT 实现、edge-tts 的返回结构都可能在"下一个小版本"里变。
+# 下界 = 已验证过的最低版本；上界 = 已知会破坏契约的下一个大版本。
+numpy>=1.24,<3
+Pillow>=10.0,<13
+# 旁白：唯一的时间轴权威（没有它只能用手工音频）
+edge-tts>=6.1,<8
+
+# ---- 强烈建议：质检门禁要用 ----
+# cv2 提供编码锐度比（"锐度比 >= 0.85"这条门禁依赖它）；
+# 缺了会降级并明确打印 WARN，不会静默通过。
+opencv-python-headless>=4.8,<6
+
+# ---- 可选：sfxkit 的时域滤波加速 ----
+# 缺了走"短冲激响应 + FFT 卷积"兜底路径：结果一致、长片不会卡死，只是慢一点。
+# scipy>=1.10,<2
+
+# ---- 可选：--engine web（浏览器逐帧渲染）专用 ----
+# 装完还要下载浏览器：python -m playwright install chromium
+# playwright>=1.40,<2
+
+# ---- 可选：ASR 回读门禁（qaasr.py）----
+# 把成片音轨转回文字与剧本对账，抓"TTS 缓存串了 / 混音丢了句子 / 音轨是旧的"。
+# 缺了会依次降级：faster-whisper -> ffmpeg 的 whisper 滤镜（需 ggml 模型）-> skipped。
+# 实测（CPU-only, int8）：small 模型加载 2.0–3.3 s、转写 RTF≈0.17；29 s 模板片约 6 s。
+# faster-whisper>=1.0,<2
+
+# ---- 纯标准库模块（**不需要**任何 pip 包，也不用拷到工程目录）----
+#   scripts/gates.py        门禁账本 / QC 报告 / 人工签核（render.py 直接 import）
+#   scripts/stagewatch.py   阶段新鲜度（render.py 直接 import）
+#   scripts/filmcheck.py    film.json 契约校验（selfcheck 与手动校验都用它）
+#   scripts/preflight.py    渲染前资源闸门（可选：缺了就记 skipped，门禁不冒充通过）
+#   scripts/qavmaf.py       全片 VMAF/SSIM（可选：缺了就 skipped）
+#   scripts/qaasr.py        ASR 回读（可选：缺了就 skipped）
+#   tools/estimate.py       开渲前成本预演（技能自带）
+#   tools/golden_frames.py  金帧回归（技能自带）
+# 三个可选门禁都**不是** render.py 的硬依赖（用了 _try_module），缺了只让对应门禁
+# 记 skipped，不会 ModuleNotFoundError；但 qa 报告里会明确写"本次没查"。
+
+# ---- 不需要 ----
+# moviepy / pydub / soundfile / librosa / manim：本技能一行都不 import。
+# ffmpeg 不是 pip 包：系统 PATH 里要有（含 libx264 / aac / loudnorm），
+# 或用环境变量 FILMKIT_FFMPEG 指向可执行文件。
+# 探测是 fail-closed 的：每个候选真跑 `-version`，跑不起来的会被跳过
+# （防的是"存在但缺 xfade 的旧版 ffmpeg 被静默选中"）。`FILMKIT_FFMPEG_STRICT=1`
+# 可把"找不到可用 ffmpeg"从回退裸命令改成直接报错。

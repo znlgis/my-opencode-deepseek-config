@@ -1,0 +1,933 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/film.schema.json",
+  "title": "video-studio film.json（剧本契约）",
+  "description": "video-studio 的剧本契约（唯一内容真源）。这是 JSON Schema draft-07 的**子集**：\n只用到 type / enum / required / properties / additionalProperties / items / minimum / maximum / pattern。\n\n为什么不写死 additionalProperties:false：draft-07 子集里没有 patternProperties，\n表达不了“下划线开头的扩展键豁免”这条规则，硬写 false 会把 _comment 这类注释键判死。\n所以未知键**不在 schema 层判死**，而是由 skills/video-studio/scripts/filmcheck.py 报 WARN\n（并给出“是不是想写 X”的建议）——schema 负责文档与 IDE 补全，filmcheck 负责执行。\n\n与 render.py 的 load_script() 的关系：load_script 是权威硬校验（title/lines 必填、lines 非空、\n每条有 text、id 不重复、bpm >0 或 auto）。本 schema 是它的补强（枚举/范围/嵌套键），不与之矛盾；\n两者都允许的脚本才能跑通。范围类约束以本文件为准，跨字段约束（cue 的 at 引用、hold 与 timeline\n对账）只有 filmcheck.py 能查。",
+  "type": "object",
+  "required": [
+    "title",
+    "lines"
+  ],
+  "properties": {
+    "_comment": {
+      "type": "string",
+      "description": "下划线开头的键是扩展位：schema 与 filmcheck 都不检查，渲染器也不读（模板用它写迁移说明）"
+    },
+    "title": {
+      "type": "string",
+      "description": "片名（必填）：顶栏常驻，也参与风格/配乐种子指纹"
+    },
+    "end_text": {
+      "type": "string",
+      "description": "片尾结束字（模板写“完”）；scenes.py 用来画收尾大字，可留空"
+    },
+    "style": {
+      "type": "string",
+      "description": "**已废弃**：技能里没有内置风格表，这个键不决定任何外观，写了也不生效（保留只为了让老剧本继续通过契约校验）。外观的唯一来源是 work/design.json（propose.py --confirm 冻结，渲染前由 designkit.design_to_plan 解析）；没有设计就渲染会明确报错，而不是回落到某个默认风格。这里**故意不放 enum**：没有任何合法风格 id 可列，列一份清单只会误导 IDE 补全。"
+    },
+    "engine": {
+      "type": "string",
+      "enum": [
+        "pil",
+        "web"
+      ],
+      "description": "渲染引擎：pil = Pillow 逐帧（默认，40–80 fps）；web = 无头浏览器逐帧（80–130 ms/帧，需要 playwright + assets/web/）"
+    },
+    "voice": {
+      "type": [
+        "string",
+        "object"
+      ],
+      "description": "字符串 = edge-tts voice id（如 zh-CN-YunxiNeural，legacy 单声线路径）；对象 = 声线策略（map 按 kind 映射音色、auto、jitter、max_distinct、rate_range、cps_band），此时忽略 rate/pitch 的单值覆盖语义",
+      "properties": {
+        "map": {
+          "type": "object",
+          "description": "按 kind 映射 edge-tts voice id：{\"hook\": \"zh-CN-YunxiaNeural\", \"body\": \"zh-CN-YunxiNeural\"}（键取 lines[].kind 的 6 个值；值是裸 edge voice id，不认 persona 名）。默认设计四个 kind 全指向同一把声音（单声线）"
+        },
+        "default": {
+          "type": "string",
+          "description": "没有对应的 kind 映射时用的 edge voice id（裸 id，如 zh-CN-YunxiNeural）"
+        },
+        "auto": {
+          "type": "boolean",
+          "description": "是否按内容自动挑语气档（tone；默认 true；false = 只用 map/default 的声线）"
+        },
+        "jitter": {
+          "type": "number",
+          "minimum": 0,
+          "description": "逐句 rate/pitch/lead/tail 的确定性抖动幅度（默认 0.35；legacy 默认 0）"
+        },
+        "max_distinct": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "全片最多用几个不同 persona（默认 3；相邻句不换人是防广播剧的关键）"
+        },
+        "rate_range": {
+          "type": "array",
+          "description": "语速夹取区间（百分数，例如 [-15, 12]）",
+          "items": {
+            "type": "number"
+          }
+        },
+        "cps_band": {
+          "type": "array",
+          "description": "可接受的每秒字数区间（默认 [3.6, 5.6]）",
+          "items": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "rate": {
+      "type": "string",
+      "pattern": "^\\s*[+-]?\\d+\\s*%\\s*$",
+      "description": "语速，如 \"+6%\" / \"-2%\"（edge-tts 只接受整数）；超过 +15% 会有机械感"
+    },
+    "pitch": {
+      "type": "string",
+      "pattern": "^\\s*[+-]?\\d+\\s*Hz\\s*$",
+      "description": "音高，如 \"+0Hz\" / \"-2Hz\""
+    },
+    "bpm": {
+      "type": [
+        "number",
+        "string"
+      ],
+      "minimum": 0,
+      "description": "配乐 BPM：数字必须 > 0（这里是 ≥0 的宽松下限，0 与负数由 filmcheck 报 error）；\"auto\" = 按风格 BPM 梯度 + 内容指纹决定。music.bpm 优先级更高"
+    },
+    "seed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "配乐/纹理种子（缺省 7）；music.seed 优先"
+    },
+    "crf": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 51,
+      "description": "x264 CRF：17 更锐利（体积约 +30%），18 是 filmkit 默认；范围 1–51"
+    },
+    "preset": {
+      "type": "string",
+      "enum": [
+        "ultrafast",
+        "superfast",
+        "veryfast",
+        "faster",
+        "fast",
+        "medium",
+        "slow",
+        "slower",
+        "veryslow"
+      ],
+      "description": "x264 preset：medium 是实测基准（141 fps @crf17）；slow 更小更慢，veryfast 只适合预览"
+    },
+    "lines": {
+      "type": "array",
+      "description": "台词数组（必填且非空）：一句一个对象，顺序即播放顺序。id 缺省时 render.py 自动生成 l01、l02…；sfx.cues 的 at 用同一个 id 定位",
+      "items": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "description": "场景 id（TTS 文件与 cue 都靠它定位）。缺省 = l%02d；一旦写 sfx.cues 就显式给 id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "hook",
+              "body",
+              "quote",
+              "outro",
+              "emphasis",
+              "calm"
+            ],
+            "description": "段落类型：hook 开场 / body 正文 / quote 引用 / outro 收尾 / emphasis 强调 / calm 沉静。决定声线、语气、版式与配乐能量"
+          },
+          "text": {
+            "type": "string",
+            "description": "朗读文本（必填，不能为空）：自然口语，TTS 念这一句"
+          },
+          "sub": {
+            "type": "string",
+            "description": "上屏字幕：短、一行优先（约 ≤24 个中文字）；缺省沿用 text"
+          },
+          "big": {
+            "type": "string",
+            "description": "画面大字（标题/金句）"
+          },
+          "subtitle": {
+            "type": "string",
+            "description": "副标题（版式可用的第二行小字，可选）"
+          },
+          "chapter": {
+            "type": "string",
+            "description": "章节标签，如 \"02 · 怎么做到的\"；同一章节内轮换版式，不会每句都跳"
+          },
+          "kicker": {
+            "type": "string",
+            "description": "小标签（如 \"PIPELINE\"），版式里的英文眉标"
+          },
+          "items": {
+            "type": "array",
+            "description": "要点列表（版式画成勾选卡片）；items.py 只读 text/ok",
+            "items": {
+              "type": "object",
+              "required": [
+                "text"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "description": "要点文字"
+                },
+                "ok": {
+                  "type": "boolean",
+                  "description": "true = 勾（绿色），false = 叉（红色）"
+                }
+              }
+            }
+          },
+          "hold": {
+            "type": "number",
+            "minimum": 0,
+            "description": "语音结束后额外停留秒数（让观众看清）；缺省用全局 hold / 风格 pacing"
+          },
+          "lead": {
+            "type": "number",
+            "minimum": 0,
+            "description": "句前留白秒数；覆盖全局 lead 与 voice_plan 的逐句 lead"
+          },
+          "tail": {
+            "type": "number",
+            "minimum": 0,
+            "description": "注意：**当前不生效**（保留字段）。filmkit.build_timeline 只读 tail_map，逐句句后留白请写顶层 tail_map，或交给 voicekit 的 voice_plan（st_layout 会把它的逐句 tail 并进 tail_map）。filmcheck 对写了 lines[].tail 的剧本会报 WARN 提醒。"
+          },
+          "persona": {
+            "type": "string",
+            "description": "显式声线 persona（voicekit.PERSONA_IDS：narrator_male / narrator_female / warm_female / bright_female / authority_male / young_male / teen_male / dialect_ne_female / dialect_sx_female）"
+          },
+          "tone": {
+            "type": "string",
+            "enum": [
+              "body",
+              "hook",
+              "quote",
+              "outro",
+              "emphasis",
+              "calm"
+            ],
+            "description": "显式语气（voicekit.VOICE_TONES 的键）：覆盖 kind 规则"
+          },
+          "voice": {
+            "type": "string",
+            "description": "显式 edge-tts voice id（覆盖 persona 底子）"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "hero",
+              "statement",
+              "list",
+              "stat",
+              "compare",
+              "process",
+              "quote",
+              "chapter",
+              "chart",
+              "outro"
+            ],
+            "description": "视觉场景类型（可选）：决定这段画面长成什么构图——hero 封面 / statement 金句 / list 要点列表 / stat 数字卡 / compare 左右对比 / process 流程轴 / quote 引语 / chapter 章节卡 / chart 数据条 / outro 收尾。与 kind **正交**：kind 管声线、语气、配乐能量，type 只管构图，所以没有新增 kind 值；不写 = 由 grammar.py 按内容自动推导（写错值 filmcheck.py 会报 error）。枚举真值来自 grammar.SCENE_TYPES 与 assets/scenes.py 的 _DRAWERS 键，改那边要同步这里"
+          },
+          "quote": {
+            "type": "string",
+            "description": "引语原文（type=quote 时用）：打在屏幕上的引文。它和 text 是两件事——text 是 TTS 念的那句，quote 是画面上那句话本身"
+          },
+          "by": {
+            "type": "string",
+            "description": "引语出处/作者（type=quote 时用），如“—— 某本书 · 某作者”；与 quote 配套，缺省不画署名"
+          },
+          "stats": {
+            "type": "array",
+            "description": "数字卡原料（type=stat）：每项 {value, unit, label, note}。value 必填（数字或字符串，字符串用于“>3x”“1/2”这类写法）；unit 是单位后缀，label 是指标名，note 是小字补充",
+            "items": {
+              "type": "object",
+              "required": [
+                "value"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "value": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "数字主体（必填）：数字，或“>3x”“1/2”这类字符串写法"
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "单位/后缀，如“秒”“%”“fps”"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "指标名，如“帧率”"
+                },
+                "note": {
+                  "type": "string",
+                  "description": "补充说明（小字），可省略"
+                }
+              }
+            }
+          },
+          "series": {
+            "type": "array",
+            "description": "数据条原料（type=chart）：每项 {label, value, unit}。label 是条形名（必填），value 是条长（必填，数字或数值字符串）",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "value"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "条形名（必填）"
+                },
+                "value": {
+                  "type": [
+                    "number",
+                    "string"
+                  ],
+                  "description": "条长（必填）：数字或数值字符串（“0.8”“80%”由绘制器解析）"
+                },
+                "unit": {
+                  "type": "string",
+                  "description": "单位/后缀，如“GB”“%”"
+                }
+              }
+            }
+          },
+          "steps": {
+            "type": "array",
+            "description": "流程轴原料（type=process）：每项 {label, note}，数组顺序即节点顺序",
+            "items": {
+              "type": "object",
+              "required": [
+                "label"
+              ],
+              "additionalProperties": true,
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "节点名（必填）"
+                },
+                "note": {
+                  "type": "string",
+                  "description": "节点补充说明（小字），可省略"
+                }
+              }
+            }
+          },
+          "sides": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "左右对比原料（type=compare）：{left, right}，每侧 {head, items[]}；items 里每项可写字符串，也可写对象 {text}（两种都认：短条目直接写字符串更省事）",
+            "properties": {
+              "left": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "左侧",
+                "properties": {
+                  "head": {
+                    "type": "string",
+                    "description": "左侧小标题"
+                  },
+                  "items": {
+                    "type": "array",
+                    "description": "左侧条目：字符串或对象 {text} 两种写法都行",
+                    "items": {
+                      "type": [
+                        "string",
+                        "object"
+                      ],
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字）"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "right": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "右侧",
+                "properties": {
+                  "head": {
+                    "type": "string",
+                    "description": "右侧小标题"
+                  },
+                  "items": {
+                    "type": "array",
+                    "description": "右侧条目：字符串或对象 {text} 两种写法都行",
+                    "items": {
+                      "type": [
+                        "string",
+                        "object"
+                      ],
+                      "properties": {
+                        "text": {
+                          "type": "string",
+                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字）"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "lead": {
+      "type": "number",
+      "minimum": 0,
+      "description": "全局句前留白（秒）。缺省取设计的 pacing（body 基准 0.62）"
+    },
+    "tail": {
+      "type": "number",
+      "minimum": 0,
+      "description": "全局句后留白（秒）。缺省取设计的 pacing（body 基准 0.92）"
+    },
+    "min_dur": {
+      "type": "number",
+      "minimum": 0,
+      "description": "每段最短时长（秒）：语音太短时把画面撑住，缺省 3.0–4.0（按风格）"
+    },
+    "hold": {
+      "type": "number",
+      "minimum": 0,
+      "description": "全局停留秒数（语音结束后的额外停留），逐句 hold 优先"
+    },
+    "max_dur": {
+      "type": "number",
+      "minimum": 0,
+      "description": "每段最长时长（秒）：超过就截断（会截断旁白，慎用）"
+    },
+    "bar": {
+      "type": "number",
+      "minimum": 0,
+      "description": "按小节对齐（秒）：>0 时每段时长向上取整到整数倍。注意 render.py 目前未传这个值给 build_timeline（保留字段）"
+    },
+    "sub_max_hold": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "字幕最长停留秒数（null = 覆盖整句）；拍的是“字幕跟读完”，不是“画面慢放”"
+    },
+    "trim_silence": {
+      "type": "boolean",
+      "description": "TTS 后是否裁掉首尾静音（默认 true；要保留 edge-tts 尾部 ~0.95 s 静音就设 false）"
+    },
+    "trim_db": {
+      "type": "number",
+      "description": "裁静音的门限 dBFS（默认 -42.0）；太激进会把气声裁掉"
+    },
+    "tts_workers": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "TTS 并发句数（默认 4；edge-tts 免费端点别开太大）"
+    },
+    "chunk_frames": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "分块渲染的块大小（帧）；0 = 按 frames/jobs/4 自动算。写死它会同时进分块计划指纹"
+    },
+    "reencode_video": {
+      "type": "boolean",
+      "description": "mux 时是否重编码视频（默认 false = -c:v copy，只改封装与音频）"
+    },
+    "voice_gain": {
+      "type": "number",
+      "description": "旁白总增益（混音侧线性倍数，默认 1.0）"
+    },
+    "whoosh": {
+      "type": "boolean",
+      "description": "兼容行为：没有 cues.json 时每段开头一声 whoosh（默认 true）"
+    },
+    "whoosh_amp": {
+      "type": "number",
+      "minimum": 0,
+      "description": "旧版 whoosh 的幅度（默认 0.055–0.06）"
+    },
+    "tail_map": {
+      "type": "object",
+      "description": "按 lines id 覆盖句后留白：{\"l03\": 1.4}（逐句微调用）"
+    },
+    "pacing": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "节奏覆盖（优先于 lead/tail/min_dur/hold 字段，也优先于风格 pacing）",
+      "properties": {
+        "lead": {
+          "type": "number",
+          "minimum": 0,
+          "description": "句前留白"
+        },
+        "tail": {
+          "type": "number",
+          "minimum": 0,
+          "description": "句后留白"
+        },
+        "min_dur": {
+          "type": "number",
+          "minimum": 0,
+          "description": "最短段长"
+        },
+        "hold": {
+          "type": "number",
+          "minimum": 0,
+          "description": "全局停留"
+        },
+        "item_stagger": {
+          "type": "number",
+          "minimum": 0,
+          "description": "要点条目的入场步长（秒）"
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "视觉覆盖：一般不用写，设计已经决定；要锁主题/版式时才用",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "description": "锁主题 id（等价于锁 style，主题与风格 1:1）"
+        },
+        "layout": {
+          "type": "string",
+          "description": "锁版式名（stylekit.LAYOUTS 的键，如 left-stack / center-stack / split-right）"
+        },
+        "theme_overrides": {
+          "type": "object",
+          "description": "主题字段覆盖：{\"accent\": \"#ff8a3d\"}（只接受主题里已存在的键）"
+        }
+      }
+    },
+    "music": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "配乐：musicgen 按参数现场编排 / 和弦床 / 外部 wav / 关掉。不写 mode 时走兼容链（有 bpm 就生成，没有就沿用）。没有配乐风格表，不要指望选一个 id 得到一种现成配乐",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "false = 本片不要配乐（等价于 mode=off）"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "score",
+            "bed",
+            "file",
+            "off"
+          ],
+          "description": "score = musicgen 参数化编排（bpm/key/scale/mood/sections 全可写）；bed = 和弦床；file = 用外部 work/music.wav；off = 不要配乐（不读也不删 music.wav）"
+        },
+        "style": {
+          "type": "string",
+          "description": "已废弃：删除了配乐风格表，写风格 id 没有意义（保留字段只为老剧本校验不失败）"
+        },
+        "mood": {
+          "type": "string",
+          "description": "\"auto\" 或情绪名（steady/reflective/hopeful/uplifting/calm/driving，按风格缺省）"
+        },
+        "bpm": {
+          "type": [
+            "number",
+            "string"
+          ],
+          "minimum": 0,
+          "description": "配乐 BPM：数字必须 > 0；\"auto\" = 风格梯度 + 指纹。优先级高于顶层 bpm"
+        },
+        "key": {
+          "type": "string",
+          "description": "调性：\"auto\" 或 C/G/D/F/A/Bb/Dm/Am/Em/Cm；缺省按风格调池选"
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "配乐种子（缺省 7）；同一 seed 逐采样一致"
+        },
+        "seed_from_content": {
+          "type": "boolean",
+          "description": "种子是否掺入内容指纹（默认 true：改台词换 BPM/调性，不换细节音色）"
+        },
+        "gain_db": {
+          "type": "number",
+          "description": "配乐总线增益 dB（默认 -12：视频以旁白为主，背景必须明显低于人声；-1.5 会让背景与台词几乎等高）"
+        },
+        "duck_db": {
+          "type": "number",
+          "description": "音效响起时配乐让位深度 dB（默认按设计 3.0–5.5）"
+        },
+        "voice_duck_db": {
+          "type": "number",
+          "description": "旁白说话时配乐额外让位深度 dB（默认 6；0 = 关闭旁白侧链）"
+        },
+        "voice_duck_sfx_db": {
+          "type": "number",
+          "description": "旁白说话时音效额外让位深度 dB（默认 3；0 = 关闭）"
+        },
+        "voice_thresh_db": {
+          "type": "number",
+          "description": "语音活跃度阈值 dBFS（默认 -42；低于它算静音间隙，背景恢复）"
+        },
+        "voice_floor_db": {
+          "type": "number",
+          "description": "语音包络的地板 dBFS（默认 -60；与阈值之间做 0~1 映射）"
+        },
+        "guard_snr_db": {
+          "type": "number",
+          "description": "旁白清晰度兜底（默认 12）。混音后实测人声活跃区的人声/背景响度差，不足就整体再压背景；0 = 关闭"
+        },
+        "guard_cap_db": {
+          "type": "number",
+          "description": "SNR 兜底最多补压多少 dB（默认 30，防止把背景压成忽有忽无；补压 >18 dB 会提示检查素材电平）"
+        },
+        "seg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "和弦床的段长秒数（默认 4.0）"
+        },
+        "amp": {
+          "type": "number",
+          "minimum": 0,
+          "description": "和弦床幅度（默认 0.055）"
+        },
+        "gain": {
+          "type": "number",
+          "minimum": 0,
+          "description": "和弦床增益（默认 0.9）"
+        },
+        "xfade": {
+          "type": "number",
+          "minimum": 0,
+          "description": "和弦床交叉淡化秒数（默认 1.2）"
+        },
+        "chords": {
+          "type": "array",
+          "description": "兼容行为：和弦频率表 [[220, 261.63, 329.63], ...]；只有 mode=bed/兼容链用得到",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "sections": {
+          "type": "array",
+          "description": "手工分段：每项 {id, at 或 start, end, energy, chords, layers…}；at 可写 \"l03\" 让分段跟着场景走",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "sfx": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "音效：按 cues 在绝对时刻落位（画面提示点驱动声音，不靠“对齐猜”）",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "false = 不登记 film.json 的 cues（scenes.py 的 cues() 钩子仍会跑）"
+        },
+        "gain_db": {
+          "type": "number",
+          "description": "音效总线增益 dB（默认 0）"
+        },
+        "base_db": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "按配方名覆盖基础电平 dB：{\"whoosh\": -6}。render.py 的 st_sfx 原样透传给 filmkit.CueBus.build_audio(base_db=...)，只对键名命中的配方生效（未知配方名不报错、也不生效）"
+        },
+        "mix_gain_db": {
+          "type": "number",
+          "description": "混音时音效总线额外增益 dB（默认 0）"
+        },
+        "content_seed": {
+          "type": "boolean",
+          "description": "true（默认）= 每条 cue 的 seed 由 style/content_fp 派生（不同影片同一位置也不同）；false = 按 seed_base+i 的位置派生（只跟 cue 顺序，逐样本稳定）"
+        },
+        "duck_transitions": {
+          "type": "boolean",
+          "description": "true（默认）= 段落边界前 2.2s 内的 whoosh/riser/reverse_swell 自动 -3 dB，避免与配乐过门在同一频段撞车；false = 不处理"
+        },
+        "cues": {
+          "type": "array",
+          "description": "提示点数组：每条 {at, type, dur, gain, ...}；未知参数原样透传给 sfxkit 配方（size/pan/seed/pitch…）",
+          "items": {
+            "type": "object",
+            "required": [
+              "at",
+              "type"
+            ],
+            "additionalProperties": true,
+            "properties": {
+              "at": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "时刻：数字 = 绝对秒；\"abs:12.5\" = 绝对秒；\"l03\" = 场景起点；\"l03+0.35\" / \"l03-0.2\" = 相对场景 start 的偏移。用 id 写法时该 id 必须存在于 lines"
+              },
+              "type": {
+                "type": "string",
+                "description": "sfxkit 配方名或别名：whoosh / riser / impact / ui_blip / ui_click / data_chirp / typing / wind / rain / glitch / reverse_swell …（别名 blip→ui_blip、click→ui_click、chirp→data_chirp、wind→wind 等）"
+              },
+              "dur": {
+                "type": "number",
+                "minimum": 0,
+                "description": "时长秒数（不写用配方默认）"
+              },
+              "gain": {
+                "type": "number",
+                "description": "该条增益 dB"
+              },
+              "size": {
+                "type": "number",
+                "description": "impact 的体量参数（1 = 默认）"
+              },
+              "pan": {
+                "type": "number",
+                "description": "声像 -1（左）~ +1（右）"
+              },
+              "seed": {
+                "type": "integer",
+                "description": "该条随机种子（同 seed 逐采样一致）"
+              },
+              "visual_at": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "可选锚点：画面上那个事件真正发生的秒数（数字或 \"abs:12.42\"）；qa_frames 用它查音画同步"
+              },
+              "visual_t": {
+                "type": [
+                  "number",
+                  "string"
+                ],
+                "description": "visual_at 的兼容写法（qa_frames 两个都认）"
+              }
+            }
+          }
+        }
+      }
+    },
+    "web": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "浏览器引擎（engine=web）专用配置；走 PIL 时整块可删",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "description": "入口 HTML 路径（相对 film.json 或绝对路径）；缺省 = <项目>/web/index.html"
+        },
+        "chunk_s": {
+          "type": "number",
+          "minimum": 0,
+          "description": "页面分块秒数（webengine 切块用，默认 30）"
+        }
+      }
+    },
+    "words": {
+      "type": "boolean",
+      "description": "词级时间戳开关（默认 true）。true 时 --stage tts 会额外收 edge-tts 的 WordBoundary 事件落 work/words.json，字幕按词边界折行、cue 可用词锚点 l03:w2、QA 走 G10 门禁；false = 退回整句字幕（不影响出片）。"
+    },
+    "tts": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "TTS 后端选择（接口化，默认 edge；其它后端需先 filmkit.register_tts_backend 注册）。",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "description": "后端名，缺省 edge"
+        },
+        "voice": {
+          "type": [
+            "string",
+            "object"
+          ],
+          "description": "覆盖顶层 voice"
+        }
+      }
+    },
+    "video": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "画幅/帧率。**横屏 16:9 与竖屏 9:16 都支持**：内部构图跟随 layoutkit 的 profile（--layout portrait 切到 1080x1920），输出只能同比例下采样（编码时 lanczos）。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。非当前画布比例 / 上采样 / 非法 fps 会被 filmkit.video_plan 直接报错。",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "enum": [
+            1920,
+            1280,
+            960,
+            2560,
+            1080,
+            720,
+            540
+          ],
+          "description": "输出宽：横屏 1920/1280/960/2560；竖屏 1080/720/540"
+        },
+        "height": {
+          "type": "integer",
+          "enum": [
+            1080,
+            720,
+            540,
+            1440,
+            1920,
+            1280,
+            960
+          ],
+          "description": "输出高：横屏 1080/720/540/1440；竖屏 1920/1280/960"
+        },
+        "fps": {
+          "type": "integer",
+          "enum": [
+            24,
+            25,
+            30,
+            50,
+            60
+          ],
+          "description": "帧率，缺省 30"
+        }
+      }
+    },
+    "mux": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "合成参数（可选）。true_peak_db 覆盖 mux 阶段 loudnorm 的真峰目标（默认 -1.5 dBTP）：AAC 编码会把真峰再抬约 0.9-1.2 dB，竖屏片或换配乐后叠加峰值更高时，默认目标可能让 G5 报 -0.0 dBTP fail。",
+      "properties": {
+        "true_peak_db": {
+          "type": "number",
+          "maximum": -0.1,
+          "description": "真峰目标（dBTP，必须 < 0，默认 -1.5）。G5 判据是 <= -1 dBTP；-3.0 通常能在竖屏片上留够余量"
+        }
+      }
+    },
+    "qa": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "质检门禁参数：全片 VMAF/SSIM（G11）与 ASR 回读（G12）。",
+      "properties": {
+        "vmaf": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "全片 VMAF/SSIM 门禁（参考帧由场景函数实时渲染，不是成片抽帧）。注意：本对象里的 enabled 与 qa.require_vmaf 是**惰性键**（代码无读取点），真正生效的开关是 mode=off / --vmaf off；filmcheck.py 对惰性键会报 WARN。",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "惰性键：写它不生效（要跳过 G11 请写 mode=\"off\" 或命令行 --vmaf off）"
+            },
+            "mode": {
+              "type": "string",
+              "enum": [
+                "full",
+                "sample",
+                "off"
+              ],
+              "description": "full=逐帧（默认，约 1.2x 实时）；sample=每 N 帧取 1；off=不跑"
+            },
+            "pass": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "VMAF 低于此值 -> fail（默认 92，权威定义在 qavmaf.py 的 VMAF_PASS；标定依据见 references/delivery-gates.md）"
+            },
+            "warn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "介于 pass 与 warn 之间 -> pass+warning（默认 96，权威定义在 qavmaf.py 的 VMAF_WARN）"
+            },
+            "sample_step": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "mode=sample 时的抽样步长"
+            }
+          }
+        },
+        "ssim": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "SSIM 阈值（诊断项，不单独阻断；默认 pass=0.95 / warn=0.98，权威定义在 qavmaf.py）",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "惰性键：写它不生效（SSIM 本来就只是诊断项，不单独阻断）"
+            },
+            "pass": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "warn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "require_vmaf": {
+          "type": "boolean",
+          "description": "惰性键：写它不生效（要强制 G11 不许记 skipped，请用 --strict-gates）"
+        },
+        "asr": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "ASR 回读门禁（把成片音轨转回文字与剧本对账）",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "false = 本次不做回读（记 skipped）"
+            },
+            "model": {
+              "type": "string",
+              "description": "faster-whisper 模型名，缺省 small"
+            },
+            "recall_pass": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "召回率 >= 此值算干净（默认 0.85）"
+            },
+            "recall_warn": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "低于此值 -> fail（默认 0.72）"
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}

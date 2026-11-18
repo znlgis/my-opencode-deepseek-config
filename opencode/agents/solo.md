@@ -35,6 +35,7 @@ permissions:
   - { action: skill, resource: handoff, effect: allow }
   - { action: skill, resource: reflect, effect: allow }
   - { action: skill, resource: vision-prep, effect: allow }
+  - { action: skill, resource: video-studio, effect: allow }
 ---
 
 # Solo
