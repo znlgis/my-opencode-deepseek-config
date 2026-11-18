@@ -177,6 +177,8 @@ Pick the value by task class before invoking:
 - **Unknown duration** → start at 60s. On timeout, treat it as `transient` and
   **change strategy** (background, split the command, reduce scope) — never
   replay the identical command with a longer timeout.
+- **`timeout: 0` is not unlimited on 2.3.1+** — the shell tool applies the
+  120s default. Pass an explicit larger value for long tasks.
 
 ### Failure isolation
 

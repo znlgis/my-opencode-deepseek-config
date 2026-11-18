@@ -11,7 +11,7 @@
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
 - 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）
-- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（`131072−16000=115,072` tokens），保留尾部 `keep.tokens: 12000`；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
+- 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（`131072−16000=115,072` tokens），保留尾部 `keep.tokens: 12000`；`compaction.background: false`（2.3.1+ 新增开关，默认 `true`）避免为未使用的预写摘要付费；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **24 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
 - 命令：**18 个**快捷命令（Agent 路由 / 操作 / 内联 / 规约四类），见下文
@@ -21,7 +21,7 @@
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.3.0**，2026-11-13 核验通过；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.3.2**，2026-11-18 核验通过；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「安装与启动」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（v2.3.0 起 `task` 委派**始终后台运行**：调用立即返回 `sessionID`，子会话空闲时向父会话上报）；无需环境变量，旧版 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 已废弃
@@ -87,7 +87,7 @@ opencode
 
 ### v2 原生键名（本仓库唯一写法）
 
-本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, keep, buffer}`（`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2.3.0 会把它逐键迁移后与原生键合并（`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断）——不报错，但实际生效的配置与本文描述不一致。
+本仓库是 **OpenCode v2 专属配置**，只写 v2 原生键：`plugins`（非 `plugin`）、`providers`/`models`（非 `provider`）、`agents`/`commands`（非 `agent`/`command`）、`permissions`（有序 `{action, resource, effect}`，非 `permission`；action 名是 `shell`/`subagent`，非 `bash`/`task`）、`media.image`（非 `attachment`），嵌套深度为 `experimental.subagent_depth`，压缩为 `{auto, background, keep, buffer}`（`background` 是 v2.3.1+ 新增开关；`prune`/`tail_turns`/`reserved` 是 v1 拼写，v2 不读）。只要文件里出现任一 v1 触发键（`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model` 等），v2.3.2 会把它逐键迁移后与原生键合并（`logLevel`/`server`/`layout`/顶层 `subagent_depth` 则丢弃并记诊断）——不报错，但实际生效的配置与本文描述不一致。
 
 > `$schema` 保持 `https://opencode.ai/config.json`（v2 应用自身写入的就是该 URL）。
 
@@ -119,7 +119,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-flash`；Agent 列表有 12 个自定义 Agent；输入任意需求，`orchestrator` 会自动分析并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review`）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.3.0** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
+> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.3.2** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
 
 改完仓库文件后必须同步（`~/.config/opencode` 是独立副本，不是符号链接）：
 
@@ -153,13 +153,13 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 - **thinking 开关** —— `{"thinking":{"type":"enabled"|"disabled"}}`，是**请求体（body）字段**。默认档关闭（最省），`#low`/`#high`/`#max` 打开。
 - **thinking 强度** —— `{"reasoning_effort":"low"|"high"|"max"}`，由 **provider setting** `settings.reasoningEffort` 驱动（配置里写 camelCase，线上是 snake_case）——这是 opencode aisdk 层唯一会转成 `reasoning_effort` 的路径。
 
-> **官方文档核对（2026-11-09，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token：`#high` 只是把默认值写明，`#low` 是唯一的低档，`#max` 是唯一高于默认的档位；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high`/`#max` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/src/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
+> **官方文档核对（2026-11-18，`guides/thinking_mode`）**：① 思考模式**默认打开，effort 默认 `high`**——所以只有默认档（显式 `disabled`）真能省下 reasoning token：`#high` 只是把默认值写明，`#low` 是唯一的低档，`#max` 是唯一高于默认的档位；effort 没有中间值，`minimal`→low、`medium`/`xhigh`→high、`max`/`ultra`→max。② 思考模式**不支持** `temperature`/`presence_penalty`/`frequency_penalty`——传入不报错，但也不生效；上表的 `temperature: 0` 只在默认档真正起作用，`#low`/`#high`/`#max` 继承它但无效。③ `top_p` 行为相反：`deepseek-flash` 仅在思考模式下生效（有效范围 0.95–1.0，低于 0.95 按 0.95 处理），非思考模式下恒为 1.0、传入值被忽略——所以本配置不设 `top_p`。④ 请求携带 `tools` 时，历史轮的 `reasoning_content` 必须完整回传，否则 API 返回 400；opencode 对所有 deepseek 模型强制回传（`ai/src/protocols/openai-chat.ts` 的 `requireReasoning`），无需额外配置。
 
 > **⚠️ 写法陷阱（2026-10-16 实测修正）**：`thinking`/`temperature` 放在 `settings` 下不生效（openai-chat 协议不实现该 option），`reasoningEffort` 放在 Agent 的 `options` 下也不生效（`options` 只落到 `request.body`，且 camelCase 不是 API 认的 `reasoning_effort`）。两者都必须写在**模型层**：toggle 进 `body`、effort 进 `settings`。修正前 flash 一直开着 thinking 跑，每一步都在付 reasoning token。
 
 **成本结构**：四个档位共用 flash 的同一份费率（in 0.15 / out 0.60 / cache_read 0.003 USD per 1M，off-peak），没有模型溢价；档位差异只体现在 **reasoning token 数量**，而 reasoning token 按输出价计费。所以「升档」是多花输出 token，不是换更贵的单价——深度任务不再付 4.4× 输入价。**但步数会放大这笔账**：effort 按步计费，`#max` 给一个跑三十步的写作 agent 等于把最贵档乘以三十，所以顶档只给步数少、输出短的只读升级 agent（`oracle`/`reviewer`），写作类停在 `#high`；thinking off 则留给纯转写与路由——这些任务加推理不产生价值。
 
-> **未验证项（2026-11-09 复核）**：`reasoningEffort` 的三个取值 `low`/`high`/`max` 在 flash 上的实际推理深度与 reasoning token 增量仍未实测——档位只改变 reasoning token 数量，本仓库按输出价线性估算；请在具备 DeepSeek 凭据的机器上跑一次 `/deep-review` 复核。
+> **未验证项（2026-11-18 复核）**：`reasoningEffort` 的三个取值 `low`/`high`/`max` 在 flash 上的实际推理深度与 reasoning token 增量仍未实测——档位只改变 reasoning token 数量，本仓库按输出价线性估算；请在具备 DeepSeek 凭据的机器上跑一次 `/deep-review` 复核。
 
 ### 路由策略
 
@@ -188,7 +188,7 @@ Tier 1 报告是**完整审查**而非预览——干净结果不因"再确认�
 
 ### 成本对比
 
-价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-11-09 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
+价格取自 `opencode.jsonc` 的 `providers.deepseek.models`（USD / 1M tokens，**2026-11-18 官方定价页重新核验，与本表逐项一致**，off-peak 价；peak 时段 = off-peak ×2，北京时间周一至周五 09:00–12:00 与 14:00–18:00，其余时段含周末与中国法定节假日均为 off-peak）。`cache_write` 无独立官方价，按 cache-miss 输入价映射：
 
 | 模型 | 输入 | 输出 | 缓存命中（cache_read） | 缓存写入（cache_write） |
 | --- | --- | --- | --- | --- |
@@ -355,7 +355,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | 单个 Agent 的模型、思考档、工具与 skill 白名单、拒绝契约 | `opencode/agents/<name>.md` | frontmatter + 正文 |
 | 全局行为规则（原则、失败纪律、缓存纪律、反模式） | `opencode/AGENTS.md` | 对应小节 |
 | 插件版本（pin） | `opencode/opencode.jsonc` | `plugins` |
-| 压缩触发窗口（按模型）/ buffer / 保留尾部 | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction`（`buffer`/`keep`） |
+| 压缩触发窗口（按模型）/ buffer / 保留尾部 / 后台预写 | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction`（`buffer`/`keep`/`background`） |
 | Skill 的行为与触发词 | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + 正文 |
 
 > 改完必须 `.\scripts\sync-config.ps1` 同步到 `~/.config/opencode`，然后重载（桌面 v2：`& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" reload`；或重启 opencode）。校验：`node scripts/validate-jsonc.js`；查已解析结果：`& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" debug config`。

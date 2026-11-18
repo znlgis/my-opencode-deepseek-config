@@ -11,7 +11,7 @@
 - Agent nesting: `experimental.subagent_depth: 2` (v2-native key; the v1 top-level `subagent_depth` is dropped by v2 and no longer written. Exactly covers the deepest chain in use, `orchestrator → light-orchestrator → oracle`; every other subagent is denied delegation, so a deeper level only widens the token-amplification surface)
 - Session sharing: off (`share: "disabled"`)
 - Permission baseline: `read` allowed by default, `shell` set to `ask` (unmatched commands go to a human; dangerous patterns are not enumerated); sensitive `.env`-type files `deny`; external directories `ask`; read-only agents get shell rules (deny all by default + allow read-only subcommands only)
-- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (`131072−16000=115,072` tokens), keeping a verbatim tail of `keep.tokens: 12000`; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed (the v1 `reserved` maps to v2 `buffer`); no third-party compression plugin
+- Context compression: **built-in compaction only** (opencode.jsonc) — `limit.input` declares the working window, and it fires at `limit.input − compaction.buffer` (`131072−16000=115,072` tokens), keeping a verbatim tail of `keep.tokens: 12000`; `compaction.background: false` (the v2.3.1+ switch, default `true`) avoids paying for a pre-written summary that is never used; the v1 spellings (`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`) do nothing on v2 and were removed (the v1 `reserved` maps to v2 `buffer`); no third-party compression plugin
 - Global rules: `AGENTS.md` (core principles, task rejection contract, self-verification, anti-patterns, etc.; context/token discipline in `AGENTS.md`)
 - Skills: **24** `SKILL.md` skills under `skills/`, loaded on demand via the native `skill` tool; each agent then trims the roster with a `skill` permission allowlist (the roster's name+description is an **always-on** per-turn cost, so it is kept minimal by role)
 - Commands: **18** shortcut commands (agent routing / operations / inline / spec), see below
@@ -21,7 +21,7 @@
 
 ### Prerequisites
 
-- OpenCode v2 (desktop app's bundled CLI **2.3.0**, verified 2026-11-13; 1.18.x and older are **no longer supported**)
+- OpenCode v2 (desktop app's bundled CLI **2.3.2**, verified 2026-11-18; 1.18.x and older are **no longer supported**)
 - **Runtime caveat**: the `opencode` on `PATH` (WinGet install) is **1.18.4**, not this config's runtime — it takes the V1→V2 migration path. For headless runs use the desktop app's bundled CLI (path in the Install and Start ⚠️ note)
 - DeepSeek API key: request one at [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
 - Background subagents (since v2.3.0 every `task` delegation **always runs in the background**: the call returns a `sessionID` immediately and the child reports back to the parent when idle); no environment variable is needed — the old `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` flag is obsolete
@@ -87,7 +87,7 @@ This config keeps only `deepseek-flash` and splits thinking at the `providers` l
 
 ### v2-native keys (the only dialect this repo writes)
 
-This repo is an **OpenCode v2-only config** and writes only v2-native keys: `plugins` (not `plugin`), `providers`/`models` (not `provider`), `agents`/`commands` (not `agent`/`command`), `permissions` (ordered `{action, resource, effect}`, not `permission`; the action names are `shell`/`subagent`, not `bash`/`task`), `media.image` (not `attachment`), nesting depth as `experimental.subagent_depth`, and compaction as `{auto, keep, buffer}` (`prune`/`tail_turns`/`reserved` are v1 spellings v2 does not read). If any v1 trigger key appears (`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model`, …), v2.3.0 migrates it per key and merges the result with the native keys (while `logLevel`/`server`/`layout`/top-level `subagent_depth` are dropped with a diagnostic) — no error, but the config that actually runs no longer matches what this document describes.
+This repo is an **OpenCode v2-only config** and writes only v2-native keys: `plugins` (not `plugin`), `providers`/`models` (not `provider`), `agents`/`commands` (not `agent`/`command`), `permissions` (ordered `{action, resource, effect}`, not `permission`; the action names are `shell`/`subagent`, not `bash`/`task`), `media.image` (not `attachment`), nesting depth as `experimental.subagent_depth`, and compaction as `{auto, background, keep, buffer}` (`background` is the v2.3.1+ switch; `prune`/`tail_turns`/`reserved` are v1 spellings v2 does not read). If any v1 trigger key appears (`provider`/`agent`/`command`/`plugin`/`permission`/`tools`/`attachment`/`small_model`, …), v2.3.2 migrates it per key and merges the result with the native keys (while `logLevel`/`server`/`layout`/top-level `subagent_depth` are dropped with a diagnostic) — no error, but the config that actually runs no longer matches what this document describes.
 
 > `$schema` stays `https://opencode.ai/config.json` (the URL the v2 app itself writes).
 
@@ -119,7 +119,7 @@ Linux / macOS: append `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-dee
 
 Three self-checks after launch: `/models` shows `deepseek/deepseek-flash`; the agent list has all 12 custom agents; describe any task in plain language and `orchestrator` classifies and routes it (to skip routing, use `/quick`, `/deep`, `/review`, … directly).
 
-> **⚠️ Must run on OpenCode V2.x**: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4**, while the runtime actually in use is the desktop app **v2.3.0** and its bundled CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`. Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds; for headless runs use that CLI.
+> **⚠️ Must run on OpenCode V2.x**: the `opencode.exe` on `PATH` is the WinGet install of **v1.18.4**, while the runtime actually in use is the desktop app **v2.3.2** and its bundled CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`. Launching under v1 takes the V1→V2 migration path, and none of the routing, permission, compaction or roster behavior described here holds; for headless runs use that CLI.
 
 After editing repo files, sync them (`~/.config/opencode` is an independent copy, not a symlink):
 
@@ -153,13 +153,13 @@ Thinking strength is driven by two **request parameters**, both declared at the 
 - **thinking toggle** — `{"thinking":{"type":"enabled"|"disabled"}}`, a **request BODY field**. The default tier is off (cheapest); `#low`/`#high`/`#max` turn it on.
 - **thinking effort** — `{"reasoning_effort":"low"|"high"|"max"}`, driven by the **provider setting** `settings.reasoningEffort` (camelCase in config, snake_case on the wire) — the only path the aisdk layer turns into `reasoning_effort`.
 
-> **Checked against the official guide (2026-11-09, `guides/thinking_mode`)**: ① thinking is **on by default with effort `high`** — so only the default tier (explicit `disabled`) actually saves reasoning tokens: `#high` merely spells out the default, `#low` is the only rung below it, and `#max` is the only rung above it. There is no medium effort: `minimal`→low, `medium`/`xhigh`→high, `max`/`ultra`→max. ② Thinking mode **does not support** `temperature`/`presence_penalty`/`frequency_penalty` — passing them raises no error and has no effect, so the `temperature: 0` in the table binds only on the default tier while `#low`/`#high`/`#max` inherit it inertly. ③ `top_p` is the opposite: on `deepseek-flash` it applies only with thinking on (valid range 0.95–1.0, values below are treated as 0.95), and is pinned to 1.0 with passed values ignored when thinking is off — so this config sets no `top_p`. ④ When a request carries `tools`, every historical `reasoning_content` must be sent back or the API returns 400; opencode forces the replay for all deepseek models (`requireReasoning` in `ai/src/protocols/openai-chat.ts`), so nothing extra is needed here.
+> **Checked against the official guide (2026-11-18, `guides/thinking_mode`)**: ① thinking is **on by default with effort `high`** — so only the default tier (explicit `disabled`) actually saves reasoning tokens: `#high` merely spells out the default, `#low` is the only rung below it, and `#max` is the only rung above it. There is no medium effort: `minimal`→low, `medium`/`xhigh`→high, `max`/`ultra`→max. ② Thinking mode **does not support** `temperature`/`presence_penalty`/`frequency_penalty` — passing them raises no error and has no effect, so the `temperature: 0` in the table binds only on the default tier while `#low`/`#high`/`#max` inherit it inertly. ③ `top_p` is the opposite: on `deepseek-flash` it applies only with thinking on (valid range 0.95–1.0, values below are treated as 0.95), and is pinned to 1.0 with passed values ignored when thinking is off — so this config sets no `top_p`. ④ When a request carries `tools`, every historical `reasoning_content` must be sent back or the API returns 400; opencode forces the replay for all deepseek models (`requireReasoning` in `ai/src/protocols/openai-chat.ts`), so nothing extra is needed here.
 
 > **⚠️ Spelling trap (measured 2026-10-16)**: `thinking`/`temperature` under `settings` are inert (the openai-chat protocol implements no such option), and `reasoningEffort` under an agent's `options` is inert too (`options` only reaches `request.body`, and camelCase is not the `reasoning_effort` the API reads). Both must live at the **model layer**: the toggle in `body`, the effort in `settings`. Before the fix flash ran with thinking on all along, paying reasoning tokens on every step.
 
 **Cost structure**: all four tiers share flash's single price sheet (in 0.15 / out 0.60 / cache_read 0.003 USD per 1M, off-peak) — no model premium. A tier difference shows up only in the **number of reasoning tokens**, which bill at the output rate. "Escalating" therefore buys more output tokens, not a more expensive unit price — deep work no longer pays a 4.4× input premium. **Step count multiplies that bill**: effort is paid per step, so running `#max` on a writer that takes thirty steps means paying the top rate thirty times. The top rung therefore goes only to short, few-step read-only escalation agents (`oracle`/`reviewer`); writers stop at `#high`, and thinking off is for pure transduction and routing, where added reasoning buys nothing.
 
-> **Not yet verified (re-checked 2026-11-09)**: the actual reasoning depth and reasoning-token delta of `reasoningEffort` at `low`/`high`/`max` on flash are still unmeasured — the tier only changes the reasoning-token count, which this repo estimates linearly at the output rate. Re-check with one `/deep-review` run on a machine that holds DeepSeek credentials.
+> **Not yet verified (re-checked 2026-11-18)**: the actual reasoning depth and reasoning-token delta of `reasoningEffort` at `low`/`high`/`max` on flash are still unmeasured — the tier only changes the reasoning-token count, which this repo estimates linearly at the output rate. Re-check with one `/deep-review` run on a machine that holds DeepSeek credentials.
 
 ### Routing Strategy
 
@@ -188,7 +188,7 @@ A Tier-1 report is a **complete review**, not a preview — a clean result is ne
 
 ### Cost Comparison
 
-Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-11-09**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
+Prices are taken from `providers.deepseek.models` in `opencode.jsonc` (USD per 1M tokens; **re-verified item-by-item against the official pricing page on 2026-11-18**, off-peak rates). Peak hours are exactly double: 01:00–04:00 and 06:00–10:00 UTC Mon–Fri, excluding Chinese public holidays (= 09:00–12:00 and 14:00–18:00 Beijing); all other hours, weekends and Chinese public holidays are off-peak. `cache_write` has no standalone official price and is mapped from the cache-miss input rate:
 
 | Model | Input | Output | Cache hit (cache_read) | Cache write (cache_write) |
 | --- | --- | --- | --- | --- |
@@ -355,7 +355,7 @@ When editing config, locate "what to change → which file", so you never change
 | One agent's model, thinking tier, tool and skill allowlists, rejection contract | `opencode/agents/<name>.md` | frontmatter + body |
 | Global behavior rules (principles, failure discipline, cache discipline, anti-patterns) | `opencode/AGENTS.md` | the matching section |
 | Plugin versions (pins) | `opencode/opencode.jsonc` | `plugins` |
-| Compression trigger window (per model) / buffer / preserved tail | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction` (`buffer`/`keep`) |
+| Compression trigger window (per model) / buffer / preserved tail / background pre-write | `opencode/opencode.jsonc` | `providers.deepseek.models.<id>.limit.input` + `compaction` (`buffer`/`keep`/`background`) |
 | A skill's behavior and triggers | `opencode/skills/<name>/SKILL.md` | frontmatter `description` + body |
 
 > After editing, run `.\scripts\sync-config.ps1` to sync into `~/.config/opencode`, then reload (desktop v2: `& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" reload`; or restart opencode). Validate with `node scripts/validate-jsonc.js`; inspect the resolved result with `& "$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe" debug config`.

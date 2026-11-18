@@ -3,7 +3,7 @@
     // is the v2 dialect (plugins / providers / agents / commands / permissions
     // / media). The v1 spellings (plugin, provider, agent, command, permission,
     // attachment, small_model, top-level subagent_depth) are never written:
-    // v2.3.0 silently migrates most of them per key (and drops the four in
+    // v2.3.2 silently migrates most of them per key (and drops the four in
     // unsupportedTopLevel) instead of rejecting the file, so the config that
     // runs would stop matching this file. See
     // README「v2 原生键名」for the key map and the verification method.
@@ -109,7 +109,7 @@
     //   #max        thinking ON, effort `max`       — escalation-only,
     //                                                 read-only agents.
     // Upstream default is thinking ON at effort `high` (DeepSeek thinking-mode
-    // guide, re-checked 2026-11-09). So only the no-suffix tier actually saves
+    // guide, re-checked 2026-11-18). So only the no-suffix tier actually saves
     // reasoning tokens — it must send `disabled` explicitly; `#high` merely
     // restates the default, `#low` sits one rung below it, and `#max` is the
     // top rung reserved for escalation.
@@ -195,7 +195,7 @@
                         }
                     ],
                     // `cost` is USD per 1M tokens — official off-peak rates,
-                    // re-verified against the pricing page 2026-11-09. Peak
+                    // re-verified against the pricing page 2026-11-18. Peak
                     // hours (UTC 01-04 & 06-10 Mon-Fri, excluding Chinese
                     // public holidays = Beijing 09-12 & 14-18) charge double,
                     // so this table under-reports peak-time spend by ~2x; it
@@ -320,8 +320,13 @@
     // is the overflow headroom during compaction. The v1 spellings (`reserved`,
     // `preserve_recent_tokens`, `prune`, `tail_turns`) are not read by v2 and
     // were removed; the v1 `reserved` knob maps to v2 `buffer`.
+    // `background` (v2.3.1+, default true) pre-writes the summary while the
+    // session nears the threshold. This repo sets it false: a summary that is
+    // never used still bills tokens, and the only downside of false is a pause
+    // at the 115K boundary. Flip to true when interactive latency matters more.
     "compaction": {
         "auto": true,
+        "background": false,
         "keep": { "tokens": 12000 },
         "buffer": 16000
     },

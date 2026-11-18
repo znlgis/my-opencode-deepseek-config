@@ -21,10 +21,10 @@ paid for.
 
 ## Hard constraints
 - Only the natively multimodal `deepseek/deepseek-flash`, with its thinking variants `#low` / `#high` / `#max`. Never another model; the one model handles both text and visual input. A **variant** (`deepseek/deepseek-flash#low`) is a thinking mode of the allowed model, not another model.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.3.0** on 2026-11-13). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
-- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16, re-measured 2026-11-09: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.3.0** (2026-11-13). Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.3.2** on 2026-11-18). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
+- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16, re-measured 2026-11-18: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.3.2** (2026-11-18). Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
-## Target runtime: desktop v2 (CLI 2.3.0 measured)
+## Target runtime: desktop v2 (CLI 2.3.2 measured)
 v2 loads `opencode.json`/`opencode.jsonc` through `packages/core/src/config/normalize.ts`: native keys decode directly, legacy keys (`command`, `agent`, `provider`, `permission`, `tools`, `plugin`, `attachment`, `reference`, `snapshot`, `autoupdate`, `autoshare`, `small_model`, `mode`, `disabled_providers`, `enabled_providers`) are migrated per key and merged with the native keys, and `logLevel`/`server`/`layout`/`subagent_depth` are dropped with a diagnostic.
 This repo standardizes on the native path: keep every v1 key out of the file, so nothing is silently migrated or dropped.
 
@@ -36,7 +36,7 @@ This repo standardizes on the native path: keep every v1 key out of the file, so
 | agents / commands | `agents`, `commands` | inline overrides; file-based agents stay in `agents/*.md` |
 | permissions | `permissions: [{action, resource, effect}]`, ordered, last-match-wins | v2 action names: `shell` (not `bash`), `subagent` (not `task`); `write`/`patch` normalize to `edit` |
 | media | `media.image.{auto_resize, max_width, max_height, max_base64_bytes}` | former `attachment` |
-| compaction | `{auto: bool, keep: {tokens}, buffer: int}` | `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1-only — do not add |
+| compaction | `{auto: bool, background: bool, keep: {tokens}, buffer: int \| "20%"}` | `background` is v2.3.1+ (default true; an unused pre-written summary still bills); `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1-only — do not add |
 | subagent_depth | `experimental.subagent_depth` | top-level `subagent_depth` is dropped by v2 — never write it |
 | skills | flat `string[]` of paths/URLs | not used here (config-dir skills are auto-discovered) |
 | small_model | — | v2 expands it into the `title` agent; this repo pins `title` explicitly instead |
@@ -93,7 +93,7 @@ URL even though the published schema only documents the v1 keys (observed
 ## Config key shapes (authoritative)
 - **references** — alias → `{"repository" | "path", "branch"?, "description"?}`. `repository` takes a Git URL / host-path / `owner/repo` (+ `branch` to pin a ref); `path` takes relative / absolute / `~/`; `description` tells agents *when* to use it.
 - **agents (inline)** — `"agents": { "build": { "model": "…" } }`; inline keys override file-based `agents/<name>.md`.
-- **compaction** — `{ "auto": bool, "keep": { "tokens": n }, "buffer": n }`. `keep.tokens` is the verbatim tail kept across a compaction; `buffer` is the overflow headroom. Do NOT write the v1 names (`reserved`, `preserve_recent_tokens`, `prune`, `tail_turns`).
+- **compaction** — `{ "auto": bool, "background": bool, "keep": { "tokens": n }, "buffer": n | "20%" }`. `keep.tokens` is the verbatim tail kept across a compaction; `buffer` is the headroom kept free below the model window (token count or a percentage); `background` (v2.3.1+) pre-writes the summary and defaults to true. Do NOT write the v1 names (`reserved`, `preserve_recent_tokens`, `prune`, `tail_turns`).
 - **Environment escape hatches** — `OPENCODE_CONFIG_DIR` points at a custom config dir (searched like `.opencode`, loaded after it so it *overrides*); `OPENCODE_CONFIG` points at a single custom config file (loaded between global and project).
 
 ## Agent frontmatter (`agents/<name>.md`)
@@ -155,7 +155,7 @@ Only these keys are native. **A key outside this list is never itself a fatal st
 - `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
 - Capture both as UTF-8 or the multi-byte content corrupts the JSON:
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
-- `reload` is present on **2.3.0** (`opencode-cli.exe --help` lists it; absent in 2.0.27, restored in 2.1.0; re-checked 2026-11-13). The config watcher also reloads on file change by itself; use `opencode-cli.exe service restart` when a forced restart is needed.
+- `reload` is present on **2.3.2** (`opencode-cli.exe --help` lists it; absent in 2.0.27, restored in 2.1.0; re-checked 2026-11-18). The config watcher also reloads on file change by itself; use `opencode-cli.exe service restart` when a forced restart is needed.
 - Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
 - `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
 - The 1.18.x line is out of scope; do not verify against it.
