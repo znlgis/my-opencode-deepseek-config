@@ -1797,17 +1797,29 @@ def _qa_gates(lg, rep, deep, tl, work):
     if os.path.exists(srt):
         got = len([b for b in open(srt, encoding="utf-8").read().strip().split("\n\n") if b.strip()])
     want = len(tl["scenes"])
-    if got:
+    if not os.path.exists(srt):
+        # 文件根本没有：sub 阶段没跑过，记 skipped（skipped != 通过）。
+        lg.skip("G7", "字幕条数 = 剧本句数", "没找到 sub.srt（sub 阶段没跑）")
+    elif got == 0 and want > 0:
+        # 文件在但是空的：这是"字幕全丢"，必须 fail。以前落到 else 记成 skipped，
+        # 报告里写"没找到 sub.srt"——文件明明在，结论在撒谎。
+        lg.fail("G7", "字幕条数 = 剧本句数", "sub.srt 存在但为空：0 / %d 条字幕" % want)
+    else:
         (lg.ok if got == want else lg.fail)("G7", "字幕条数 = 剧本句数",
                                             "%d / %d" % (got, want))
-    else:
-        lg.skip("G7", "字幕条数 = 剧本句数", "没找到 sub.srt")
 
     # ---- G8 黑帧 ----
-    black_msgs = [w for w in (rep.get("warnings") or []) if "黑帧" in w]
-    if black_msgs:
-        # qa_report 只在"首尾之外有长黑帧"时写 warning，本身是 warning 级
-        lg.skip("G8", "首尾之外无长黑帧", "检测到：" + black_msgs[0])
+    # G8 读结构化字段 black_segments（None=没执行 / >0=真检测到 / 0=干净）。
+    # 以前靠 warnings 里有没有"黑帧"两个字来判断，于是"检测未执行"和"检测到 2 段"
+    # 被同一个分支记成 skipped——真发现长黑帧也写不进 fail，门禁等于不存在。
+    if "black_segments" not in rep:
+        black_n = None
+    else:
+        black_n = rep.get("black_segments")
+    if black_n is None:
+        lg.skip("G8", "首尾之外无长黑帧", "检测未执行（blackdetect 失败），本次没查")
+    elif int(black_n) > 0:
+        lg.fail("G8", "首尾之外无长黑帧", "检测到 %d 段长黑帧" % int(black_n))
     else:
         lg.ok("G8", "首尾之外无长黑帧", "0 段")
 
@@ -2307,19 +2319,26 @@ def _finish_gates(a, persist=True):
     lg = _LEDGER
     if lg is None:
         return 0
-    errs = lg.exit_errors(strict=bool(getattr(a, "strict_gates", False)))
+    errs = list(lg.exit_errors(strict=bool(getattr(a, "strict_gates", False))))
     gj = rep = ""
     if persist:
         # 交付账本只在交付阶段写；中间阶段（layout 等）写一次就会把上一轮
         # 「pass 8 / skipped 1」的完整报告换成「只有本阶段一条」的半成品。
+        # 交付凭据写不出去 = 没有交付凭据。以前只打一行 WARN 就继续，退出码仍是 0，
+        # 于是"QC-REPORT.md 根本没生成"这件事在机器眼里等于通过。这里把它记成 fail：
+        # 账本里有一条明确失败，退出码随之非零（--strict-gates 之外也一样）。
         try:
             gj = lg.write_json()
         except Exception as e:                              # noqa: BLE001
-            print("[WARN] gates.json 写入失败:", e)
+            print("[ERROR] gates.json 写入失败:", e)
+            lg.fail("deliver", "交付凭据落盘（gates.json）", "写入失败：%s" % e)
+            errs.append("gates.json 写入失败：%s" % e)
         try:
             rep = GT.write_report(a.work, _report_path(a))
         except Exception as e:                              # noqa: BLE001
-            print("[WARN] QC 报告写入失败:", e)
+            print("[ERROR] QC 报告写入失败:", e)
+            lg.fail("deliver", "交付凭据落盘（QC-REPORT.md）", "写入失败：%s" % e)
+            errs.append("QC-REPORT.md 写入失败：%s" % e)
     c = lg.counts()
     print("")
     print("== 门禁汇总：pass %d · fail %d · skipped %d%s"
@@ -2465,6 +2484,9 @@ def run_batch(a):
         cmd += ["--engine", a.engine] if a.engine else []
         cmd += ["--cost"] if a.cost else []
         cmd += ["--strict-gates"] if a.strict_gates else []
+        # --layout 必须透传：父进程的 _early_layout 只作用于父进程，子进程是独立进程，
+        # argv 里没有 --layout 就按横屏渲——批量出竖屏片会静默全变横屏。
+        cmd += ["--layout", a.layout] if a.layout else []
         t0 = time.time()
         p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
                            errors="replace")
@@ -2538,7 +2560,7 @@ def _proposal_gate(a):
 
 # ---------------------------------------------------------------- 场景模块定位
 def _builtin_scenes() -> str:
-    """本技能内置的场景绘制模块路径（收编后在技能目录的 assets/scenes.py）。"""
+    """本技能内置的场景绘制模块路径（装成插件后在包内 skills/video-studio/assets/scenes.py）。"""
     cand = (Path(__file__).resolve().parent.parent / "assets" / "scenes.py")
     return str(cand) if cand.exists() else ""
 
@@ -2568,9 +2590,9 @@ def _resolve_scenes(scenes_arg, script_path) -> str:
         return builtin
     raise SystemExit(
         "[缺少场景模块] 找不到 %s，也找不到技能内置渲染器（%s）。\n"
-        "  内置渲染器应在 <SKILL_DIR>/assets/scenes.py；"
+        "  装成插件时内置渲染器应在 <包>/skills/video-studio/assets/scenes.py；"
 
-        "请检查技能目录是否完整，或显式传 --scenes 指向你自己的 scenes.py。" % (cand, _builtin_scenes() or "missing"))
+        "请检查插件包是否完整，或显式传 --scenes 指向你自己的 scenes.py。" % (cand, _builtin_scenes() or "missing"))
 
 
 # ---------------------------------------------------------------- main
@@ -2636,6 +2658,19 @@ def main():
             "references/portrait-and-motion.md\n")
 
     if a.batch:
+        # 批量只吃清单里的 per-film 字段；这些开关在批量下要么没意义、要么会被静默丢掉。
+        # 以前它们全部无声失效：`--batch x.json --preview 15` 会真的跑全量成片（最贵的一条路），
+        # 用户以为在出预览；`--layout portrait` 曾经父进程竖屏、子进程横屏。宁可早报错。
+        _clash = [flag for flag, on in (("--preview", bool(a.preview)),
+                                        ("--stage", a.stage not in ("", "all")),
+                                        ("--gate", bool(a.gate)),
+                                        ("--run-id", bool(a.run_id)),
+                                        ("--vmaf", bool(a.vmaf)),
+                                        ("--no-preflight", bool(a.no_preflight))) if on]
+        if _clash:
+            raise SystemExit("[batch] 与 %s 互斥：批量只按清单逐条跑 `--stage all`，"
+                             "这些开关写进清单或用单条 render.py 指定"
+                             % " / ".join(dict.fromkeys(_clash)))
         _setup_stdio()
         return run_batch(a)
 
@@ -2663,7 +2698,7 @@ def main():
             web_entry = _web_entry(script)   # 入口页不存在时这里会 SystemExit（本来就该早失败）
         except SystemExit:
             web_entry = ""                   # 页面还没建：交给后面的 stage 报错，账本先照建
-    _LEDGER = GT.GateLedger(a.work, script, scenes_path=a.scenes,
+    _LEDGER = GT.GateLedger(a.work, script, scenes_path=script["_scenes"],
                             script_path=a.script, engine=engine,
                             web_entry=web_entry, run_id=a.run_id)
     if a.no_gate:
@@ -2678,7 +2713,7 @@ def main():
         源头指纹，否则"改了配色但没重跑 frames"这种事故查不出来。
         """
         design = os.path.join(a.work, "design.json")
-        return {"script": a.script, "scenes": a.scenes,
+        return {"script": a.script, "scenes": script.get("_scenes") or "",
                 "design": design if os.path.exists(design) else ""}
 
     # 本次命令行**计划要跑**的 stage 集合：--stage all 展开成 10 个，单 stage 就是它自己。
@@ -2831,7 +2866,27 @@ def main():
             raise SystemExit("[preview] 需要秒数，例如 --preview 15") from None
         if secs <= 0:
             raise SystemExit("[preview] 秒数必须 > 0")
-        tl = ensure_tl()
+        # 自动补前置（照抄 stills 分支的写法）：README 把 --preview 15 列在常用开关里，
+        # 可干净 work/ 下直接 ensure_tl() 会 SystemExit「先跑 --stage layout」——照文档
+        # 抄一遍必失败，而且用户看不出"只差一次 TTS + 排轴"。这里缺什么就真跑什么，
+        # 每一步都**明说**补的是哪一步（不偷偷跑）。
+        # 为什么每步都要 _stage_begin/_stage_end：否则 manifest 里没有 tts/layout 记录，
+        # 下次 --stage tts 会看到 tts.json 在、账本里却没记录 -> 误报「接手旧 work」。
+        if not os.path.exists(tts_p):
+            print("[preview] 没有 tts.json，自动先跑 --stage tts（需要联网合成旁白）")
+            _t0 = _stage_begin("tts")
+            lines = st_tts(script, a.work, force=a.force_tts)
+            _stage_end("tts", _t0, n_tts=len(lines) if isinstance(lines, list) else None)
+            _t0 = _stage_begin("layout")
+            tl = st_layout(script, a.work, lines)
+            _stage_end("layout", _t0)
+        elif not os.path.exists(tl_p):
+            print("[preview] 没有 timeline.json，自动先跑 --stage layout")
+            _t0 = _stage_begin("layout")
+            tl = st_layout(script, a.work)
+            _stage_end("layout", _t0)
+        else:
+            tl = ensure_tl()
         mod = load_scenes()
         pdir = os.path.dirname(os.path.abspath(a.out))
         os.makedirs(pdir, exist_ok=True)
@@ -2908,7 +2963,8 @@ def main():
             proj = os.path.dirname(os.path.abspath(a.script))
             want = {"style": [os.path.join(a.work, "style.json"),
                               os.path.join(a.work, "voice_plan.json")],
-                    "stills": [os.path.join(a.work, "qa", "sheet.png")],
+                    "stills": [os.path.join(a.work, "qa", "sheet.png"),
+                               os.path.join(a.work, "stills", "_sheet.png")],
                     "facts": [os.path.join(proj, "FACTS.md"), os.path.join(a.work, "FACTS.md")],
                     "release": [a.out]}.get(a.gate, [])
             # 每一组是"多选一"：任一条路径存在就算有证据。

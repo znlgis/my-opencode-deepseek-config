@@ -115,13 +115,12 @@ def build_audio(self, total=None, sr=SR, base_db=None, default_gain_db=0.0,
 
 另有硬性回归（任何一条红都不算完成）：
 
-> 下面 1–5 的路径都按技能目录写（`python <SKILL_DIR>/scripts/…`）。
+> 下面每条路径都按 `<SKILL_DIR>`（本技能所在目录）写；`<SKILL_DIR>` 见 SKILL.md §1 的定义。
 
-1. `python <SKILL_DIR>/scripts/selfcheck.py` 全 PASS（**85 条**）。
+1. `python <SKILL_DIR>/scripts/selfcheck.py` 全 PASS（**97 条**）。
 2. `python <SKILL_DIR>/scripts/musicgen.py --selftest` 全 PASS（26 项）。
 3. `python <SKILL_DIR>/scripts/sfxkit.py --selftest` 全 PASS（16 条）。
-4. 本仓库的 `node scripts/validate-jsonc.js` 无 FAIL（技能 frontmatter 合法）。
-5. 音效位置派生的逐样本可复现：`selfcheck.py` 守着这条（`sfx.content_seed=false` 时与 `seed_base + i` 同值）。
+4. 音效位置派生的逐样本可复现：`selfcheck.py` 守着这条（`sfx.content_seed=false` 时与 `seed_base + i` 同值）。
 
 ## 6. 实现备注
 

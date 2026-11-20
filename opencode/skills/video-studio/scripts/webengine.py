@@ -7,7 +7,7 @@
 
 **跟随风格包**。公开入口都有一组可选参数（style / width / height / fps）：
     style       stylekit 的 style plan（dict，含 "theme"）或裸主题 dict；None = 不注入
-    width/height 画布尺寸，只接受 16:9 横屏偶数尺寸（竖屏 / 4:3 / 奇数直接 raise）
+    width/height 画布尺寸，只接受 16:9 横屏或 9:16 竖屏的偶数尺寸（4:3 / 其它比例 / 奇数直接 raise）
     fps         写进注入 payload 的帧率；None = 不约束（页面自己的 window.FPS 为准）
 注入方式：add_init_script 在**页面加载前**写 window.__STYLE__（主题色板 / 版式 / 字体栈 /
 画布 w·h·fps）。assets/web/engine.js 与 film.js 优先读它，取不到就退回深蓝橙常量。
@@ -17,7 +17,7 @@
    window.__STYLE__，渲染像素与默认外观逐字节一致（自检里有「无 style 页面无 __STYLE__」断言，
    外部还有逐帧 SHA-256 对照）。
 2. 注入内容只来自入参：不读环境变量/时间/随机数，JSON 用 sort_keys 序列化，同输入同输出。
-3. 尺寸与帧率 fail-closed：不符合 16:9 横屏偶数就 raise，绝不静默缩放或改帧率
+3. 尺寸与帧率 fail-closed：不符合 16:9 横屏 / 9:16 竖屏偶数就 raise，绝不静默缩放或改帧率
    （静默改帧率会让分块帧号整体错位，成片音画不同步且门禁看不出来）。
 
 算法改编自 ai-history-film（MIT）video/render.py（逐帧 seek / 分块并行 / 崩溃重开 / 断点续跑），
@@ -160,11 +160,12 @@ _MIN_CANVAS = (320, 180)
 
 
 def _validate_canvas(width, height):
-    """校验画布尺寸（16:9 横屏 + 偶数），返回 (int, int)；不合格 raise ValueError。
+    """校验画布尺寸（16:9 横屏 / 9:16 竖屏 + 偶数），返回 (int, int)；不合格 raise ValueError。
 
-    为什么 fail-closed：竖屏 9:16 / 4:3 在网页模板里没有对应的安全区与版式，静默接受会渲出
-    "文字贴边、构图塌掉"的片子；而 render.py 的 --engine pil 路线也不支持非 16:9，
-    两边不一致时最容易出现"预览好好的、出片是竖的"。所以上游拒绝之外，这里再拦一道。
+    为什么 fail-closed：4:3 / 3:2 这些比例在网页模板里没有对应的安全区与版式，静默接受会渲出
+    "文字贴边、构图塌掉"的片子；而 render.py 的 --engine pil 路线也只认这两套画幅（竖屏要配
+    --layout portrait，见 SKILL.md §7.5.1），两边不一致时最容易出现"预览好好的、出片是竖的"。
+    所以上游拒绝之外，这里再拦一道。
     """
     try:
         w = int(width)
@@ -577,7 +578,17 @@ async def open_page(pw, url, width=W, height=H, log=False, deterministic=None,
                                          polling=250)
         except Exception as exc:        # noqa: BLE001
             contract = await _page_contract(page)
+            # 页面自己捕获的启动异常（示例页 index.html 的 boot().catch 会写到这个全局）：
+            # 它比"window.ready 没变 true"更接近根因——异步 reject 不一定能进 pageerror。
+            boot_err = ""
+            try:
+                boot_err = str(await page.evaluate(
+                    "() => window.__BOOT_ERROR__ ? String(window.__BOOT_ERROR__) : ''") or "")
+            except Exception:                                     # noqa: BLE001
+                boot_err = ""
             detail = ("；页面异常/控制台错误：" + " | ".join(page_errors[:5])) if page_errors else ""
+            if boot_err:
+                detail += "；boot() 抛出的异常：%s" % boot_err.splitlines()[0][:300]
             raise RuntimeError(
                 "页面 %s 在 %d s 内没有把 window.ready 置 true（%s）。契约快照：%s%s。"
                 "排查：① 页面脚本是否报错（上面若有 [页面异常] 就是它）；"
@@ -595,7 +606,7 @@ async def open_page(pw, url, width=W, height=H, log=False, deterministic=None,
                 % (url, _format_contract(contract))
             )
         if payload is not None:
-            # 注入的契约自检：payload 说 16:9 + w/h，页面就必须真的按它建画布；
+            # 注入的契约自检：payload 说画幅（16:9 或 9:16）+ w/h，页面就必须真的按它建画布；
             # 页面没照做（老页面不认 __STYLE__）要当场报错，不能拿"截图能出图"当通过。
             got = await page.evaluate(
                 "() => ({hasStyle: typeof window.__STYLE__ === 'object' && window.__STYLE__ !== null,"
@@ -1231,9 +1242,14 @@ QA_BRIEF_S = 0.6
 def _check_qa_window(t0, t1, step):
     """文字质检扫描参数校验；非法 raise ValueError（否则非法参数会被静默吞成空结果 + exit 0）。
 
-    qa_text.js 用 `if (end < start) return empty` 与 `dt = max(step, 1/fps)` 兜底，于是
-    --from 2 --to 1 会打印"重叠 0、出画 0…"并 exit 0；--step 1 因为采不到 0.5 s 的闪
-    字而永远报 brief=0。空扫描 / 扫不到的扫描都不能算"没有缺陷"。
+    现状：assets/web/qa_text.js 的 qaText() 对四类非法输入**全部 throw**——非有限时间、
+    t1 < t0、step <= 0、step >= 一闪而过的判据阈值（BRIEF_S = 0.6）。页面侧已经不会拿
+    "空结果"兜底，空扫描 / 扫不到的扫描都不能算"没有缺陷"。
+
+    那 Python 这道还留着做什么：它跑在**起浏览器之前**，CLI 能立刻给 exit 2 + 一行可读中文
+    报错，而不是等 Playwright 起来、页面抛异常再翻译成 RuntimeError。两侧阈值必须同口径
+    （QA_BRIEF_S == qa_text.js 的 BRIEF_S）：任何一侧放宽，step>=0.6 时「一闪而过」这条判据
+    就永远不可能触发，等于没检查。
     """
     try:
         a = float(t0)
@@ -1253,7 +1269,7 @@ def _check_qa_window(t0, t1, step):
             "时每段文字最多被采到 1 个点，该判据永远不可能触发（等于没检查）。"
             "整片扫描请用 step<=0.5；长片可分段多次调用。"
             % (s, QA_BRIEF_S, QA_BRIEF_S, QA_BRIEF_S))
-    if b is not None and b < a:
+    if b is not None and b <= a:
         raise ValueError(
             "文字质检区间非法：t1=%.3f < t0=%.3f。以前这种空扫描会返回全 0 并让 CLI exit 0，"
             "看起来像「没有任何文字缺陷」。" % (b, a))

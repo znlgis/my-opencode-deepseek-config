@@ -5,7 +5,6 @@
  "voice": "zh-CN-YunxiNeural",
  "rate": "+6%",
  "pitch": "+0Hz",
- "bar": 0,
  "sub_max_hold": null,
  "trim_silence": true,
  "tts_workers": 4,

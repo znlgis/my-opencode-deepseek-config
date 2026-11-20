@@ -23,7 +23,8 @@
 `propose.py` 只决定「外观谁来拍板」；素材 / 时长 / 气质 / 声线 / 配乐这些**输入**来自问诊：
 
 ```bash
-python <SKILL_DIR>/scripts/intake.py --work work --questions --json   # 7 题，一次性问完
+python <SKILL_DIR>/scripts/intake.py --work work --questions --json   # 8 题，一次性问完
+python <SKILL_DIR>/scripts/intake.py --work work --recommend "中国高铁十年，纪录片"  # 制作方式推荐
 python <SKILL_DIR>/scripts/intake.py --work work --set tone:bright-lively ...
 python <SKILL_DIR>/scripts/intake.py --work work --finalize           # -> intake.brief.txt
 ```
@@ -31,9 +32,11 @@ python <SKILL_DIR>/scripts/intake.py --work work --finalize           # -> intak
 | 项 | 行为 |
 |---|---|
 | 没答完 | 首次 `propose.py` 退 1，并打印「怎么问 / 怎么答 / 怎么定稿」三步 |
-| 答完了 | 提案读 `work/intake.json`，答案合成 brief；`proposal.intake` 记 complete + 答案 |
+| 答完了 | 提案读 `work/intake.json`，答案合成 brief；`proposal.intake` 记 complete + 答案 + 制作方式（`intake.mode`） |
 | `--no-intake` | 显式放行，`proposal.intake.status = bypassed`（事后可查） |
 | 气质默认 | 任何题材的推荐项都是「明亮活泼」；没点名气质时**首个候选固定 bright** |
+| 制作方式 | 第 2 题（`mode`）= 自己画 / 网上素材剪辑 / 两者结合；`auto` 按题材推荐落地。**素材剪辑线提案层不适用**：`propose.py` 仍能跑（hybrid 的**图文段**要用），但会明确提示，并把 `mode` 记进 `proposal.intake` |
+| hybrid 的下一步 | 提案/冻结只决定图文段外观；冻结后必须跑 `matchstyle.py --apply` 把配色与画幅锚到素材（见 `references/footage.md`）。**不要**反过来给素材叠主题色 |
 
 ## 2. 流程（零拷贝：脚本留在技能目录里直接跑）
 

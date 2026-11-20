@@ -1,0 +1,390 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/footage.schema.json",
+ "title": "footage.json — 素材剪辑生产线契约",
+ "description": "素材线（footage 模式）：画面来自现成素材（网上下载或本地文件），旁白/时间轴/混音/字幕由代码保证。与 film.json（零素材逐帧绘制）并列，字段不通用。",
+ "type": "object",
+ "required": [
+  "title",
+  "sources",
+  "lines"
+ ],
+ "additionalProperties": false,
+ "patternProperties": {
+  "^_": {
+   "description": "以 _ 开头的注释键（如 _comment）：只给人看，不参与渲染与门禁逻辑"
+  }
+ },
+ "properties": {
+  "title": {
+   "type": "string",
+   "minLength": 1
+  },
+  "sources": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "required": [
+     "id"
+    ],
+    "additionalProperties": false,
+    "patternProperties": {
+     "^_": {
+      "description": "以 _ 开头的注释键：只给人看，不参与渲染与门禁逻辑"
+     }
+    },
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$"
+     },
+     "kind": {
+      "enum": [
+       "video",
+       "audio",
+       "image"
+      ]
+     },
+     "path": {
+      "type": "string",
+      "description": "本地文件（相对 footage.json 所在目录；可离线复现，推荐）"
+     },
+     "url": {
+      "type": "string",
+      "description": "远程地址：直链走 urllib，页面走 yt-dlp"
+     },
+     "headers": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "string"
+      }
+     },
+     "format_sel": {
+      "type": "string",
+      "description": "yt-dlp 的 -f 表达式"
+     },
+     "sections": {
+      "type": "array",
+      "items": {
+       "type": "array",
+       "items": {
+        "type": "number"
+       },
+       "minItems": 2,
+       "maxItems": 2
+      }
+     },
+     "license_note": {
+      "type": "string",
+      "description": "出处/授权说明（F5 门禁要求非空）"
+     },
+     "burned_subs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "原片烧录字幕带的纵向范围（源像素）。F2 原字幕残留判定拿它和 treatment.crop 之后的可见区做几何相交；字段名与 footageqa._declared_band 消费的写法一致",
+      "required": [
+       "y0",
+       "y1"
+      ],
+      "properties": {
+       "y0": {
+        "type": "number",
+        "description": "字幕带上边界（源像素 y）"
+       },
+       "y1": {
+        "type": "number",
+        "description": "字幕带下边界（源像素 y）"
+       }
+      }
+     },
+     "watermark": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "原片台标/水印框（源像素）。F3 水印残留判定拿它和 treatment.crop 之后的可见区做几何相交；字段名与 footageqa._declared_band 消费的写法一致",
+      "required": [
+       "x",
+       "y",
+       "w",
+       "h"
+      ],
+      "properties": {
+       "x": {
+        "type": "number"
+       },
+       "y": {
+        "type": "number"
+       },
+       "w": {
+        "type": "number"
+       },
+       "h": {
+        "type": "number"
+       }
+      }
+     }
+    }
+   }
+  },
+  "treatment": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "画面治理：一次定义、全片复用（去烧录字幕、去水印、统一画幅与调色）",
+   "properties": {
+    "crop": {
+     "type": "string",
+     "pattern": "^\\d+:\\d+:\\d+:\\d+$"
+    },
+    "scale": {
+     "type": "string",
+     "pattern": "^\\d+:\\d+$"
+    },
+    "color": {
+     "type": "string"
+    },
+    "letterbox_color": {
+     "type": "string"
+    }
+   }
+  },
+  "video": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "width": {
+     "type": "integer",
+     "minimum": 320
+    },
+    "height": {
+     "type": "integer",
+     "minimum": 240
+    },
+    "fps": {
+     "enum": [
+      24,
+      25,
+      30,
+      50,
+      60
+     ]
+    }
+   }
+  },
+  "audio": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "voice": {
+     "type": "string"
+    },
+    "rate": {
+     "type": "string"
+    },
+    "pitch": {
+     "type": "string"
+    },
+    "words": {
+     "type": "boolean"
+    },
+    "workers": {
+     "type": "integer",
+     "minimum": 1,
+     "maximum": 16
+    },
+    "voice_gain": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 2
+    },
+    "env_gain": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1,
+     "description": "素材原声（环境层）增益；默认 0.12"
+    },
+    "music_gain": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 1
+    },
+    "music_file": {
+     "type": "string"
+    },
+    "music": {
+     "type": "object"
+    },
+    "trim_silence": {
+     "type": "boolean",
+     "description": "逐句 TTS 后裁掉尾部静音（footage.py st_tts 真实读取；默认 true）"
+    }
+   }
+  },
+  "subtitle": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "font": {
+     "type": "string"
+    },
+    "size": {
+     "type": "integer",
+     "minimum": 16,
+     "maximum": 96
+    },
+    "margin_v": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 400
+    },
+    "margin_l": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 400
+    },
+    "margin_r": {
+     "type": "integer",
+     "minimum": 0,
+     "maximum": 400
+    },
+    "outline": {
+     "type": "number"
+    },
+    "shadow": {
+     "type": "number"
+    },
+    "note_size": {
+     "type": "integer",
+     "minimum": 12,
+     "maximum": 72
+    },
+    "halfwidth_commas": {
+     "type": "boolean"
+    }
+   }
+  },
+  "credit": {
+   "type": "object",
+   "additionalProperties": false,
+   "required": [
+    "text"
+   ],
+   "properties": {
+    "text": {
+     "type": "string"
+    },
+    "at": {
+     "type": "number"
+    },
+    "end": {
+     "type": "number"
+    }
+   }
+  },
+  "pacing": {
+   "type": "object",
+   "additionalProperties": false,
+   "properties": {
+    "lead": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 3
+    },
+    "tail": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 3
+    },
+    "hold": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 5
+    },
+    "outro": {
+     "type": "number",
+     "minimum": 0,
+     "maximum": 10
+    }
+   }
+  },
+  "crf": {
+   "type": "integer",
+   "minimum": 12,
+   "maximum": 30
+  },
+  "preset": {
+   "enum": [
+    "ultrafast",
+    "superfast",
+    "veryfast",
+    "faster",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow"
+   ]
+  },
+  "audio_bitrate": {
+   "type": "string"
+  },
+  "lines": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "text"
+    ],
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+$"
+     },
+     "text": {
+      "type": "string",
+      "minLength": 1,
+      "description": "朗读文本"
+     },
+     "sub": {
+      "type": "string",
+      "description": "上屏字幕；不写则用 text"
+     },
+     "hold": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 5
+     },
+     "shot": {
+      "type": "object",
+      "required": [
+       "source",
+       "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+       "source": {
+        "type": "string"
+       },
+       "at": {
+        "type": "number",
+        "minimum": 0,
+        "description": "源文件内绝对秒数"
+       },
+       "len": {
+        "type": "number",
+        "minimum": 0.2,
+        "description": "镜头长度；省掉则跟随旁白实测时长"
+       },
+       "why": {
+        "type": "string",
+        "description": "为什么用这一镜（审计用）"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

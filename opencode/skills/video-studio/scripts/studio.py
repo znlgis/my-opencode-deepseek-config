@@ -3,14 +3,14 @@
 
 为什么要有它
 ------------
-技能里现在有 20+ 个脚本、约 200 个命令行开关。对人是记忆负担，对 agent 是**犯错概率**：
+技能里现在有 28 个脚本、约 230 个命令行开关。对人是记忆负担，对 agent 是**犯错概率**：
 参数记不住就会瞎猜，而整套设计恰恰依赖“照文档走”。
 
 它**不做任何事**，只做两件：
   1) 把常用动作映射到对应的脚本与参数（studio render --stage stills → render.py）；
   2) 自己不认识的参数**原样透传**给目标脚本（studio render --vmaf off 照样生效）。
 
-刻意不动的东西：现成的 20+ 个脚本**一个都不改**，它们的 --help 与文档里的直调方式全部继续有效。
+刻意不动的东西：现成的 28 个脚本**一个都不改**，它们的 --help 与文档里的直调方式全部继续有效。
 门面只是多一条路，不是替代——所以它坏了也不影响出片（这比“功能多”重要）。
 
 用法
@@ -37,12 +37,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # 子命令 -> (目标脚本, 一句话说明)
 # 只收“高频且名字与脚本对得上”的几个；冷门脚本直调更清楚，硬塞进来等于多一层要记的映射。
 COMMANDS = {
-    "intake":   ("intake.py",    "出片前问诊：7 个问题一次问完"),
+    "intake":   ("intake.py",    "出片前问诊：8 个问题一次问完（含制作方式推荐）"),
     "propose":  ("propose.py",   "出候选方案 / 冻结设计 / 换方向重出"),
     "render":   ("render.py",    "生产线：14 个 stage、批量、预览、断点续跑"),
     "critic":   ("critic.py",    "审美质检：离线打分 + 可选 VLM 复评"),
-    "check":    ("selfcheck.py", "回归自检：76 条断言，不联网"),
+    "check":    ("selfcheck.py", "回归自检：97 条断言，不联网"),
     "lint":     ("designkit.py", "设计 DSL 体检（--lint design.json）"),
+    "matchstyle": ("matchstyle.py", "hybrid 风格对齐：素材画像 -> 图文段配色/画幅"),
     "contract": ("filmcheck.py", "film.json 契约校验"),
     "explain":  ("render.py",    "哪些阶段过时了 + 最小重跑命令"),
 }

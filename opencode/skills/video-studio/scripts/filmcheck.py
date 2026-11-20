@@ -330,6 +330,11 @@ CUE_RECIPE_PARAMS = ("pitch", "kind", "direction", "tone", "end", "brightness", 
                      "shift", "depth", "strength", "gustiness", "whistle", "env",
                      "intensity", "surface", "crackle")
 
+# fps 白名单只在 filmkit 不可用的降级分支里用；与 filmkit.VIDEO_FPS_ALLOWED 同值。
+# 放在这里是为了"拷出来只带 filmcheck"时也能真查，而不是打一句 warn 冒充查过。
+VIDEO_FPS_ALLOWED = (24, 25, 30, 50, 60)
+
+
 CUE_SPEC = {
     "t": "dict", "required": ["at", "type"], "passthrough": True,
     "props": dict({
@@ -356,7 +361,18 @@ SCRIPT_SPEC = {
         # Now it is an inert key: accepted (old scripts must not hard-fail) but reported.
         "style": {"t": "str", "inert": "已废弃：外观由 work/design.json 决定（python propose.py --brief ... 再 --confirm），这里写任何值都不生效"},
         "engine": {"t": "str", "enum": ENGINES},
-        "voice": {"t": ("str", "dict"), "open": "dict"},
+        # voice 以前整块 open（嵌套字段全靠自由发挥）：`jitterr`/`rate_rang` 这类拼写错误
+        # 发明不报任何 warning，而这条工具存在的理由就是"写对了却不生效"要能查出来。
+        "voice": {"t": ("str", "dict"), "props": {
+            # map / default 是设备 -> edge voice id 的映射表，内容自由：
+            "map": {"t": "dict", "open": "dict"},
+            "default": {"t": "str"},
+            "auto": {"t": "bool"},
+            "jitter": {"t": "num", "min": 0.0},
+            "max_distinct": {"t": "int", "min": 1, "max": 8},
+            "rate_range": {"t": "list", "len": 2},
+            "cps_band": {"t": "list", "len": 2},
+        }},
         "rate": {"t": "str", "pattern": RATE_RE, "example": "+6%"},
         "pitch": {"t": "str", "pattern": PITCH_RE, "example": "+0Hz"},
         "bpm": {"t": ("num", "str"), "auto": True, "auto_only": True, "positive": True},
@@ -369,7 +385,10 @@ SCRIPT_SPEC = {
         "min_dur": {"t": "num", "min": 0.0},
         "hold": {"t": "num", "min": 0.0},
         "max_dur": {"t": "num", "min": 0.0},
-        "bar": {"t": "num", "min": 0.0},
+        # bar 是保留字段：render.py 的 build_timeline 不传它，写了只影响 filmcheck 的
+        # timeline 对账豁免（那条豁免已删）。标 inert 让"写对了却不生效"能被看见。
+        "bar": {"t": "num", "min": 0.0,
+                "inert": "保留字段：render.py 不传给 build_timeline，写它对成片没有影响"},
         "sub_max_hold": {"t": ("num", "null")},
         "trim_silence": {"t": "bool"},
         "trim_db": {"t": "num"},
@@ -447,8 +466,10 @@ SCRIPT_SPEC = {
                 # 因为本项目的立场是"写对了却不生效"比"报未知键"更坏。
                 "enabled": {"t": "bool", "inert": "写它不生效；要跳过 G11 请写 qa.vmaf.mode=\"off\"（或 --vmaf off）"},
                 "mode": {"t": "str", "enum": ("full", "sample", "off")},
-                "pass": {"t": "num", "min": 0.0},
-                "warn": {"t": "num", "min": 0.0},
+                # max 与 schemas/film.schema.json 同口径（0–100）：以前只写 min，
+                # pass=1500 在 schema 里非法、在 filmcheck 里静默通过。
+                "pass": {"t": "num", "min": 0.0, "max": 100.0},
+                "warn": {"t": "num", "min": 0.0, "max": 100.0},
                 # 键名对齐 schemas/film.schema.json 与 qavmaf.report(sample_step=...)。
                 # 这里以前写的是 sample_s —— 全仓没有任何消费者（render 不读、qavmaf 只认
                 # sample_step），于是"写对了却完全没生效"，而 schema 里合法写完还会被本脚本
@@ -719,9 +740,22 @@ def check_cross(script, script_path, rep, ctx):
             except Exception as e:                          # noqa: BLE001
                 rep.err("video", "画幅解析失败：%s" % e, "bad_video")
         else:
-            # filmkit 不可用（拷出来只带了 filmcheck）时退回最小校验：只查 fps 枚举，
-            # 并明说"完整校验需要 filmkit.py"，避免让人以为已经全查过。
-            rep.warn("video", "找不到 filmkit.py：只做了 fps 枚举校验，"
+            # filmkit 不可用（拷出来只带了 filmcheck）时退回最小校验。
+            # 以前这里**只打一句 warn 就什么都不查**，文案却写"只做了 fps 枚举校验"——
+            # 用户以为 fps 查过，实际 fps=45 静默通过。现在真的查一遍 fps 白名单，
+            # 并且画幅/上采样规则明确标"未校验"（warn），别冒充全查。
+            _fps = vv.get("fps")
+            if _fps is not None:
+                try:
+                    _fps_f = float(_fps)
+                except (TypeError, ValueError):
+                    rep.err("video", "video.fps 必须是数字，收到 %r" % (_fps,), "bad_video")
+                else:
+                    if _fps_f not in VIDEO_FPS_ALLOWED:
+                        rep.err("video", "video.fps=%g 不在允许列表 %s"
+                                % (_fps_f, "/".join(str(int(x)) for x in VIDEO_FPS_ALLOWED)),
+                                "bad_video")
+            rep.warn("video", "找不到 filmkit.py：已查 fps 枚举，"
                               "画幅/上采样规则未校验（完整校验请把 filmkit.py 放在同目录）",
                      "video_partial")
 
@@ -778,13 +812,15 @@ def check_cross(script, script_path, rep, ctx):
         # 快语速 = 时长短（下界），慢语速 = 时长长（上界）
         est_lo += max(min_dur, lead + chars / CPS_HI + tail + hold)
         est_hi += max(min_dur, lead + chars / CPS_LO + tail + hold)
-    # bar > 0 把每段向上取整到小节倍数，total 天然比逐句估算大；这时不拿估算对账。
+    # 以前这里有一条 "script.bar > 0 就跳过对账" 的豁免：理由是"每段向上取整到小节倍数，
+    # total 天然比逐句估算大"。但 render.py 的 build_timeline 根本不传 bar（film.schema.json
+    # 自己也标了"保留字段"）——于是这条豁免的唯一效果是：写上 bar 就关掉 timeline 漂移对账。
+    # 现在只做真对账，bar 的 inert 提示由 SPEC 负责。
     drift = 0.0
-    if not (_f(script.get("bar", 0.0)) > 0):
-        if total < est_lo - TIMELINE_TOL:
-            drift = total - est_lo
-        elif total > est_hi + TIMELINE_TOL:
-            drift = total - est_hi
+    if total < est_lo - TIMELINE_TOL:
+        drift = total - est_lo
+    elif total > est_hi + TIMELINE_TOL:
+        drift = total - est_hi
     if drift:
         rep.warn(str(tl_path),
                  "剧本 hold 合计 %.2f s + 语音预估 %.2f–%.2f s（含 lead/tail）≈ 全片 "

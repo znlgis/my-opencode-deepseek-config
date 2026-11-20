@@ -1537,6 +1537,72 @@ def _too_narrow(cat, want, banned):
             % (_CATEGORY_WORD[cat], "；".join(bits)))
 
 
+def _required_lightness(must, avoid):
+    """brief 对底色明暗的硬要求 -> (True=必须暗底 / False=必须浅底 / None=两可, 出处词, 出处类)。
+
+    tone 的 must 与 avoid 都能把明暗锁死（"要深色" / "不要明亮"），配色锚点自带明暗
+    （见 _PALETTE_ANCHOR 的第二个值）。两边撞上时任何候选都无解，必须在采样前说清楚。
+    """
+    want = must.get("tone")
+    if want is not None:
+        val = want[0]
+        if val == _TONE_DARK:
+            return True, want[1], "must_have"
+        if val in (_TONE_BRIGHT, _TONE_LIGHT):
+            return False, want[1], "must_have"
+        return None, "", ""
+    for aval, aword, _asrc in avoid.get("tone", ()):
+        if aval == _TONE_DARK:
+            return False, aword, "avoid"
+        if aval in (_TONE_BRIGHT, _TONE_LIGHT):
+            return True, aword, "avoid"
+    return None, "", ""
+
+
+def _palette_tone_conflict(must, avoid):
+    """配色锚点与气质约束是否互斥；互斥返回报错文案，否则 None。
+
+    为什么必须**采样前**就判：配色锚点（"深蓝"= 210°±26° + 暗底）会覆盖气质
+    （_make_design 里 dark = anchor 写在 tone 分支之后）。两者相反时每个候选都必然
+    违反约束，50 次重采样后只报一句"气质不满足"——用户看不出根因。这里提前点名是
+    哪两个词打架，并给出可以怎么改。
+    """
+    want = must.get("palette")
+    if want is None or want[0] not in _PALETTE_ANCHOR:
+        return None
+    _hue, dark = _PALETTE_ANCHOR[want[0]]
+    required, tone_word, tone_src = _required_lightness(must, avoid)
+    if required is None or required == dark:
+        return None
+    # 同明暗的替换词：锚点表里落在另一侧的那些（深蓝 ↔ 暖纸 / 墨纸）。
+    pool = [_palette_word(v) for v, (_h, d) in _PALETTE_ANCHOR.items() if d == dark]
+    alt = " / ".join([p for p in pool if p])
+    fit_tone = "深色专注" if dark else "明亮活泼"
+    return (
+        "brief 的约束互斥：「%s」把底色锁成%s，而 %s「%s」要求%s——一个设计只有一种底色明暗，"
+        "没有任何候选能同时满足。\n"
+        "  怎么办（三选一）：① 去掉配色要求「%s」，让气质决定明暗；"
+        "② 把 %s「%s」换成与配色同明暗的「%s」；"
+        "③ 把配色换成同明暗的词：%s。"
+        % (want[1], "暗底" if dark else "浅底", tone_src, tone_word,
+           "暗底" if required else "浅底", want[1], tone_src, tone_word, fit_tone,
+           alt or "（见配色词表）")
+    )
+
+
+def _palette_word(value):
+    """配色取值 -> 第一个中文说法（报错信息用；找不到就返回取值本身）。"""
+    for cat, val, aliases in _CONSTRAINT_WORDS:
+        if cat != "palette" or val != value:
+            continue
+        for alias in aliases:
+            if alias and alias.isascii() is False:
+                return alias
+        if aliases:
+            return aliases[0]
+    return value
+
+
 def _resolve_constraints(brief):
     """brief 的 must_have / avoid -> (must, avoid, domain, unmatched)。
 
@@ -1581,6 +1647,10 @@ def _resolve_constraints(brief):
                     "brief 自相矛盾：「%s」在 must_have 里要 %s=%s，"
                     "「%s」又在 avoid 里排除同一个值——没有任何候选能同时满足"
                     % (word, _CATEGORY_WORD[cat], val, aword))
+
+    _conflict = _palette_tone_conflict(must, avoid)
+    if _conflict:
+        raise ValueError(_conflict)
 
     domain = {}
     for cat, values in _CATEGORY_VALUES.items():

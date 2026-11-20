@@ -27,6 +27,7 @@
 | `bpm` / `music.*` | score / audio / mux | `score → audio → mux → qa` | 秒级 |
 | `sfx.cues` / `scenes.py 的 cues()` | cues.json / sfx.wav / audio.wav / mux | `cues → sfx → audio → mux → qa` | 秒级 |
 | `scenes.py`（画面代码） | frames / qa（参考帧失效） | `frames → mux → qa`（音轨可复用） | 帧数÷40 s |
+| `overlay.json` / `compose.py` 的叠加层与预算（图层、面积、时间窗、`role=cover`） | `work/overlay_audit.json` / `work/silent.mp4` / `work/audio_norm.wav` / 成片 / `qa` | `compose.py --stage all`（只想看时间窗就先 `--stage overlay`；底片不用重切） | 一次编码，数十秒 |
 | `crf` / `preset` | 只影响 mux | `mux → qa` | 1–3 s |
 | `engine`（pil ↔ web） | frames / qa / 分块（两条渲染路径不留复用） | `frames → mux → qa` | 帧数×(1÷fps 或 0.08–0.13 s) |
 | `tts_workers` / `chunk_frames` / `--jobs` | 只影响调度 | 无需重跑 | — |

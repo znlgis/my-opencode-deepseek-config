@@ -78,9 +78,12 @@
         { "action": "shell", "resource": "npm test*", "effect": "allow" },
         { "action": "shell", "resource": "rg *", "effect": "allow" },
         // The video-studio skill executes its bundled Python scripts by absolute
-        // path (`python <...>\skills\video-studio\scripts\render.py --stage ...`).
-        // Scoped to the skill name plus scripts/ so unrelated python stays on ask.
+        // path (`python <...>\skills\video-studio\scripts\render.py --stage ...`
+        // and `python <...>\skills\video-studio\tools\estimate.py --jobs 4`).
+        // Scoped to the skill name plus scripts/ or tools/ so unrelated python
+        // stays on ask.
         { "action": "shell", "resource": "python *video-studio*scripts*", "effect": "allow" },
+        { "action": "shell", "resource": "python *video-studio*tools*", "effect": "allow" },
         { "action": "skill", "resource": "*", "effect": "allow" },
         { "action": "external_directory", "resource": "*", "effect": "ask" }
     ],

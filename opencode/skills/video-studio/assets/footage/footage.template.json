@@ -1,0 +1,69 @@
+{
+ "_comment": "素材剪辑生产线（footage 模式）契约模板。与 film.json 并列：film.json 是零素材逐帧绘制，本文件是现成素材剪辑。先把 sources 落地、再给每句旁白指定 shot.at。",
+ "title": "示例：素材剪辑片",
+ "sources": [
+  {
+   "id": "src1",
+   "kind": "video",
+   "path": "media/source.mp4",
+   "license_note": "本地自有素材 / 已获授权；公开发布前请自行确认权利状态"
+  }
+ ],
+ "treatment": {
+  "crop": "1576:660:172:80",
+  "scale": "1920:804",
+  "letterbox_color": "0x0b0c0e"
+ },
+ "video": {
+  "width": 1920,
+  "height": 1080,
+  "fps": 30
+ },
+ "audio": {
+  "voice": "zh-CN-YunyangNeural",
+  "rate": "-6%",
+  "env_gain": 0.12,
+  "music_gain": 0.1,
+  "music": {
+   "bpm": 92,
+   "key": "Dm",
+   "scale": "minor",
+   "mood": "steady",
+   "seed": 11
+  }
+ },
+ "subtitle": {
+  "size": 46,
+  "margin_v": 38
+ },
+ "credit": {
+  "text": "素材：<作品名>（<出品方>，<年份>）",
+  "at": 188
+ },
+ "pacing": {
+  "lead": 0.35,
+  "tail": 0.55,
+  "outro": 2.2
+ },
+ "lines": [
+  {
+   "id": "s01",
+   "text": "第一句旁白，读出来大约七八秒。",
+   "sub": "第一句旁白",
+   "shot": {
+    "source": "src1",
+    "at": 12.5,
+    "why": "开场空镜"
+   }
+  },
+  {
+   "id": "s02",
+   "text": "第二句旁白，镜头长度会跟着这句话的实测时长自动变。",
+   "shot": {
+    "source": "src1",
+    "at": 30,
+    "why": "人物特写"
+   }
+  }
+ ]
+}

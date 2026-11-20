@@ -150,7 +150,9 @@ PNG 截图比 JPEG q94 慢但无压缩伪影，本模块按契约固定 PNG。
 ## 9. 文字质检 qaText
 
     r = qa_text("assets/web/index.html", 0, 12, 0.2)
-    # {"overlaps":[...], "offscreen":[...], "brief":[...], "never":[...], "frames": 61}
+    # {"overlaps":[...], "offscreen":[...], "brief":[...], "never":[...], "frames": 61, "texts": 507}
+    # frames = 实际采样帧数（12 s / step 0.2 -> 61）；texts = 扫描期间累计可见文本实例数
+    # （同一段文字被多个采样点读到会重复计数，所以它远大于画面上的文字条数，别拿它当字幕条数）。
 
 判据（改编自 ai-history-film（MIT）video/qa_text.js）：
 
@@ -163,7 +165,8 @@ PNG 截图比 JPEG q94 慢但无压缩伪影，本模块按契约固定 PNG。
 
 工作方式：qaText 每隔 step 秒调用一次 renderFrame，读回 engine.js 登记的文字包围盒与透明度
 （文字必须用 FK.g.text 画，直接 ctx.fillText 不会进登记表）。扫描期间会反复改页面时间轴状态，
-跑完需要成片截图时请重新 renderFrame 或重开页面。CLI 的 textqa 在有重叠/出画时返回 exit 1。
+跑完需要成片截图时请重新 renderFrame 或重开页面。CLI 的 textqa 在四类缺陷中任意一类非空时
+返回 exit 1（重叠/出画是布局错，一闪而过/从没露面同样会让成片看起来"漏字"，所以都算没通过）。
 
 ## 10. 和别的模块怎么接
 

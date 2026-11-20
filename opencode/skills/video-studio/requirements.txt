@@ -9,8 +9,11 @@
 # 上界与下界一起给：这个项目以"可复现"为卖点，而 Pillow 的字体度量、
 # numpy 的 FFT 实现、edge-tts 的返回结构都可能在"下一个小版本"里变。
 # 下界 = 已验证过的最低版本；上界 = 已知会破坏契约的下一个大版本。
+# Pillow 13.0.0 已在本机实测通过整套自检（与 CI 当前装到的版本一致），
+# 所以上界放到下一个大版本 14：留出的空间是为了让 CI 装到与本地实测一致的版本，
+# 而不是让 pip 因一条过时的上界回退到 12.x、与"实测通过"的环境不一致。
 numpy>=1.24,<3
-Pillow>=10.0,<13
+Pillow>=10.0,<14
 # 旁白：唯一的时间轴权威（没有它只能用手工音频）
 edge-tts>=6.1,<8
 
@@ -36,14 +39,19 @@ opencv-python-headless>=4.8,<6
 # ---- 纯标准库模块（**不需要**任何 pip 包，也不用拷到工程目录）----
 #   scripts/gates.py        门禁账本 / QC 报告 / 人工签核（render.py 直接 import）
 #   scripts/stagewatch.py   阶段新鲜度（render.py 直接 import）
-#   scripts/filmcheck.py    film.json 契约校验（selfcheck 与手动校验都用它）
+#   scripts/filmcheck.py    film.json 契约校验（收编版直接手调；selfcheck 也用它）
 #   scripts/preflight.py    渲染前资源闸门（可选：缺了就记 skipped，门禁不冒充通过）
 #   scripts/qavmaf.py       全片 VMAF/SSIM（可选：缺了就 skipped）
 #   scripts/qaasr.py        ASR 回读（可选：缺了就 skipped）
-#   tools/estimate.py       开渲前成本预演（技能自带）
-#   tools/golden_frames.py  金帧回归（技能自带）
+#   tools/estimate.py       开渲前成本预演（仓库工具）
+#   tools/golden_frames.py  金帧回归（仓库工具）
 # 三个可选门禁都**不是** render.py 的硬依赖（用了 _try_module），缺了只让对应门禁
 # 记 skipped，不会 ModuleNotFoundError；但 qa 报告里会明确写"本次没查"。
+
+# ---- 契约样例校验（可选，不是技能运行期依赖）----
+# schemas/*.schema.json 是字段契约的真源；要在本机当 JSON Schema 真跑一遍校验就装 jsonschema
+# （纯手调：python -c "import json,jsonschema; ..."），不装也不影响出片与 selfcheck。
+# jsonschema>=4.0,<5
 
 # ---- 不需要 ----
 # moviepy / pydub / soundfile / librosa / manim：本技能一行都不 import。

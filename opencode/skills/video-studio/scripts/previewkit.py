@@ -110,7 +110,7 @@ AUDIO_SR = 48000
 # 会把每一帧都判成"尺寸不符"，竖屏提案根本出不来（实测 career 一次：propose.py
 # 不接受 --layout 就算绕过去了，出来的静帧仍是横屏——设计评审看的是错的东西）。
 try:
-    import layoutkit as _LK                        # noqa: PLC0415（导入期定死）
+    import layoutkit as _LK                        # noqa: PLC0415  # 导入期定死（延迟到模块半途会拿不到 profile）
     CANVAS = (int(_LK.W), int(_LK.H))
 except Exception:                                  # noqa: BLE001 —— 只读旁路
     CANVAS = (1920, 1080)
@@ -383,8 +383,10 @@ def render_preview_frames(plan, script, times, outdir, theme=None):
     os.makedirs(outdir, exist_ok=True)
 
     tl = synthetic_timeline(script, fps=_fps_of(script, plan))
-    # 唯一 scene_type 来源。legacy 计划下 draw_frame 走 _LEGACY_DRAWERS（只读 kind），
-    # 这里的字段不会被用到，调一次也无害——但"预览"绝不允许 scene_type 为空。
+    # 唯一 scene_type 来源。注意 scenes.draw_frame 已**没有** legacy 分支（stylekit 也不再
+    # 产出 legacy 计划），所以这里补的 scene_type 一定会被真正用到。
+    # 预览绝不允许 scene_type 为空：为空时 scenes 会静默落到 statement，看起来"能出图"，
+    # 但和全片渲染的分镜不是同一份。
     G.plan_scenes(tl["scenes"], script, plan)
     missing = [s.get("id") for s in tl["scenes"] if not s.get("scene_type")]
     if missing:

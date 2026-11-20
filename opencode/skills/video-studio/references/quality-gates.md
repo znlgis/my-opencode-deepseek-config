@@ -243,5 +243,10 @@ python webengine.py textqa ./web/index.html --step 0.2
 信号：-16.3 LUFS / 真峰 -1.2 dBTP / 锐度比 0.94 / 黑帧 0 / 字幕 86 条 = 剧本 86 句
 时间：单帧闪烁 0 / 画面空窗 0 / 音画同步最大偏差 38 ms
 页面：文字重叠 0 / 出画 0 / 一闪而过 0 / 从没露面 0
-自检：python selfcheck.py -> PASS 70 / FAIL 0 / SKIP 0
+自检：python selfcheck.py -> PASS <实测条数> / FAIL 0 / SKIP 0
 ```
+
+`<实测条数>` 照 selfcheck.py 的真实输出填（当前 97 条），**不要抄示例里的旧数字**：
+这里曾写死 70 条，而 selfcheck.CASES 早已 85 —— 死数字是文档漂移的源头。
+总数口径的唯一真源是 `selfcheck.CASES`；本收编版没有第二个总数要同步。
+SKIP 必须写成 0 或逐项说明原因：SKIP != 通过。

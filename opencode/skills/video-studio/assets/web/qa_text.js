@@ -47,7 +47,9 @@
       throw new Error('qaText: step=' + stepN + 's 必须小于 ' + BRIEF_S
         + 's（一闪而过阈值）；步长 >= 阈值时每段文字最多被采到 1 个点，该判据永远不可能触发');
     }
-    if (end < start) {
+    // end === start 也非法：空窗口只会采到一个点，返回 frames:1 让调用方误以为"扫过了、零缺陷"。
+    // "没扫到"不是"没有缺陷"——这里必须和 webengine.py 的 _check_qa_window 同口径。
+    if (end <= start) {
       throw new Error('qaText: t1=' + end + ' < t0=' + start
         + '（空扫描不是"没有缺陷"，不能当通过）');
     }

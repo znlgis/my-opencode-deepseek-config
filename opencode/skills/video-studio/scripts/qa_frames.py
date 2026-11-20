@@ -87,6 +87,9 @@ FLICKER_RETURN_RATIO = 1.6
 FLICKER_AGREE_MIN = 0.60
 # 与已登记视觉事件（闪白/震屏/冲击环）重合多久内视为"设计好的重击"，不计 error
 FLICKER_EXPLAIN_WIN = 0.2
+# 镜头切点白名单窗口（秒）：素材线是硬切，切点前后两帧结构不同，二阶差分必然尖峰。
+# 这类切点是作者声明的剪辑结构（不是"单帧闪烁"）；降级为 warning 且留痕，不静默放过。
+SHOT_WIN = 0.12
 # 转化为"可解释设计事件"的 event.kind（小写匹配；cues.json §4.2 的 events 由页面导出）
 VISUAL_EVENT_KINDS = {
     "flash", "shake", "ring", "rings", "shakes", "flash_white",
@@ -838,6 +841,36 @@ def _sync_coverage(cues, events, tol=SYNC_TOL) -> dict:
             "judged": judged, "judged_any": judged_any, "src_skipped": src_skipped}
 
 
+def _load_shots(shots_json) -> list:
+    """镜头切点（秒）。支持三种写法：
+      ["s04","s05"] 或 [{"id":"s04"}, ...]  —— 从 timeline.json 的同目录 work/ 里查，
+      或直接给秒数 [12.5, 33.1]。
+    查不到就返回空表（**不报错**）：白名单是"少一次误报"的优化，不该让质检跑不起来。
+    """
+    if not shots_json:
+        return []
+    try:
+        if isinstance(shots_json, (list, tuple)):
+            data = list(shots_json)
+        else:
+            with open(str(shots_json), "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    out = []
+    for item in data or []:
+        if isinstance(item, (int, float)):
+            out.append(float(item))
+        elif isinstance(item, dict):
+            for k in ("t", "start", "at"):
+                if isinstance(item.get(k), (int, float)):
+                    out.append(float(item[k])); break
+        elif isinstance(item, str):
+            # 段落 id：交给调用方传秒数更可靠，这里忽略（避免猜错时间轴）
+            continue
+    return sorted(set(round(x, 3) for x in out))
+
+
 def _load_cues(cues_json):
     """读 cues.json（或直接给 dict）。返回 (cues, events, warnings, info)。
 
@@ -1053,13 +1086,17 @@ def _write_json(rep, out_json):
         fp.write(txt + "\n")
 
 
-def report(film, *, cues_json=None, expect_duration=None, out_json=None, out_png=None,
-           require_sync=None) -> dict:
+def report(film, *, cues_json=None, shots_json=None, expect_duration=None,
+           out_json=None, out_png=None, require_sync=None) -> dict:
     """对成片做帧级深检，返回 CONTRACT §4.5 结构的 dict（并可选写 JSON / PNG）。
 
     一次流式解码同时得到：亮度曲线、单帧闪烁、画面空窗、静止段；音频轨另解一次得到响度曲线。
     cues_json 可以是路径或已载入的 dict；events 里闪白/震屏/冲击环时刻会用来排除
     "设计好的重击"（记 warning，不记 error）。
+
+    shots_json：镜头切点列表（秒）。素材线是硬切剪辑，切点前后两帧结构不同，
+      二阶差分必然产生孤立尖峰。传了它，切点 ±SHOT_WIN 内的候选降级为 warning
+      并单独记录条数（报告字段 flicker_shot_cut），既不误报也不隐藏。
 
     require_sync：把"音画同步门禁没能执行"从 warning 升级为 error。
       默认 None = 读环境变量 QA_REQUIRE_SYNC（1/true/yes/on 时开启），便于不改进 render.py
@@ -1096,9 +1133,16 @@ def report(film, *, cues_json=None, expect_duration=None, out_json=None, out_png
     explained_times = _visual_event_times(events)
     for fl in flicker:
         fl["expected"] = any(abs(fl["t"] - te) <= FLICKER_EXPLAIN_WIN for te in explained_times)
+    # 镜头切点（shots_json）：切点附近的孤立尖峰是剪辑结构，不是单帧闪烁。
+    # 与 expected 分开记：报告里单独统计"因切点降级"的条数，避免和设计事件混淆。
+    _shots = _load_shots(shots_json)
+    for fl in flicker:
+        fl["at_shot_cut"] = (not fl.get("expected")) and any(
+            abs(fl["t"] - st) <= SHOT_WIN for st in _shots)
 
     errors = []
     textured = []
+    cut_downgraded = []
     for fl in flicker:
         if fl.get("expected"):
             continue
@@ -1112,11 +1156,18 @@ def report(film, *, cues_json=None, expect_duration=None, out_json=None, out_png
         # （零拷贝自测实测：t=5.867s 标题逐字入场被误判）。
         # 处理：低于阈值不静默放过，降级为 warning 并保留全部数值，交给人工复核。
         fl["sign_agree"] = fl.get("agree")
+        if fl.get("at_shot_cut"):
+            cut_downgraded.append(msg)
+            continue
         if fl.get("agree") is not None and float(fl["agree"]) < FLICKER_AGREE_MIN:
             textured.append(msg + ("，符号一致度 %.2f < %.2f → 判为纹理/动画扰动"
                                    % (float(fl["agree"]), FLICKER_AGREE_MIN)))
             continue
         errors.append("单帧闪烁 " + msg)
+    if cut_downgraded:
+        warnings.append("已按镜头切点降级 %d 条孤立尖峰（--shots 声明的剪辑结构，非缺陷）：%s"
+                        % (len(cut_downgraded), "；".join(cut_downgraded[:3])
+                           + ("…" if len(cut_downgraded) > 3 else "")))
     for msg in textured:
         warnings.append("疑似非闪烁（块内像素有增有减，像是文字/母题动画）：" + msg
                         + "；若画面确有单帧闪白，调低 FLICKER_AGREE_MIN 或登记设计事件")
@@ -1178,7 +1229,8 @@ def report(film, *, cues_json=None, expect_duration=None, out_json=None, out_png
         warnings.append("成片没有音轨，响度曲线为空（帧级判据照常检查）")
     warnings.extend(_static_warnings(drift, fps, blacks=blacks))
 
-    rep = {"flicker": flicker, "black_windows": blacks, "luma": luma, "loudness": loud,
+    rep = {"flicker": flicker, "flicker_shot_cut": cut_downgraded,
+           "black_windows": blacks, "luma": luma, "loudness": loud,
            "sync": sync, "errors": errors, "warnings": warnings,
            # sync_info：同步门禁到底查了多少（render.py:1172 一直在读 deep["sync_info"]["judged"]，
            # 缺了这个键 QC 报告的 G9 就永远显示"同步未判"）。
@@ -2023,6 +2075,9 @@ def main(argv=None) -> int:
     ap.add_argument("film", nargs="?", help="成片路径（.mp4 等）")
     ap.add_argument("--cues", default=None,
                     help="work/cues.json（§4.2：cues 音频提示点 + events 视觉事件）")
+    ap.add_argument("--shots", default=None,
+                    help="镜头切点（timeline.json 或秒数列表）；切点附近 ±0.12s 的孤立尖峰"
+                         "降级为 warning（素材线硬切会被误判成单帧闪烁）")
     ap.add_argument("--out", default=None, help="报告 JSON 输出路径（缺省不写文件）")
     ap.add_argument("--png", default=None, help="报告 PNG 输出路径（缺省不写文件）")
     ap.add_argument("--expect-duration", type=float, default=None,
@@ -2038,7 +2093,8 @@ def main(argv=None) -> int:
         ap.error("需要成片路径（或用 --selftest）")
     _utf8_stdout()
     try:
-        rep = report(a.film, cues_json=a.cues, expect_duration=a.expect_duration,
+        rep = report(a.film, cues_json=a.cues, shots_json=a.shots,
+                     expect_duration=a.expect_duration,
                      out_json=a.out, out_png=a.png, require_sync=a.require_sync)
     except Exception as e:              # noqa: BLE001
         print("[FAIL] 深度质检失败：%s" % e, file=sys.stderr)

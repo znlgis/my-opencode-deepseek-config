@@ -1,12 +1,108 @@
 ---
 name: video-studio
-description: 用代码从零生成中文视频（科普片/纪录片/宣传片/动画短片）：剧本→edge-tts 旁白→实测时长时间轴→逐帧渲染→ffmpeg 编码→采样级混音→自动质检。做视频/宣传片/动画/配音配字幕/把报告变成视频/修音画不同步/修视频画质糊，或提到 ffmpeg、字幕、分镜、配乐、混音时使用；开工前先跑 intake.py 把 7 个问题一次问完。 | Code-generated video from scratch (PIL/Canvas frames, ffmpeg, edge-tts, QA gates). Use when asked to make a video, turn a report into one, add narration or subtitles, or fix A/V sync or blurry text.
+description: 做中文视频的两条生产线：(A) 素材剪辑 footage——有素材（本地文件/链接/网上下载）就按文案剪成片，自带素材检索、转写定位镜头、字幕水印治理；(B) 零素材——没有素材且找不到时用代码逐帧画。两条都走 edge-tts 实测时长排轴 + 采样级混音 + 自动质检。做视频/宣传片/纪录片/配音配字幕/把报告变成视频/修音画不同步/修画面糊，或提到 ffmpeg、字幕、分镜、混音时使用；开工先跑 intake.py 问完 8 个问题。 | Two pipelines for Chinese videos — footage-cut (source clips -> narration -> timeline) or code-generated frames; ffmpeg, edge-tts, subtitles, QA gates.
 ---
 
 # 视频工作室（video-studio）
 
-**一句话：视频 = 剧本 + 音频实测时长 + 确定性逐帧函数 + ffmpeg 编码 + 自动质检。**
-画面与声音全部由代码生成，零素材、可复现、可断点续跑、可脚本化验收。
+## 目录
+
+- [§0 铁律](#0-铁律违反任意一条成片一定会出问题)
+- [§0.1 分诊](#01-铁律先分诊有素材走-footage没素材才自己画)
+- [§0.4 问诊](#04-铁律先问诊再提案每个新成片任务的第一步)
+- [§0.5 提案](#05-铁律先提案再出片不论用户是否要求)
+- [§1 上手](#1-五步上手零拷贝不拷脚本不拷模板)
+- [§2 八阶段](#2-标准八阶段p0p7-前置-p05)
+- [§3 引擎](#3-渲染引擎怎么选)
+- [§4 画质](#4-画质清单这几项决定像不像专业片)
+- [§5 声音与设计 DSL](#5-声音配乐--音效--提示点)
+- [§6 停留与词级时间轴](#6-停留窗口让观众看清楚而不是整片放慢)
+- [§7 质检门禁](#7-质检门禁error-必过--warning-别当看不见)
+- [§7.5 交付生产线](#75-交付生产线画幅--批量--预览--运行版本化)
+- [§8 故障速查](#8-常见故障速查)
+- [§9 参考资料](#9-参考资料按需加载)
+- [§10 脚本资产](#10-脚本资产)
+- [§11 验收话术](#11-验收话术不要自我宣称做好了)
+- [§12 参考机器](#12-参考机器的已验证环境事实)
+- [§13 换机自检](#13-换机-60-秒自检比读文档快)
+
+**一句话：视频 = 剧本 + 音频实测时长 + 画面（素材或代码生成）+ ffmpeg 编码 + 自动质检。**
+两条生产线共用同一套底盘（TTS 实测时长、时间轴、采样级混音、loudnorm、门禁），
+区别只在"画面从哪来"。
+
+## 0.1 【铁律】先分诊：有素材走 footage，没素材才自己画
+
+> 位置说明：本节排在 §0 之前是有意为之——**分诊永远排第一**，故放在 §0 之前；别为编号整齐挪下去。
+
+> 用户说"做个视频"时，**先问自己手里有没有画面素材**，再决定走哪条线。
+> 走错线的代价是整片返工（拿代码画的图文去顶"有真实影像"的需求，用户一眼就否）。
+
+| 顺序 | 情形 | 走哪条 |
+|---|---|---|
+| 1 | 用户给了素材（视频 / 图片 / 链接 / 一个片子文件） | **footage 线**：`scripts/footage.py` |
+| 2 | 没给素材，但**网上能找到**可用画面（纪录片、新闻片、公有领域影像） | **先 `--stage fetch` 下载，再走 footage 线** |
+| 3 | 找不到，或题材不该用现成画面（数据、抽象、品牌、动画） | **零素材线**：`scripts/render.py` + `design.json` |
+
+> **这张表现在由问诊第 2 题「制作方式」直接问用户**（自己画 / 网上素材剪辑 / 两者结合），
+> 并按题材给推荐值（`--recommend`）：真实影像题材 → footage、数据/原理题材 → 自己画、
+> 两边都占 → 两者结合。用户怎么选就怎么走；显式选择永远优先于推荐。
+> 上表的"顺序"是**推荐逻辑**，不是"agent 自己猜"——别跳过这一问替用户定产线。
+
+- **footage 线的契约是 `footage.json`**（不是 `film.json`）：见 [references/footage.md](references/footage.md)。
+- **素材不必提前准备好**：`sources[]` 可以写 `url`，`--stage fetch` 负责下载；
+  本地 `path` 更可复现。
+- 两条线都遵守 §0 的其它铁律（音频先做、时间轴由实测驱动、采样级混音、交付前跑门禁）。
+- 走了素材线，**提案层（`propose.py` / 设计 DSL）不适用**——外观由素材本身的调色与遮幅决定，
+  不是"采样几个设计选一个"（`propose.py` 会在问诊记录 `mode=footage` 时明确提示这一点）。
+- **"两者结合"有三种形态，先选对再动手**（详见 [references/hybrid-overlay.md](references/hybrid-overlay.md)）：
+  1. **按段拼接**：素材段走 `footage.py`、图文段走 `render.py`，最后 `concat`（图文段占 30~90%）。
+     **只有形态 1 才这么干，且必须显式选择**：`intake.py --hybrid-form 1`
+  2. **整屏卡片覆盖**：基本不该用——素材被遮掉，等于没用素材
+  3. **素材打底 + 小面积叠加**（`compose.py`，**技能默认形态**）：素材就是画面，
+     只把"必要的一点信息"（一行对照、一个标注）按时间窗叠上去，自绘面积**设计目标 ≤15%**（`compose.py` 机器审计：warn 20% / fail 30%）
+  **技能默认形态 = 3（代码默认同此）**：`intake.py` 的 `--hybrid-form {3,1}` 缺省为 3，形态落盘进
+  `intake.json` 的 `hybridForm` 字段，`--finalize` 会打印「形态: 3」与 compose 命令。链路是
+  `footage.py --stage all`（底片 / 混音 / 字幕）→ 写 `overlay.json` → `compose.py --stage all`
+  （叠层 + 烧字幕 + 两遍 loudnorm）。**形态 3 不需要 `propose.py` / `matchstyle.py`**；形态 1 需显式 `--hybrid-form 1`，那时才要那两个。
+  判断法：先想"去掉所有自绘，只留素材 + 旁白还成立吗？" 成立 → 形态 3；不成立且缺的是
+  "对比/数据/流程"这类结构信息 → 形态 1。**别默认选 1**：实测 88% 时长画整屏卡片
+  会被判"割裂"，改成形态 3 反而更统一、工作量更小。
+- **别在素材上叠整帧主题色**：素材段保持原色（只有 crop/scale/遮幅 + 显式 `treatment.color`）。
+  想让两段像一部片，方向反过来——素材不动，把**图文段的配色**锚到素材上：
+  `python matchstyle.py --footage footage.json --work work --apply`（见 §0.1.1）。
+  半透明色罩盖上去不会"统一"，只会让素材发灰、发闷、细节像蒙了雾。
+
+### 0.1.1 hybrid 的一致性：素材不动，让图文段向素材看齐
+
+> 一句话：**素材是基准，图文段是跟随者**。反过来（拿主题色去盖素材）就是糊画面。
+>
+> **适用范围**：图文段占相当比例（形态 1）时才需要。**技能默认形态是 3，形态 1 需显式 `--hybrid-form 1`**；
+> 也就是说 `matchstyle.py` 只服务形态 1，默认链路里不该出现它。走**形态 3**（素材打底 + 小面积叠加）
+> 时图文段只有 ~15%，套不套调色差别很小，**却可能把整套设计意图改掉**——所以
+> `matchstyle.py` 现在会检查"设计原本亮底 vs 素材把配色锚到暗底"并给出警告
+> （`day_night_conflict` 字段可机读）。出现警告时优先改形态 3，而不是硬套调色。
+
+```bash
+python matchstyle.py --footage footage.json --work work --report               # 先看画像，零写入
+python matchstyle.py --footage footage.json --work work --apply --align-bars   # 落地
+python propose.py --adopt --work work                                          # 调色板变了，重绑确认
+```
+
+| 它做什么 | 为什么这么做 |
+|---|---|
+| 按 EDL 抽帧（只抽成片里真会用的镜头），取**中位数**色相/饱和度/明度 | 平均值会被一块黑场或一片天空带跑；观众记住的是"典型颜色" |
+| 明暗跟素材走（luma < 0.35 记暗底，与 `stylekit.is_dark` 同一判据） | 暗素材配浅底，观感就是"两部片拼一起" |
+| 色相全收，饱和度**打折**（默认 ×0.6，`--sat-damp` 可调） | 素材里一块高饱和招牌铺满整屏会变荧光板 |
+| 配色交给 `designkit._solve_palette`，写盘前过 `theme_lint` | 对比度门槛只有一份判据；写进去再发现，就是"渲完才看见字幕看不清" |
+| `letterbox_color` 改成**同族近黑** | 自绘段黑边是纯黑；素材黑边若是米色，拼接处会直接跳 |
+| `--align-bars` 把素材可见高算到自绘段画幅 | 40/44px vs 居中黑边，差 3px 以上就看得出画幅跳 |
+| `--align-bars` 会**同时收缩 crop** | pad 是纵向居中的：只改 scale 时，宽度不够的素材右边会冒出黑带（实测 640x360 素材对齐 996 高时右侧 150px）。取景窗宽高比必须等于目标画幅；代价是多裁几个百分点，报告会写清楚 |
+
+- 只改两块：`design.json` 的 `visual.palette` 与 `footage.json` 的 `treatment`（颜色 + 可选 scale）。
+  **不碰** `treatment.color`——那是素材自己的显式调色，不是主题色。
+- 失败一律零写入：配色无解 / 缺 `design.json` → 退 2 并打印"该补什么"；只写 `work/style_profile.json`。
+- 覆盖前留备份：`work/backup/*.before-matchstyle.json`（回滚靠它，不靠记忆）。
+- 算出来的颜色照样要**亲眼看**：`render.py --stage stills`，铁律 6 不因为"颜色是算出来的"就免掉。
 
 ## 0. 铁律（违反任意一条，成片一定会出问题）
 
@@ -31,30 +127,35 @@ description: 用代码从零生成中文视频（科普片/纪录片/宣传片/�
 **固定动作（排在 §0.5 提案之前）**：
 
 ```bash
-# 1) 生成问诊单：固定 7 题（题材 / 时长 / 主题气质 / 画幅 / 旁白声线 / 配乐 / 补充硬要求）
-python <SKILL_DIR>/scripts/intake.py --work work --questions --json
+# 1) 生成问诊单：固定 8 题（题材 / 制作方式 / 时长 / 主题气质 / 画幅 / 旁白声线 / 配乐 / 补充）
+#    带 --topic 时，「制作方式」题会附 recommended / recommend_reason（按题材算好）
+python <SKILL_DIR>/scripts/intake.py --work work --questions --json --topic "AI 大模型的三年"
+#    想先单独看推荐也可以（不给文本就用问诊单里已写的题材）：
+python <SKILL_DIR>/scripts/intake.py --recommend "中国高铁十年，纪录片"
 
 # 2) 把 questions 里的每一题用 question **一次问完**（不要一句一轮），再写回：
 python <SKILL_DIR>/scripts/intake.py --work work \
-       --set "topic:AI 大模型的三年，讲给普通观众" --set duration:45s \
+       --set "topic:AI 大模型的三年，讲给普通观众" --set mode:auto --set duration:45s \
        --set tone:bright-lively --set voice:female-bright --set music:upbeat \
        --set "note:不要放射线，结尾放二维码"
 
-# 3) 定稿：校验必答题并合成 --brief 文本（work/intake.brief.txt）
+# 3) 定稿：校验必答题、合成 --brief 文本（work/intake.brief.txt），并按制作方式打印下一步
 python <SKILL_DIR>/scripts/intake.py --work work --finalize
 ```
 
 | 规则 | 说明 |
 |---|---|
-| **一次问完** | 7 题在同一次 question 里给出，每题都带推荐项；用户只需勾选/一句话补充 |
+| **一次问完** | 8 题在同一次 question 里给出，每题都带推荐项；用户只需勾选/一句话补充 |
+| **制作方式先定产线** | 第 2 题问「自己画 / 网上素材剪辑 / 两者结合」：自己画走 `render.py`、素材剪辑走 `footage.py`、两者结合默认形态 3（`footage.py` + `compose.py`），按段拼接须显式 `--hybrid-form 1`。选错产线整片返工，所以它是必答题；`auto` 档按题材推荐落地（真实影像→footage、数据/原理→draw、两边都占→hybrid），显式选择优先 |
+| **推荐要有理由** | `--recommend` / 问诊单的 `recommend_reason` 会列出命中的题材词；把推荐说给用户听，但用户不同意就按用户的来——不看理由直接默认等于替用户拍板 |
 | **明亮活泼是默认** | 任何题材（科普、纪录片、宣传片、动画短片、复盘汇报）的气质题推荐项都是「明亮活泼」，且它排在第一位 |
 | **首个候选必亮** | 没点名气质时，提案的候选 A 固定落到明亮活泼档；其余候选保留完整空间（含暗色）——"优先明亮"不等于"只有一种口味" |
 | **没答完不许出方案** | 首次 `propose.py` 会因问诊未完成而失败，并打印"怎么问 / 怎么答 / 怎么定稿"三步 |
 | **逃生口留痕** | 确实不需要问（批量补渲、已在别处答过）用 `propose.py --no-intake`，提案里会记 `intake.status = bypassed`，事后查得到 |
-| **回答进 brief** | 答案合成 `intake.brief.txt`，再喂给 `--brief`：气质→tone、声线→voice、时长→duration_target，`不要 X` 进 avoid |
+| **回答进 brief** | 答案合成 `intake.brief.txt`，再喂给 `--brief`：气质→tone、声线→voice、时长→duration_target，`不要 X` 进 avoid。**制作方式不进 brief**：它是产线路由，写进去只会污染 `propose._brief_of` 的关键词解析 |
 
 有用户直接说"你替我定"时：**仍然先问诊**（用推荐项作为各题默认，只让用户确认一次），
-再出提案；不要因为"用户没意见"就把 7 个决策全部改成程序默认值。
+再出提案；不要因为"用户没意见"就把 8 个决策全部改成程序默认值。
 
 ## 0.5 【铁律】先提案，再出片（不论用户是否要求）
 
@@ -129,8 +230,8 @@ python render.py --script film.json --stage all     # 前提：work/design.json 
 > 与它逐字节一致；改仓库后先跑 `scripts/sync-config.ps1`）。
 > 找不到时按名字定位：`Get-ChildItem -Recurse -Filter filmkit.py $env:USERPROFILE\.config\opencode`。
 >
-> `schemas/`、`tools/`、`assets/` 都在 `<SKILL_DIR>` 内——本仓库收编时把它们从上游的包根挪进了技能目录，
-> 所以下面所有命令里的 `<SKILL_DIR>` 都能直接展开成同一个绝对路径。
+> 收编时把上游包根的 `tools/` 与 `schemas/` 挪进了技能目录，所以 `<SKILL_DIR>/tools/` 与
+> `<SKILL_DIR>/schemas/` 都在技能目录下（上游写作 `<SKILL_DIR>/tools/`、`<SKILL_DIR>/schemas/`）。
 
 ```bash
 # 1) 只写一个 film.json（工程目录里唯一需要你手写的文件）
@@ -155,13 +256,15 @@ JSON
 #    契约校验（可选，几秒）：
 python <SKILL_DIR>/scripts/filmcheck.py film.json
 
-# 2) 先自检一次环境（可选；85 条回归护栏，约 10–25 秒，不联网；缺可选模块会标 SKIP）
+# 2) 先自检一次环境（可选；97 条回归护栏，约 10–25 秒，不联网；缺可选模块会标 SKIP）
 python <SKILL_DIR>/scripts/selfcheck.py
 
-# 3) 【铁律】先出方案，再出片——同一个 brief 每次都不一样，所以必须让用户看过
+# 3) 【铁律】先问诊（8 题一次问完），再出方案——同一个 brief 每次都不一样，必须让用户看过
 python <SKILL_DIR>/scripts/propose.py \
-       --brief "AI 大模型的三年，30 秒科普，深蓝" \
+       --brief "AI 大模型的三年，30 秒科普"
        --script film.json --work work
+#    问诊没答完时这条会被拦（加 --no-intake 可跳过，会记进 proposal.intake 留痕）；
+#    不传 --brief 时 propose 直接读 work/intake.brief.txt。
 #    产出 3 个候选：各自一份 design + 静帧联系表（work/proposals/rev1/_compare.png）+ 设计距离，
 #    2 秒级出结果、全程离线。看并排图，挑一个。
 
@@ -220,7 +323,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage sfx 
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage audio    # 只混音（旁白+配乐+音效，旁白优先）
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage frames   # 只渲染帧（--engine pil|web，--jobs N 分块并行）
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage mux      # 只合成（视频流 copy，两遍 loudnorm）
-python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage qa       # 只质检（只读输入，只写 work/qa/）
+python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage qa       # 只质检（只读输入，写 work/qa/；另按 §7.0 写 out/QC-REPORT.md 与 work/gates.json）
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage stills   # 只渲母版静帧 + 联系表
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage accept --gate stills   # 人工签核一道闸（写 work/signoff.json）
 python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage explain  # 只报"哪些阶段过时、为什么、该跑什么"，不跑任何 stage
@@ -229,7 +332,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage expl
 `--stage all` 的完整顺序：`style → tts → layout → cues → score → sfx → audio → frames → mux → qa`。
 **任何一步出问题都会在该步停下**，不会带着坏输入继续往下跑。
 
-**开渲前先算成本**（可选；`estimate.py` 在技能内，按 `<SKILL_DIR>/tools` 调用）：
+**开渲前先算成本**（可选；`estimate.py` 是仓库工具，按 `<SKILL_DIR>` 调用）：
 
 ```bash
 python <SKILL_DIR>/tools/estimate.py --script film.json --jobs 4
@@ -264,7 +367,10 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage fram
 > 里存着计划指纹），并提示你 `rm -rf work/segments`——这是刻意的：旧分块配新时间轴会拼出
 > "画面和旁白对不上"的片子，而且时长门禁查不出来。
 
-## 2. 标准八阶段（P0–P7）
+## 2. 标准八阶段（P0–P7）+ 前置 P0.5
+
+> 表里共 9 行：**P0.5 定设计**是前置条件（没有 design 就没有外观），不是第九阶段。
+> 它排在最前面是因为"先定外观再干活"——跳过它，后面每一步都在猜长相。
 
 | 阶段 | 产出 | 关键动作 | 常见错误 |
 |---|---|---|---|
@@ -338,6 +444,18 @@ python webengine.py textqa ./web/index.html            # 文字重叠/出画/一
 - **镜头**：只做 3–15% 缓推，不要大幅拉远拉近。
 - **调色**：整片一个主色 + 一个强调色，别超过 4 个色相。
 - **音频**：母带 -16 LUFS / 真峰 ≤ -1 dBTP；旁白比间隙响 12 dB 以上；AAC 前留 1.4 dB 余量。
+
+**素材线 / hybrid 底片还要过 F8 与素材预算**（F1–F7 查素材治理与成片对齐，F8 量"画面够不够"；细则见 [references/footage.md](references/footage.md)）：
+
+- **素材预算**（`footagekit.source_budget`，按片长反算独立来源数）：
+  `recommended = max(3, ceil(分钟数 × 3))`（推荐 **3 个独立来源/分钟**）、
+  `minimum = min(recommended, max(3, ceil(分钟数 × 2)))`（硬下限 **2 个/分钟**），
+  两条线都再夹一个**绝对下限 3 个**。低于硬下限时 `--stage edl` 就直接 `SystemExit`，不等切完镜。
+- **F8 素材多样性**（`footageqa.f8_source_variety`，已注册进 `GATES`，素材线门禁集是 F1–F8）：
+  `distinct < 硬下限` → **fail**；`< 推荐` → **pass + warning**；单源连续 ≥3 镜、重复取景窗 >0 → warning。
+  `footage.json` 写 `"licensing": {"allow_sparse_sources": true, "why": "..."}` 才记 **skipped**。
+- 逃生口：`footage.py --allow-sparse-sources`（低于硬下限也继续，F8 仍记 fail 的旁路说明）、
+  `--allow-missing-sources`（有源下载失败也继续；默认 fail-closed）。
 
 ## 5. 声音：配乐 + 音效 + 提示点
 
@@ -492,7 +610,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage styl
 870,912 种组合**，再乘配色这个连续量（色相 0–360° 任意取值，只是采样器会在锚点附近取）；
 **这个数是"字段能组合出多少种"，不是"推荐你从中挑一套"**——好看与否仍由对比度体检、分镜语法和你的目检决定。
 
-##### 5.5.0b 手改 `design.json` 之后：`--adopt`，别重跑提案
+#### 5.5.0b 手改 `design.json` 之后：`--adopt`，别重跑提案
 
 `work/design.json` 的每个字段都是开放的（配色、节奏、字幕、母题都能改），但 `proposal.json`
 存的是**确认那一刻**的设计指纹。改完直接渲染，提案闸会判 `stale` 并在 QC 报告里留 WARN；
@@ -706,7 +824,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage styl
 验收工具（改音频相关代码后必须跑）：
 
 ```bash
-python <SKILL_DIR>/tools/audio_similarity.py --strict   # A/B/C 三组阈值，失败 exit 1（任意目录）
+python <SKILL_DIR>/tools/audio_similarity.py --strict   # A/B/C/D 四组阈值，失败 exit 1（在包根执行）
 ```
 
 ## 6. 停留窗口：让观众看清楚，而不是整片放慢
@@ -784,7 +902,7 @@ python <SKILL_DIR>/tools/audio_similarity.py --strict   # A/B/C 三组阈值，�
 
 ```bash
 python render.py ... --stage qa     # 只读质检：分辨率/音轨/时长/响度/真峰/锐度比/黑帧/字幕条数 + 帧级深检
-python selfcheck.py                 # 技能自身回归（85 条针对真实缺陷的断言）
+python selfcheck.py                 # 技能自身回归（97 条针对真实缺陷的断言）
 python qa_frames.py out/film.mp4 --cues work/cues.json   # 单独跑帧级深检，出 JSON + 图
 # qa / all 收尾会自动写 out/QC-REPORT.md（机器可读交付结论）
 #       并落 work/gates.json（三档 gate matrix）与 work/cost.jsonl（实测耗时台账）
@@ -1094,8 +1212,10 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 
 ## 9. 参考资料（按需加载）
 
+- `references/footage.md` — **素材剪辑线（footage 模式）**：分诊规则、`footage.json` 契约、八个 stage、素材定位（转写/关键词/中文关键词的 GBK 坑）、画面治理四类配方（烧录字幕/水印/画幅/调色）、F1–F8 门禁与签核、常见故障、交付清单
 - `references/proposal.md` — **提案优先**：为什么先出方案、`design.json` 契约、候选采样与设计距离、`visual.subtitle` / `layout_cycle` 字段、片间去重台账、提案闸五档、常见误用
 - `references/scene-grammar.md` — **场景语法**：10 类构图怎么选、`storyboard.json` 字段、设计五组视觉签名、加第 11 类构图的步骤、常见误用
+- `references/hybrid-overlay.md` — **hybrid 形态 3（默认）**：素材打底 + 小面积叠加的 overlay 契约、叠加预算四条判据、compose 链路、何时该用形态 1
 - `references/pipeline.md` — 八阶段详细规格、契约 JSON 格式、目录约定、并行分工
 - `references/scene-authoring.md` — 场景函数写法、构图规则、Canvas/CDP 方案、超采样与后处理
 - `references/audio.md` — 采样级混音、程序化配乐/音效、响度链路、循环环境音、提示点系统
@@ -1108,7 +1228,7 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 - `references/delivery-gates.md` — **三道可选门禁**：VMAF/SSIM、ASR 回读、渲前预检的判据、阈值来源、实测数据与关闭方式（词级 G10 见 `word-timeline.md`）
 - `references/change-impact.md` — **改动影响表**：改了 text/sub/hold/design.json/scenes.py 各要重跑什么
 - `references/appearance.md` — **设计 DSL 外观定制**：35 字段主题、连续色相配色、母题/转场/字幕/版式轮换怎么写、常见误用
-- `references/pitfalls.md` — 20 条最佳实践 + 17 条反模式 + 4 个 bug 复盘（含取景抖动与音轨中断）
+- `references/pitfalls.md` — 20 条最佳实践 + 17 条反模式 + 5 个 bug 复盘（含取景抖动与音轨中断）
 - `references/machine-facts.md` — **参考机器的实测基准**：ffmpeg 构建、编码速度、各模块耗时、排期公式、三条隐形坑（换机后按 §13 重测，别照抄）
 - `references/script-index.md` — **脚本资产完整表**：每个脚本的作用、参数、契约与坑位（§10 的详细版）
 - `references/portrait-and-motion.md` — **竖屏与动感**（`--layout portrait` 已在 render / propose / filmcheck 三处入口生效，`film.json` 的 `video` 块与 `visual.size` 都接受两套尺寸）：竖屏已能出片，版式骨架与 `compare`/`process`/`chart` 的构图内部都是竖屏原生（`layoutkit` + `stylekit.LAYOUTS_PORTRAIT` + 分 profile 金帧），剩下的边界是排版节奏未按竖屏复核；动感（亚像素推镜）仍未做，判据在此：竖屏 9:16（LayoutProfile 三步走 + 会被打破的 4 个契约）、亚像素推镜（超采样 vs 仿射平移 + 可量化的验收判据）。想知道“为什么现在还只能横屏/为什么默认不动”，看这一篇
@@ -1120,7 +1240,7 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 
 | 你要干的事 | 用哪个 |
 |---|---|
-| 出片前把 7 个问题问完 | `scripts/intake.py` |
+| 出片前把 8 个问题问完（含制作方式与产线推荐；hybrid 形态用 `--hybrid-form {3,1}` 显式指定，默认 3） | `scripts/intake.py` |
 | 出候选 / 冻结设计 / 换方向重出 / 手改设计后 `--adopt` 重绑指纹 | `scripts/propose.py` |
 | 排轴 / 渲染 / 混音 / 质检 / 批量 / 断点续跑 | `scripts/render.py`（14 个 stage） |
 | 评候选静帧"好不好看"（离线打分 + 可选 VLM） | `scripts/critic.py` |
@@ -1130,14 +1250,20 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 | 门禁账本 / 阶段新鲜度 / 契约 / 渲前预检 | `gates.py` `stagewatch.py` `filmcheck.py` `preflight.py` |
 | 帧级 / 全片 / ASR 质检 | `qa_frames.py` `qavmaf.py` `qaasr.py` |
 | 浏览器逐帧渲染 | `webengine.py` |
-| 回归自检（85 条断言） | `selfcheck.py` |
+| **素材剪辑一条龙**（下载/转写定位/切镜/混音/字幕/门禁） | `scripts/footage.py`（10 个 stage） |
+| 素材线核心：取材 / 剪辑 / 专属门禁（`footageqa.py` 的 F1–F8；`footagekit.source_budget` 素材预算） | `footagekit.py` `footageedit.py` `footageqa.py` |
+| **hybrid 形态 3 合成**（素材打底 + 小面积叠加 + 强制响度归一） | `scripts/compose.py` |
+| **hybrid 风格对齐**（素材画像 -> 图文段配色/画幅；素材本身不上色） | `scripts/matchstyle.py` |
+| 回归自检（97 条断言） | `selfcheck.py` |
 
 内置资产：`assets/scenes.py`（默认渲染器；要改画面就拷成自己的 `scenes.py`）、
 `assets/film.json`（测试夹具，不是模板）、`assets/design_fixture.json`（金帧基准）、
 `assets/voice_loudness.json`（响度补偿实测表）。
 
 技能自带工具（在 `<SKILL_DIR>/tools/`）：`estimate.py` 开渲前预演、`golden_frames.py` 金帧像素回归、
-`silhouette_qa.py` 剪影可区分（G13）、`audio_similarity.py` 音频相似度。
+`silhouette_qa.py` 剪影可区分（G13）、`audio_similarity.py` 音频相似度、
+`footage_selftest.py` 素材线自检、`matchstyle_selftest.py` hybrid 风格对齐自检、
+`scenes_hybrid_selftest.py` hybrid 模板渲染自检。
 
 ## 11. 验收话术（不要自我宣称"做好了"）
 
@@ -1166,11 +1292,14 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 > 词级：4 句 / 64 词 / 末词偏差最大 0.09 s（G10）
 > 画质：VMAF 97.22 / SSIM 0.9928 / 870 帧（G11，参考帧由场景函数重渲）
 > 回读：字符召回 0.803（G12，faster-whisper small；中英混排专名会掉分，< 0.72 才 fail）
-> 自检：selfcheck PASS 85 / FAIL 0 / SKIP 0（本仓库收编后实测）
+> 自检：selfcheck PASS <实测条数> / FAIL 0 / SKIP 0
 > 音频：work/score.json 的 variation 非 0（指纹参与了结构变奏）、audio_similarity --strict 全 PASS
 > 目检：work/qa/sheet.png，四帧分别为开场星射线、五步成片卡片、画质三件事卡片、收尾居中大字；
 >       字幕黑底白字不压正文，大字边距均匀，无空洞帧。
 > ```
+>
+> 总数别从示例里抄：发版前跑一遍把真实值填进去。真源是 `selfcheck.CASES`（当前 97 条断言）——
+> 本收编版只有这一份总数口径，没有第二处要同步。
 
 > 自查口令：如果一条门禁从来没失败过，先确认它是不是根本测不到。
 
@@ -1184,12 +1313,13 @@ python render.py ... --run-id hero-v3     # 不给就按时间戳生成 rYYYYMMD
 
 ```bash
 cd <SKILL_DIR>/scripts
-python selfcheck.py                  # 85 条断言；FAIL 就照提示修环境
+python selfcheck.py                  # 97 条断言；FAIL 就照提示修环境
 python sfxkit.py --selftest          # 音效库（可选模块，装了才跑）
 python musicgen.py --selftest        # 配乐编排器（参数化）
 python scorekit.py --selftest        # 配乐合成原语（不是配乐引擎）
 python webengine.py --selftest       # 浏览器引擎（36 项，会真起无头浏览器，约 60 秒）
 python qa_frames.py --selftest       # 帧级质检（自己造测试视频）
+python <SKILL_DIR>/tools/footage_selftest.py   # 素材剪辑线（离线造素材跑全链 + F1–F8 断言）
 ```
 
 selfcheck 自己造测试信号、现场调 ffmpeg 编码，**不联网、不依赖任何成片**。
@@ -1197,10 +1327,11 @@ selfcheck 自己造测试信号、现场调 ffmpeg 编码，**不联网、不依
 报错信息直接写该改哪里。可选模块缺失时 selfcheck 标 `SKIP` 而不是 FAIL——
 **别把"没装可选件"和"坏了"混为一谈**。
 
-> **上游的仓库级体检（`ci_check.py`）没有随本技能收编**：它查的是上游 npm 包是否完整，
-> 与本仓库的 `node scripts/validate-jsonc.js` 职责不同。技能自身可用性的判据只有一个：
-> 上面的 selfcheck（本仓库实测 85 条全 PASS）。
+> **本收编版没有仓库级体检脚本。** 上游的 `tools/ci_check.py` 只查"这个仓库作为可分发包是否完整"
+> （语法 / JSON / 依赖白名单 / 打包卫生 / 文档路径引用），与 OpenCode 的收编形态无关，未搬入。
+> 这里的可用性判据只有一条：`selfcheck.py` PASS 97 / FAIL 0。
 >
-> `film.json` 的契约仍由 `scripts/filmcheck.py` 执行、由 `schemas/film.schema.json` 文档化——
-> **校验规则只允许有一份**，别在别处重写。
+> 契约校验的真源仍各有一份：`scripts/filmcheck.py` 校验 `film.json`，`schemas/*.schema.json`
+> 描述字段（含 `footage.schema.json`）。需要时直接调：
+> `python <SKILL_DIR>/scripts/filmcheck.py film.json`。
 

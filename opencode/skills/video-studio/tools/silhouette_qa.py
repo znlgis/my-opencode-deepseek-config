@@ -119,7 +119,6 @@ from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# 收编后 tools/ 在技能目录内：ROOT 即技能根（上游是 <repo>/tools + <repo>/skills/video-studio）。
 SKILL = ROOT
 SCRIPTS = os.path.join(SKILL, "scripts")
 ASSETS = os.path.join(SKILL, "assets")
@@ -136,7 +135,9 @@ DEFAULT_DESIGNS = 3
 # 默认固定种子：门禁的结论必须可复现（同一条命令两次跑出同一个 PASS/FAIL）。
 # 想要"每次新设计"就传 --seed -1；CI 与 selfcheck 走缺省值。
 DEFAULT_SEED = 1
-AUTO_SEEDS = (-1, "random", "auto")
+# "每次新设计"的几种写法。只此一处真值：_seed_arg 直接用它，避免 help 文案、
+# 解析器与常量三处各写一份（改一处就漂移）。
+SEED_WORDS = ("-1", "random", "auto", "none")
 # 采样 brief：一句话题材即可，采样器只把它当"给什么题材做方案"的背景信息。
 DEFAULT_BRIEF = "剪影校验：同一份内容，多套现场采样的设计"
 
@@ -338,9 +339,8 @@ def _load_scenes(path):
 
 
 # ---------------------------------------------------------------- 设计 -> 计划
-def load_designkits(scripts_dir=SCRIPTS):
-    """只把 designkit 拿出来（采样 / 校验 / design_to_plan 的唯一真源）。"""
-    return _modules(scripts_dir)[2]
+# 注意：designkit 只经 _modules() 取（见上面那个三件套解包）。以前这里还有一个
+# 只取 designkit 的包装 load_designkits()，全仓无人调用——删掉，避免"以为有独立入口"。
 
 
 def sample_designs(DK, n, seed, brief=None):
@@ -1000,7 +1000,7 @@ def _parse_frames(raw):
 def _seed_arg(raw):
     """--seed：固定整数 = 可复现；-1 / random / auto = 每次新设计。"""
     s = str(raw).strip().lower()
-    if s in ("-1", "random", "auto", "none"):
+    if s in SEED_WORDS:
         return None
     try:
         v = int(s)

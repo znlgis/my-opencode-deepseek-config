@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/film.schema.json",
   "title": "video-studio film.json（剧本契约）",
-  "description": "video-studio 的剧本契约（唯一内容真源）。这是 JSON Schema draft-07 的**子集**：\n只用到 type / enum / required / properties / additionalProperties / items / minimum / maximum / pattern。\n\n为什么不写死 additionalProperties:false：draft-07 子集里没有 patternProperties，\n表达不了“下划线开头的扩展键豁免”这条规则，硬写 false 会把 _comment 这类注释键判死。\n所以未知键**不在 schema 层判死**，而是由 skills/video-studio/scripts/filmcheck.py 报 WARN\n（并给出“是不是想写 X”的建议）——schema 负责文档与 IDE 补全，filmcheck 负责执行。\n\n与 render.py 的 load_script() 的关系：load_script 是权威硬校验（title/lines 必填、lines 非空、\n每条有 text、id 不重复、bpm >0 或 auto）。本 schema 是它的补强（枚举/范围/嵌套键），不与之矛盾；\n两者都允许的脚本才能跑通。范围类约束以本文件为准，跨字段约束（cue 的 at 引用、hold 与 timeline\n对账）只有 filmcheck.py 能查。",
+  "description": "video-studio 的剧本契约（**film.json 的字段说明**，不是执行器）。真正的执行者是 skills/video-studio/scripts/filmcheck.py（由 tools/ci_check.py 第 12 项调用：未知键 WARN + 拼写建议、枚举/范围 ERROR、跨字段对账），渲染前还有 render.py 的 load_script() 做最小硬校验。没有任何代码用它做校验：它供给人/AI 当字段说明、给编辑器补全（IDE 的 $schema 指向这里）；仅有两个测试读它做“枚举与真值集合一致”的回归（scripts/selfcheck.py 的 t_scene_types_single_truth 读 lines[].type，tools/ci_check.py 第 12 项只断言它是合法 JSON）。所以两边不一致时**以 filmcheck.py 的判定为准**；本文件只负责把同一套字段写清楚。\n这是 JSON Schema draft-07 的**子集**：只用到 type / enum / required / properties / additionalProperties / items / minimum / maximum / minItems / pattern。\n\n为什么不写死 additionalProperties:false：draft-07 子集里没有 patternProperties，\n表达不了“下划线开头的扩展键豁免”这条规则，硬写 false 会把 _comment 这类注释键判死。\n所以未知键**不在 schema 层判死**，而是由 filmcheck.py 报 WARN（并给出“是不是想写 X”的建议）。\n\n与 render.py 的 load_script() 的关系：load_script 是装载期的权威硬校验（title/lines 必填、lines 非空、\n每条有 text、id 不重复、bpm >0 或 auto）；契约的完整执行者是 filmcheck.py。\n本文件不执行任何校验：范围/枚举/必填只做文档，跨字段约束（cue 的 at 引用、hold 与 timeline 对账、\nvideo 宽高成对合法性）只有 filmcheck.py 能查。",
   "type": "object",
   "required": [
     "title",
@@ -93,8 +93,9 @@
         "number",
         "string"
       ],
-      "minimum": 0,
-      "description": "配乐 BPM：数字必须 > 0（这里是 ≥0 的宽松下限，0 与负数由 filmcheck 报 error）；\"auto\" = 按风格 BPM 梯度 + 内容指纹决定。music.bpm 优先级更高"
+      "exclusiveMinimum": 0,
+      "pattern": "^\\s*(?:[aA][uU][tT][oO])?\\s*$",
+      "description": "配乐 BPM：数字必须 > 0；字符串只接受 \"auto\"（大小写不敏感，空串同义）= 按风格 BPM 梯度 + 内容指纹决定。0/负数/非 auto 字符串由 filmcheck.py 报 error，这里同步收紧。music.bpm 优先级更高"
     },
     "seed": {
       "type": "integer",
@@ -125,6 +126,7 @@
     "lines": {
       "type": "array",
       "description": "台词数组（必填且非空）：一句一个对象，顺序即播放顺序。id 缺省时 render.py 自动生成 l01、l02…；sfx.cues 的 at 用同一个 id 定位",
+      "minItems": 1,
       "items": {
         "type": "object",
         "required": [
@@ -134,7 +136,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[A-Za-z0-9_.-]+$",
+            "pattern": "^[A-Za-z0-9_.\\-]+$",
             "description": "场景 id（TTS 文件与 cue 都靠它定位）。缺省 = l%02d；一旦写 sfx.cues 就显式给 id"
           },
           "kind": {
@@ -151,7 +153,8 @@
           },
           "text": {
             "type": "string",
-            "description": "朗读文本（必填，不能为空）：自然口语，TTS 念这一句"
+            "pattern": "\\S",
+            "description": "朗读文本（必填，不能为空）：自然口语，TTS 念这一句。filmcheck.py 把空串与纯空白都判 error，这里用 pattern 同步"
           },
           "sub": {
             "type": "string",
@@ -185,7 +188,8 @@
               "properties": {
                 "text": {
                   "type": "string",
-                  "description": "要点文字"
+                  "pattern": "\\S",
+                  "description": "要点文字（必填，不能为空）"
                 },
                 "ok": {
                   "type": "boolean",
@@ -216,8 +220,8 @@
           "tone": {
             "type": "string",
             "enum": [
-              "body",
               "hook",
+              "body",
               "quote",
               "outro",
               "emphasis",
@@ -268,6 +272,7 @@
                     "number",
                     "string"
                   ],
+                  "pattern": "\\S",
                   "description": "数字主体（必填）：数字，或“>3x”“1/2”这类字符串写法"
                 },
                 "unit": {
@@ -298,13 +303,15 @@
               "properties": {
                 "label": {
                   "type": "string",
-                  "description": "条形名（必填）"
+                  "pattern": "\\S",
+                  "description": "条形名（必填，不能为空）"
                 },
                 "value": {
                   "type": [
                     "number",
                     "string"
                   ],
+                  "pattern": "\\S",
                   "description": "条长（必填）：数字或数值字符串（“0.8”“80%”由绘制器解析）"
                 },
                 "unit": {
@@ -326,7 +333,8 @@
               "properties": {
                 "label": {
                   "type": "string",
-                  "description": "节点名（必填）"
+                  "pattern": "\\S",
+                  "description": "节点名（必填，不能为空）"
                 },
                 "note": {
                   "type": "string",
@@ -357,10 +365,14 @@
                         "string",
                         "object"
                       ],
+                      "required": [
+                        "text"
+                      ],
                       "properties": {
                         "text": {
                           "type": "string",
-                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字）"
+                          "pattern": "\\S",
+                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字；写对象时必填且不能为空）"
                         }
                       }
                     }
@@ -384,10 +396,14 @@
                         "string",
                         "object"
                       ],
+                      "required": [
+                        "text"
+                      ],
                       "properties": {
                         "text": {
                           "type": "string",
-                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字）"
+                          "pattern": "\\S",
+                          "description": "条目文字（写对象时用它；写字符串时字符串本身就是文字；写对象时必填且不能为空）"
                         }
                       }
                     }
@@ -558,12 +574,16 @@
             "number",
             "string"
           ],
-          "minimum": 0,
-          "description": "配乐 BPM：数字必须 > 0；\"auto\" = 风格梯度 + 指纹。优先级高于顶层 bpm"
+          "exclusiveMinimum": 0,
+          "pattern": "^\\s*(?:[aA][uU][tT][oO])?\\s*$",
+          "description": "配乐 BPM：数字必须 > 0；字符串只接受 \"auto\"（大小写不敏感，空串同义）= 风格梯度 + 指纹。0/负数/非 auto 字符串由 filmcheck.py 报 error，这里同步收紧。优先级高于顶层 bpm"
         },
         "key": {
-          "type": "string",
-          "description": "调性：\"auto\" 或 C/G/D/F/A/Bb/Dm/Am/Em/Cm；缺省按风格调池选"
+          "type": [
+            "number",
+            "string"
+          ],
+          "description": "调性：\"auto\" 或 C/G/D/F/A/Bb/Dm/Am/Em/Cm 这类调名；缺省按风格调池选。filmcheck.py 也放行数字（执行者只查类型），但 musicgen 会 str() 后再解析调名，数字通常没有意义——**推荐写字符串**"
         },
         "seed": {
           "type": "integer",
@@ -678,7 +698,7 @@
         },
         "cues": {
           "type": "array",
-          "description": "提示点数组：每条 {at, type, dur, gain, ...}；未知参数原样透传给 sfxkit 配方（size/pan/seed/pitch…）",
+          "description": "提示点数组：每条 {at, type, dur, gain, ...}；配方专属参数（pitch/kind/direction/tone/end/brightness/metal/tail/start_hz/end_hz/rate/density/accel/stop/shift/depth/strength/gustiness/whistle/env/intensity/surface/crackle，见 references/sfx-design.md §7）原样透传给 sfxkit 配方，**不做类型校验**（filmcheck.py 只认名字；名单之外的键只报 WARN 并照样透传）",
           "items": {
             "type": "object",
             "required": [
@@ -696,7 +716,8 @@
               },
               "type": {
                 "type": "string",
-                "description": "sfxkit 配方名或别名：whoosh / riser / impact / ui_blip / ui_click / data_chirp / typing / wind / rain / glitch / reverse_swell …（别名 blip→ui_blip、click→ui_click、chirp→data_chirp、wind→wind 等）"
+                "pattern": "\\S",
+                "description": "sfxkit 配方名或别名：whoosh / riser / impact / ui_blip / ui_click / data_chirp / typing / wind / rain / glitch / reverse_swell …（别名 blip→ui_blip、click→ui_click、chirp→data_chirp、wind→wind 等）。必填且不能为空（filmcheck.py 判 error）"
               },
               "dur": {
                 "type": "number",
@@ -732,7 +753,30 @@
                   "string"
                 ],
                 "description": "visual_at 的兼容写法（qa_frames 两个都认）"
-              }
+              },
+              "pitch": {},
+              "kind": {},
+              "direction": {},
+              "tone": {},
+              "end": {},
+              "brightness": {},
+              "metal": {},
+              "tail": {},
+              "start_hz": {},
+              "end_hz": {},
+              "rate": {},
+              "density": {},
+              "accel": {},
+              "stop": {},
+              "shift": {},
+              "depth": {},
+              "strength": {},
+              "gustiness": {},
+              "whistle": {},
+              "env": {},
+              "intensity": {},
+              "surface": {},
+              "crackle": {}
             }
           }
         }
@@ -779,36 +823,48 @@
     "video": {
       "type": "object",
       "additionalProperties": true,
-      "description": "画幅/帧率。**横屏 16:9 与竖屏 9:16 都支持**：内部构图跟随 layoutkit 的 profile（--layout portrait 切到 1080x1920），输出只能同比例下采样（编码时 lanczos）。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。非当前画布比例 / 上采样 / 非法 fps 会被 filmkit.video_plan 直接报错。",
+      "description": "画幅/帧率。**横屏 16:9 与竖屏 9:16 都支持**：内部构图跟随 layoutkit 的 profile（--layout portrait 切到 1080x1920），输出只能同比例下采样（编码时 lanczos）。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。**成对合法性由执行者判**：filmkit.video_plan() 要求 (width,height) 或 (out_width,out_height) 成对且落在白名单（横屏 1920x1080 / 1280x720 / 960x540；竖屏 1080x1920 / 720x1280 / 540x960），非当前画布比例 / 上采样（如 2560x1440）/ 非法 fps 一律报错。这里按轴列候选值只为 IDE 补全：宽高比与成对规则依赖 --layout 画布（单写 width 时 height 缺省=画布高），纯 JSON Schema 表达不了，不在此复制。",
       "properties": {
         "width": {
           "type": "integer",
+          "minimum": 2,
           "enum": [
             1920,
             1280,
             960,
-            2560,
             1080,
             720,
             540
           ],
-          "description": "输出宽：横屏 1920/1280/960/2560；竖屏 1080/720/540"
+          "description": "输出宽候选值（实际成对合法性见 filmkit.video_plan）：横屏 1920/1280/960；竖屏 1080/720/540。2560x1440 因上采样被执行者拒绝，故不列为候选"
         },
         "height": {
           "type": "integer",
+          "minimum": 2,
           "enum": [
             1080,
             720,
             540,
-            1440,
             1920,
             1280,
             960
           ],
-          "description": "输出高：横屏 1080/720/540/1440；竖屏 1920/1280/960"
+          "description": "输出高候选值：横屏 1080/720/540；竖屏 1920/1280/960。必须与 width 成对取白名单里的组合（执行者按 --layout 画布判宽高比）"
+        },
+        "out_width": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "输出宽的低优先级别名：render.py 先读 video.width，只有没写 width 时才用它。必须与 out_height 成对写、取 width/height 白名单里的同一组合；单独写会退回画布高度，被 filmkit.video_plan 按宽高比拒（schema 只声明类型与下限，成对规则由执行者判）"
+        },
+        "out_height": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "输出高的低优先级别名：与 out_width 成对使用。成对合法性与上采样/宽高比规则同 width/height，由 filmkit.video_plan() 判定"
         },
         "fps": {
           "type": "integer",
+          "minimum": 1,
+          "maximum": 120,
           "enum": [
             24,
             25,
@@ -816,7 +872,7 @@
             50,
             60
           ],
-          "description": "帧率，缺省 30"
+          "description": "帧率，缺省 30。候选值见 enum（= filmkit.VIDEO_FPS_ALLOWED）；执行者另外兜底 1–120"
         }
       }
     },

@@ -314,7 +314,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `spec-workflow` | 轻量规约驱动变更：proposal → delta specs → tasks → update 三问决策树 → verify → archive |
 | `verify-with-docs` | 编码前核对 API 文档，检索优先，防幻觉 |
 | `vision-prep` | 大图/PDF 送入视觉模型前的预处理：大图切块、PDF 栅格化，规避 ~800x800 降采样损失 |
-| `video-studio` | 用代码从零生成中文视频：问诊 → 提案 → 设计冻结 → TTS 实测排轴 → 逐帧渲染 → 采样级混音 → 四层质检；脚本自包含（ffmpeg + numpy/Pillow/edge-tts） |
+| `video-studio` | 用代码生成中文视频，两条生产线：有素材就按文案剪（`footage.py`，含 F1–F8 素材门禁与许可治理），没素材才逐帧画（`render.py`）；两者结合用 `compose.py` 把必要信息小面积叠在素材上（形态 3，默认）。共用问诊 → 提案 → 设计冻结 → TTS 实测排轴 → 采样级混音 → 四层质检；脚本自包含（ffmpeg + numpy/Pillow/edge-tts） |
 | `grilling` | 需求对齐访谈：一次一问、多选优先，歧义收敛后再动手；并含「消息完全没听懂 → 一句话重述确认」与「领域术语模糊 → 协同 `domain-modeling` 锐化」两条分支（已合并原 `wait-what`/`grill-with-docs`） |
 | `writing-for-agents` | 写给 agent 看的文档（skill/AGENTS.md/指针文档）的写作杠杆 |
 | `to-tickets` | 把 spec/plan 拆解为可追踪的 GitHub issue（每单一个可独立完成+验收的单元，带验收标准） |
@@ -323,7 +323,7 @@ OpenCode 通过原生 `skill` 工具按需暴露技能——Agent 只在需要�
 | `codebase-design` | 架构词汇表：module/interface/depth/seam/adapter/leverage/locality，删除测试、深度测试，评估模块边界是否合理 |
 | `domain-modeling` | 主动领域建模：维护 CONTEXT.md 术语表（仅词汇，不含实现细节），会话中挑战/锐化模糊术语，仅在必要时提议 ADR；含重复解释触发——同一概念被反复解释时落一条术语 |
 
-> **`video-studio` 的前置条件**：ffmpeg（PATH 或 `FILMKIT_FFMPEG`）、缺依赖时 `pip install -r skills/video-studio/requirements.txt`（numpy / Pillow / edge-tts；cv2、scipy 可选；本机已装齐，Pillow 13 实测通过），旁白合成需要联网。脚本留在技能目录直接执行，工程目录里只需要一个 `film.json`；上游为 [dsh-video-studio-skill](https://github.com/znlgis/dsh-video-studio-skill)（MIT），差异与重新 vendor 步骤见 `skills/video-studio/VENDOR.md`。
+> **`video-studio` 的前置条件**：ffmpeg（PATH 或 `FILMKIT_FFMPEG`）、缺依赖时 `pip install -r skills/video-studio/requirements.txt`（numpy / Pillow / edge-tts；cv2、scipy 可选；本机已装齐，Pillow 13 实测通过），旁白合成需要联网（素材本身可全本地）。脚本留在技能目录直接执行：零素材线只需要一个 `film.json`，素材线只需要一个 `footage.json`。上游为 [dsh-video-studio-skill](https://github.com/znlgis/dsh-video-studio-skill) **2.7.1**（MIT），差异与重新 vendor 步骤见 `skills/video-studio/VENDOR.md`。
 
 > **名册即预算**：`skill` 工具的 `<available_skills>` 里每个 skill 的 name + description 都是**每轮常驻**上下文。2026-10-16 实测（当时全部放行）：名册 **30 条**（23 个本地 + 7 个 superpowers 接线项），渲染后的名册块 **12,186 字符 / 11,927 字节 ≈ 3.3K tokens**——`orchestrator` 只放行 2 个 skill，名册仅 804 字符 ≈ 223 tokens，差 **15×**。2026-10-20 起 `solo` 裁掉 2 个与本地 skill 语义重复的接线项（`systematic-debugging` → `diagnosing-bugs`、`writing-skills` → `writing-for-agents`），其名册降到 28 条；2026-11-18 收编 `video-studio` 后为 29 条，已无任何 Agent 放行全部 skill。所以「不再高频使用」或「与现有 skill 重复」的 skill 应当合并删除，而不是留着备用；超长的 `description` 要按触发词必需性裁剪。**被 deny 的 skill 不会出现在该 Agent 的名册里**（core 用 `skill` 权限规则集过滤名册），所以每个 Agent 的 allowlist 就是它的常驻上下文预算。**隐藏的一次性 agent（title/summary/compaction）已显式 `skill:* deny`——它们永远不加载 skill，名册对它们纯属浪费**。
 

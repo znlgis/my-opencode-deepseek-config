@@ -63,12 +63,16 @@ import filmkit as K
 from filmkit import SAFE, SUB_BAND, W, H, clamp, smooth, ease_out, rng
 
 # ============================================================================
-# 零、legacy 绘制器（逐字节基线，别动这里的任何一行）
+# 零、legacy 绘制器（历史基线，**当前不可达**；一个字符都不许改）
 # ============================================================================
 #
-# legacy = 老项目（film.json 没有 style 字段）。这组函数是逐字节基线，
-# 一个字符都不许改：Lead 的基线三帧 sha256 直接对拍这里的输出。
-# 新主题化代码只在 _legacy_* 之外生长，互不影响。
+# legacy = 老项目（film.json 没有 style 字段）的绘制路径。这组函数是逐字节基线，
+# 一个字符都不许改：老版本的金帧 sha256 是拿它的输出对拍的。
+#
+# 注意：**它不是活的绘制路径**。draw_frame 已删掉 legacy 分支（见文件末尾 draw_frame
+# 的 docstring），stylekit 也不再产出 legacy 计划。保留它是为了能复核历史基线、
+# 对比新旧几何差异；新主题化代码只在 _legacy_* 之外生长，互不影响。
+# 读代码时别误以为"还支持 legacy"——要做老外观请走 propose.py 的采样链路。
 
 # ---------------- 主题（legacy 专用；新代码走 stylekit.STYLES / THEMES） ----------------
 THEME = dict(

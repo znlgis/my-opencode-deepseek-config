@@ -298,9 +298,13 @@ def _cn_number(text):
 def parse_duration(text):
     """从一句话里解析时长（秒）。认不出返回 None。
 
-    支持：「90秒」「2分钟」「2.5分钟」「一分半」「3分30秒」「1分30秒」「两分钟」。
+    支持（中文单位）：「90秒」「2分钟」「2.5分钟」「一分半」「3分30秒」「1分30秒」「两分钟」。
+    支持（ASCII 单位，README/SKILL/intake 的示例写的就是这种）：「45s」「20 s」「90sec」
+    「1.5min」「2m」「3minutes」——大小写不敏感，数字与单位之间允许空格。
     为什么只认这些：宁可比对少认，也不要猜错——猜错会让成片段落数按错误时长排，
     用户更难发现。认不出的句子不会被静默吞掉：整句仍作为 topic 参与题材理解。
+    为什么只取**首个**匹配、不把多个时长相加：「每 5 分钟走 20 秒」是在说节拍，
+    相加成 320 秒会把整片长度排错；取首匹配（5 分钟 = 300 秒）至少和句子的主语一致。
     """
     import re as _re
     s = str(text or "")
@@ -324,6 +328,22 @@ def parse_duration(text):
             v = _cn_number(m.group(1))
             if v is not None:
                 best = float(v)
+    if best is None:
+        # ASCII 单位：文档把 `--set duration:45s` 写成示例（README / SKILL / intake 三处），
+        # 而上面两条分支只认「分/秒」——照文档执行会被 intake 判成"不是合法选项"。
+        # 单位按长到短排（min before m, sec before s），否则 "2min" 会被截成 "2m" 后
+        # 在 "in" 处撞上右边界而整体不认。
+        # 左边界：数字前不能是字母/数字（"ipv6s"、"h264s" 里的字母不是单位）；
+        # 连 "." 也一起排除，"v1.45s" 这种版本号写法不能被读成 45 秒。
+        # 右边界：单位后不能紧跟字母（"2months"/"45secondsx" 必须整体不认，
+        # 而不是截成 2m/45s）——宁可少认，也不能猜错。
+        m = _re.search(
+            r"(?<![0-9A-Za-z.])([0-9]+(?:\.[0-9]+)?)\s*"
+            r"(min(?:ute)?s?|m|sec(?:ond)?s?|s)(?![A-Za-z])",
+            s, _re.IGNORECASE)
+        if m:
+            v = float(m.group(1))
+            best = v * 60.0 if m.group(2).lower().startswith("m") else v
     if best is None or best <= 0:
         return None
     if best < 3.0 or best > 1800.0:
@@ -341,8 +361,9 @@ def parse_duration_spec(text):
     """解析时长要求 -> (秒数, 模式) 或 (None, None)。
 
     模式："at_least"（下限，例如「不少于 5 分钟」） / "exact"（精确目标，例如「2 分钟」）。
-    只认 parse_duration 认得的写法（宁可比对少认，也不要猜错）；认不出就返回 (None, None)，
-    整句仍作为 topic 参与题材理解，不会被静默吞掉。
+    只认 parse_duration 认得的写法（宁可比对少认，也不要猜错），所以 ASCII 写法同样走这条路径：
+    「不少于45s」-> (45.0, "at_least")，「45s 以上」也判下限。
+    认不出就返回 (None, None)，整句仍作为 topic 参与题材理解，不会被静默吞掉。
     """
     sec = parse_duration(text)
     if sec is None:
@@ -373,7 +394,10 @@ def intake_path(work):
 
 
 def _intake_state(work):
-    """读问诊结果：返回 {"present", "status", "missing", "brief", "path"}。
+    """读问诊结果：返回 {"present", "status", "missing", "brief", "path", "mode"}。
+
+    mode 是问诊「制作方式」题的落地结果（chosen / resolved / route）；素材剪辑线（footage）
+    下提案层不适用，上层据此提示，不再假装"这个方案能直接套到成片"。
 
     读不出/不是 JSON 一律当"没有问诊"处理——问诊文件坏掉不该让上层看到一个
     可疑的"已答完"，那会跳过提问直接出方案（正是这一刻要避免的事）。
@@ -383,15 +407,19 @@ def _intake_state(work):
         with open(p, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, json.JSONDecodeError):
-        return {"present": False, "status": "absent", "missing": [], "brief": "", "path": p}
+        return {"present": False, "status": "absent", "missing": [], "brief": "",
+                "path": p, "mode": {}}
     if not isinstance(data, dict):
-        return {"present": False, "status": "broken", "missing": [], "brief": "", "path": p}
+        return {"present": False, "status": "broken", "missing": [], "brief": "",
+                "path": p, "mode": {}}
     answers = data.get("answers") if isinstance(data.get("answers"), dict) else {}
     missing = [str(x) for x in (data.get("missing") or [])]
     status = str(data.get("status") or ("complete" if not missing else "draft"))
+    mode = data.get("mode") if isinstance(data.get("mode"), dict) else {}
     return {"present": True, "status": status, "missing": missing,
             "brief": str(data.get("brief") or ""), "path": p,
-            "answers": dict(answers)}
+            "schema": int(data.get("schema") or 0),
+            "answers": dict(answers), "mode": dict(mode)}
 
 
 def _intake_gate(work, brief_text, no_intake):
@@ -409,11 +437,11 @@ def _intake_gate(work, brief_text, no_intake):
     miss = " / ".join(state.get("missing") or []) or "题材"
     raise SystemExit(
         "[proposal] 还没完成出片前问诊（%s）。\n"
-        "  这是刻意的：素材/时长/气质/声线/配乐这些只有用户能定，先问完再出方案，"
+        "  这是刻意的：题材/制作方式/时长/气质/声线/配乐这些只有用户能定，先问完再出方案，"
         "返工才不会落在渲染之后。\n"
         "  怎么做：\n"
         "    1) python intake.py --work %s --questions --json   # 拿去问用户（一次问完）\n"
-        "    2) python intake.py --work %s --set topic:\"...\" --set tone:bright-lively ...\n"
+        "    2) python intake.py --work %s --set topic:\"...\" --set mode:auto --set tone:bright-lively ...\n"
         "    3) python intake.py --work %s --finalize          # 合成 brief\n"
         "  确实不需要问（批量补渲 / 已在别处答过）：加 --no-intake，会记进提案留痕。\n"
         "  当前状态：%s；还没答：%s" % (state.get("status"), work, work, work,
@@ -556,6 +584,25 @@ def make_proposal(brief_text, script, work, n=3, seed=None, n_frames=4, json_out
             print("   问诊: 已答完（%s）" % intake_state.get("path"))
         if not json_out and intake_bypassed:
             print("   问诊: 已用 --no-intake 跳过（本次提案里会留痕）")
+        # 旧问诊单（schema 1）没有「制作方式」：不拦（向后兼容），但要提示补问——
+        # 否则这片子的产线是"没有记录"的，事后查不出当初选的是哪条线。
+        if (not json_out and intake_state.get("present")
+                and 0 < int(intake_state.get("schema") or 0) < 2
+                and not (intake_state.get("mode") or {}).get("resolved")):
+            print("   问诊: 问诊单是旧版（schema 1），缺「制作方式」（mode）——建议补问一次；"
+                  "本次提案照旧出方案，但 proposal.intake.mode 会是空的。")
+        # 制作方式=素材剪辑时，提案层本身不适用：素材线的外观由素材调色/遮幅决定。
+        # 不失败（hybrid 的图文段仍要设计），但必须说清楚，别让人以为提案能直接套到成片。
+        if not json_out and (intake_state.get("mode") or {}).get("resolved") == "footage":
+            print("   问诊: 制作方式=网上素材剪辑（footage 线）——提案层不适用；"
+                  "出片请用 footage.py（footage.json 契约见 references/footage.md），"
+                  "本提案仅供 hybrid 的图文段参考。")
+        # hybrid 的提示单独一条：这时候提案**有用**，但只对图文段有效，
+        # 而且必须接着跑 matchstyle 才能和素材看齐（这是"两段像一部片"的唯一正路）。
+        if not json_out and (intake_state.get("mode") or {}).get("resolved") == "hybrid":
+            print("   问诊: 制作方式=两者结合（hybrid）——默认形态是「素材打底 + 小面积叠加」，"
+                  "它**不需要**这份提案：画面是素材，自绘只有小面积信息层。\n"
+                  "         只有显式走 --hybrid-form 1（按段拼接）时，本提案才决定图文段外观。")
     else:
         intake_state, intake_bypassed = _intake_state(work), False
     brief = _brief_of(brief_text, script)
@@ -652,7 +699,10 @@ def make_proposal(brief_text, script, work, n=3, seed=None, n_frames=4, json_out
         "intake": {"path": intake_state.get("path"),
                    "status": intake_state.get("status"),
                    "bypassed": bool(intake_bypassed),
-                   "answers": intake_state.get("answers") or {}},
+                   "answers": intake_state.get("answers") or {},
+                   # 制作方式（问诊第 2 题）的落地结果：chosen / resolved / route。
+                   # 素材线（footage）下提案层不适用，这里留痕，事后可查"为什么还出了方案"。
+                   "mode": intake_state.get("mode") or {}},
         # 片间去重证据：这批候选与"最近交付过的设计"的最小维度距离。
         # None = 没有台账（第一次出片 / 已用 --no-ledger 关闭）。
         "ledger": {"path": ledger_path() or None, "recent": len(recent),
@@ -837,7 +887,16 @@ def confirm(work, candidate, by="user", note="", json_out=False,
         if prev.get("scriptHash"):
             print("   剧本指纹: %s（剧本改了要重新提案）" % prev["scriptHash"])
         print("   冻结设计: %s" % os.path.join(str(work), "design.json"))
-        print("   现在可以: python render.py --script <film.json> --stage all")
+        # hybrid 的下一步不是"直接 render"：先把图文段的配色锚到素材，否则两段是两部片。
+        _mode = ((_load_json(os.path.join(str(work), "intake.json"), default=None) or {})
+                 .get("mode") or {}).get("resolved")
+        if _mode == "hybrid":
+            print("   下一步（hybrid 形态 3，默认）: 本设计只对**小面积叠加层**有用；"
+                  "出片走 footage.py --stage all -> overlay.json -> compose.py --stage all")
+            print("   形态 1（按段拼接）才需要 matchstyle：python matchstyle.py "
+                  "--footage footage.json --work %s --apply --align-bars" % work)
+        else:
+            print("   现在可以: python render.py --script <film.json> --stage all")
     return prev
 
 def revise(work, feedback, script_path, n=3, seed=None, n_frames=4, json_out=False,

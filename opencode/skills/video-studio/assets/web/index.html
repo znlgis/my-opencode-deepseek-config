@@ -25,7 +25,23 @@
   <script src="qa_text.js"></script>
   <script>
     // 场景与文字登记都建好、字体度量稳定后才把 window.ready 置 true
-    window.FK.boot();
+    // 为什么要 catch：boot() 是 async，裸调用一旦在 renderFrame(0)/字体 await 处抛错就是
+    // unhandled rejection —— 页面看着"在加载"，window.ready 永远不置 true，webengine 只能
+    // 干等到 ready 超时（open_page 默认 300 s）。把错误留在 window.__BOOT_ERROR__（字符串，
+    // 含 stack）并打 console.error，渲染端与人工排查都能立刻看到可读原因。
+    // 必须先判空：engine.js 自己加载失败（404/语法错）时 window.FK 是 undefined，
+    // 裸调 window.FK.boot() 是同步 TypeError，下面的 .catch 根本挂不上，
+    // 于是 __BOOT_ERROR__ 永远写不进去，渲染端只能干等到 ready 超时。
+    if (!window.FK || typeof window.FK.boot !== "function") {
+      window.__BOOT_ERROR__ = "[video-studio] engine.js 没有加载出 window.FK.boot()"
+        + "（检查 assets/web/engine.js 是否存在/是否被改坏）";
+      console.error(window.__BOOT_ERROR__);
+    } else {
+      window.FK.boot().catch(function (e) {
+        window.__BOOT_ERROR__ = (e && e.stack) ? String(e.stack) : String(e);
+        console.error('[video-studio] boot() 失败：', e);
+      });
+    }
   </script>
 </body>
 </html>

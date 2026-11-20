@@ -40,8 +40,12 @@ sha1），指纹不同直接 skipped（跨机不误报）；指纹相同还变�
 CLI
 ---
     python tools/golden_frames.py [--check | --write] [--json] [--strict]
-                                  [--script PATH] [--scenes PATH] [--golden PATH]
-                                  [--frames 56,168,380]
+                                  [--script PATH] [--scenes PATH] [--design PATH]
+                                  [--golden PATH] [--frames 56,168,380]
+                                  [--layout landscape|portrait] [--compose]
+    --golden 缺省按 profile/模式取：整片 golden_frames.json / golden_frames_portrait.json，
+    --compose golden_frames_compose.json / golden_frames_compose_portrait.json；
+    **显式传入时 --check/--write/--compose 都只用这个路径**（不会再被静默换成默认基线）。
     退出码：0 = pass 或 skipped；1 = fail；skipped 加 --strict 时为 2。
     --json 输出 {status, frames:[{frame, sha256, expect}], font_fp, ...}，可直接给
     selfcheck.py / CI 消费；给人看的文字一律走 stdout（--json 时只有 JSON）。
@@ -63,7 +67,6 @@ import traceback
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-# 收编后 tools/ 在技能目录内：ROOT 即技能根（上游是 <repo>/tools + <repo>/skills/video-studio）。
 SKILL = ROOT
 SCRIPTS = os.path.join(SKILL, "scripts")
 ASSETS = os.path.join(SKILL, "assets")
@@ -654,14 +657,15 @@ COMPOSE_SCENES = (
 )
 
 
-def _compose_default_golden(golden_path=None):
-    """构图层基线的文件名：**固定按 profile 取**，不从 --golden 派生。
+def _compose_default_golden():
+    """构图层基线的缺省文件名：**固定按 profile 取**，不从 --golden 派生。
 
     踩过一次：`--layout portrait` 已经把 --golden 改成了 golden_frames_portrait.json，
     这里再按 profile 追一次后缀，就变成 golden_frames_portrait_portrait.json——
     两个 profile 各自写了一份名字互不相同的基线，谁都对不上谁。
     所以构图层基线用**自己的固定名字**（golden_frames_compose.json / _compose_portrait.json），
     与整片时刻基线（golden_frames*.json）完全分开。
+    **只有用户没显式传 --golden 时才走这里**；显式路径在 compose_frames 里原样生效。
     """
     suffix = "_portrait" if _is_portrait() else ""
     return os.path.join(ASSETS, "golden_frames_compose%s.json" % suffix)
@@ -676,9 +680,10 @@ def _is_portrait():
     return int(K.H) > int(K.W)
 
 
-def compose_frames(scenes_path, golden_path, design_path=None, mode="check"):
+def compose_frames(scenes_path, golden_path=None, design_path=None, mode="check"):
     """按 scene_type 逐类渲一帧并比对/写入构图层基线。
 
+    golden_path：显式基线路径（None = 未传，按当前 profile 取默认名）。
     mode: "check" 比对 / "write" 重录。返回与 check_golden 同形状的 result。
     """
     K, ST = _modules()
@@ -700,7 +705,12 @@ def compose_frames(scenes_path, golden_path, design_path=None, mode="check"):
         rows.append({"name": name, "sha256": _sha256_image(img),
                      "size": [int(K.W), int(K.H)]})
 
-    golden_path = _compose_default_golden()
+    # 显式传入的 --golden 必须生效：这里原来无条件改写成默认名，于是
+    # `--compose --check --golden /tmp/nonexistent_xyz.json --json` 也照样拿默认构图基线
+    # PASS——用户以为在验另一份基线，实际参数被静默丢弃（实测复现）。
+    # 约定：显式给了就用给的（--check 读它、--write 写它）；没给才按 profile 取默认名。
+    if not golden_path:
+        golden_path = _compose_default_golden()
     data = {
         "version": GOLDEN_VERSION,
         "generator": "golden_frames.py compose v%s" % __version__,
@@ -801,8 +811,10 @@ def main(argv=None):
                     help="固定 fixture 设计（默认 assets/design_fixture.json）；"
                          "传空串回落到老的 stylekit 口径")
     ap.add_argument("--scenes", default=DEFAULT_SCENES, help="scenes.py（默认内置场景）")
-    ap.add_argument("--golden", default=DEFAULT_GOLDEN,
-                    help="基线 JSON（默认 skills/video-studio/assets/golden_frames.json）")
+    ap.add_argument("--golden", default=None,
+                    help="基线 JSON。缺省：整片按 profile 取 golden_frames.json / "
+                         "golden_frames_portrait.json，--compose 取 golden_frames_compose*.json；"
+                         "显式传入时 --check/--write/--compose 都只用这个路径（不会被换成默认基线）")
     ap.add_argument("--frames", default="",
                     help="--write 时指定帧号（逗号分隔）；缺省取夹具片 3 个时刻")
     ap.add_argument("--layout", default="", choices=("", "landscape", "portrait"),
@@ -818,14 +830,21 @@ def main(argv=None):
     # scenes.py 写的是 `from filmkit import W, H`，值在导入那一刻就绑死了。
     # 等到 _modules() 里面再设，渲染出来的仍是横屏——而基线文件名却是 portrait，
     # 于是"竖屏基线"里存的是横屏像素，回归从此永远绿（最坏的那种假通过）。
+    # --golden 的 argparse default 必须是 None：只有"用户没传"才能按 profile 推默认文件名，
+    # 而"用户显式传了路径"必须原样保留。之前 default=DEFAULT_GOLDEN，--compose 分不清
+    # "没传 / 传的正好是默认路径"，于是永远用默认构图基线——传不存在的路径也 PASS（静默丢弃）。
+    golden = a.golden
     if a.layout:
         os.environ["VIDEO_STUDIO_LAYOUT"] = a.layout
-        if a.golden == DEFAULT_GOLDEN:
-            a.golden = os.path.join(
+        if golden is None:
+            golden = os.path.join(
                 ASSETS, "golden_frames.json" if a.layout == "landscape"
                 else "golden_frames_%s.json" % a.layout.replace("-", "_"))
+    if golden is None:
+        golden = DEFAULT_GOLDEN
     try:
         if a.compose:
+            # 显式 --golden 原样透传；None 交给 compose_frames 按 profile 取默认名。
             res = compose_frames(a.scenes, a.golden, design_path=(a.design or None),
                                  mode=("write" if a.write else "check"))
         elif a.write:
@@ -837,13 +856,13 @@ def main(argv=None):
                     raise SystemExit("--frames 必须是逗号分隔的整数帧号，收到 %r" % a.frames) from None
                 if not frames:
                     raise SystemExit("--frames 里没有有效帧号")
-            res = write_golden(a.script, a.scenes, a.golden, frames,
+            res = write_golden(a.script, a.scenes, golden, frames,
                        design_path=(a.design or None))
         else:
             if a.frames:
                 raise SystemExit("--frames 只用于 --write；--check 的帧号由基线决定"
                                  "（要换帧号请 --write --frames ... 重录）")
-            res = check_golden(a.script, a.scenes, a.golden,
+            res = check_golden(a.script, a.scenes, golden,
                        design_path=(a.design or None))
     except SystemExit:
         raise

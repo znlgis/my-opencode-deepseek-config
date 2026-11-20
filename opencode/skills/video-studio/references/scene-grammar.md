@@ -258,7 +258,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --out out/fi
    再跑一次剪影门禁（`--selftest` / `--designs N`）确认新类型在不同现场设计下也"看得出来"。这一步不做，等于新加的构图
    没有进入 G13 的覆盖范围。
 
-跑完的验证顺序：`python selfcheck.py`（**85 条**，第 52–55 条专盯场景语法/视觉语言/单真值/剪影，第 71 条盯默认无细线（HUD 打开时也无线、遮幅不随 push 缩放），第 72 条盯前景不抖）
+跑完的验证顺序：`python selfcheck.py`（**97 条**，第 52–55 条专盯场景语法/视觉语言/单真值/剪影，第 71 条盯默认无细线（HUD 打开时也无线、遮幅不随 push 缩放），第 72 条盯前景不抖）
 → `python <SKILL_DIR>/tools/silhouette_qa.py`（不同设计两两仍可区分）。
 
 ## 9. 常见误用
