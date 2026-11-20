@@ -472,7 +472,7 @@ out.append({"at": "%s+0.3" % s["id"], "type": "text_stream",
 ### 13.3 验收：别靠耳朵，跑脚本
 
 ```bash
-python <SKILL_DIR>/tools/audio_similarity.py --strict   # 在包根执行
+python <SKILL_DIR>/tools/audio_similarity.py --strict
 ```
 
 A 组量"同参数换内容指纹"和"换编排参数"的相关性；B 组量"跨片音效是否还逐样本相同"（同时验
@@ -481,7 +481,7 @@ D 组构造"有人声段 + 间隙"，量人声段旁白/背景响度差。任何
 
 ### 13.4 改音频代码后的自检清单
 
-1. `python <SKILL_DIR>/tools/audio_similarity.py --strict` —— A/B/C/D 四组达标（在包根执行）。
-2. `python <SKILL_DIR>/scripts/selfcheck.py` —— **77 条**全 PASS（第 33 条盯内容派生 seed、第 35–38 条盯旁白优先，第 39 条盯音频边界）。
+1. `python <SKILL_DIR>/tools/audio_similarity.py --strict` —— A/B/C/D 四组达标。
+2. `python <SKILL_DIR>/scripts/selfcheck.py` —— **97 条**全 PASS（第 33 条盯内容派生 seed、第 35–38 条盯旁白优先，第 39 条盯音频边界）。
 3. `python musicgen.py --selftest` / `python sfxkit.py --selftest` —— 各自全 PASS（musicgen 的 26 项覆盖编排与确定性）。
 4. 改 `assets/scenes.py` 的 `cues()` 后，跑一次 `--stage cues` 看类型分布是否覆盖 hook/body/quote/outro。

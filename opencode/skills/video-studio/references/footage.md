@@ -303,5 +303,5 @@ python footage.py ... --stage qa --strict-qa                 # fail 即失败（
 2. out/QC-REPORT-footage.md 里的时长/响度/真峰抄进回复，不要凭印象说"没问题"。
 3. work/qa/footage-sheet.png **亲眼看过**，并在回复里说出具体观察（哪几镜、有没有错位）。
 4. 片尾出处卡在成片里（F5 pass 只是"写了"，还要看它真的出现在画面上）。
-5. python tools/footage_selftest.py 全绿（改了这条线的代码就跑一次，离线约 30 秒）。
+5. python <SKILL_DIR>/tools/footage_selftest.py 全绿（改了这条线的代码就跑一次，离线约 30 秒）。
 6. 素材预算核对过：`distinct ≥ 硬下限`（F8 不是 fail / skipped；豁免必须写了 `licensing.why`）。

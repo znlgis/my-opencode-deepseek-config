@@ -231,7 +231,7 @@ python render.py --script film.json --stage all     # 前提：work/design.json 
 > 找不到时按名字定位：`Get-ChildItem -Recurse -Filter filmkit.py $env:USERPROFILE\.config\opencode`。
 >
 > 收编时把上游包根的 `tools/` 与 `schemas/` 挪进了技能目录，所以 `<SKILL_DIR>/tools/` 与
-> `<SKILL_DIR>/schemas/` 都在技能目录下（上游写作 `<SKILL_DIR>/tools/`、`<SKILL_DIR>/schemas/`）。
+> `<SKILL_DIR>/schemas/` 都是有效路径；上游原本把它们写在包根下（`<包根>/tools/`、`<包根>/schemas/`）。
 
 ```bash
 # 1) 只写一个 film.json（工程目录里唯一需要你手写的文件）
@@ -261,7 +261,7 @@ python <SKILL_DIR>/scripts/selfcheck.py
 
 # 3) 【铁律】先问诊（8 题一次问完），再出方案——同一个 brief 每次都不一样，必须让用户看过
 python <SKILL_DIR>/scripts/propose.py \
-       --brief "AI 大模型的三年，30 秒科普"
+       --brief "AI 大模型的三年，30 秒科普" \
        --script film.json --work work
 #    问诊没答完时这条会被拦（加 --no-intake 可跳过，会记进 proposal.intake 留痕）；
 #    不传 --brief 时 propose 直接读 work/intake.brief.txt。
@@ -824,7 +824,7 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --stage styl
 验收工具（改音频相关代码后必须跑）：
 
 ```bash
-python <SKILL_DIR>/tools/audio_similarity.py --strict   # A/B/C/D 四组阈值，失败 exit 1（在包根执行）
+python <SKILL_DIR>/tools/audio_similarity.py --strict   # A/B/C/D 四组阈值，失败 exit 1
 ```
 
 ## 6. 停留窗口：让观众看清楚，而不是整片放慢

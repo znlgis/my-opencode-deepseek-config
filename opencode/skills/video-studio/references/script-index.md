@@ -4,7 +4,8 @@
 > 而**各自的 `--help` 永远比文档新**——两者不一致时以 `--help` 为准，并顺手改这一篇。
 
 约定：所有脚本都在技能目录里按路径直接调用，**不要拷进工程目录**（零拷贝，见 `SKILL.md` §1）。
-`<SKILL_DIR>` = 本次 `skill` 工具回报的 resourceBase；`<SKILL_DIR>` = 包根（`<SKILL_DIR>` 往上两级）。
+`<SKILL_DIR>` = 本技能所在目录（OpenCode 的全局技能目录 `~/.config/opencode/skills/video-studio`，见 `SKILL.md` §1）。
+`tools/`、`schemas/`、`assets/`、`scripts/` 都在它下面——下面的路径一律按 `<SKILL_DIR>` 展开。
 
 > **所有脚本都在技能目录里，直接按路径调用即可**（如 `python <SKILL_DIR>/scripts/propose.py`）。
 > 不需要拷到工程目录——主路径是零拷贝（§1）。
