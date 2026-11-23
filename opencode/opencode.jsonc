@@ -51,6 +51,15 @@
         { "action": "read", "resource": ".envrc", "effect": "deny" },
         { "action": "read", "resource": "*.envrc", "effect": "deny" },
         { "action": "read", "resource": "*.env.example", "effect": "allow" },
+        // Private keys and credential files are never needed by an agent; deny
+        // them explicitly instead of relying on the `.env` patterns.
+        { "action": "read", "resource": "*.pem", "effect": "deny" },
+        { "action": "read", "resource": "*.key", "effect": "deny" },
+        { "action": "read", "resource": "*.p12", "effect": "deny" },
+        { "action": "read", "resource": "*.pfx", "effect": "deny" },
+        { "action": "read", "resource": "id_rsa*", "effect": "deny" },
+        { "action": "read", "resource": ".npmrc", "effect": "deny" },
+        { "action": "read", "resource": ".pypirc", "effect": "deny" },
         // `edit` rules here only forbid writing secret files and env
         // templates (`*.env.*` also covers `.env.example`). Do NOT add a
         // global `edit *` allow (or any allow that relaxes a secret path):
@@ -67,6 +76,13 @@
         { "action": "edit", "resource": "*.env.*", "effect": "deny" },
         { "action": "edit", "resource": ".envrc", "effect": "deny" },
         { "action": "edit", "resource": "*.envrc", "effect": "deny" },
+        { "action": "edit", "resource": "*.pem", "effect": "deny" },
+        { "action": "edit", "resource": "*.key", "effect": "deny" },
+        { "action": "edit", "resource": "*.p12", "effect": "deny" },
+        { "action": "edit", "resource": "*.pfx", "effect": "deny" },
+        { "action": "edit", "resource": "id_rsa*", "effect": "deny" },
+        { "action": "edit", "resource": ".npmrc", "effect": "deny" },
+        { "action": "edit", "resource": ".pypirc", "effect": "deny" },
         // `shell` resources are the full command text (shell/parse.ts), matched
         // as wildcard patterns — the trailing `*` in a rule is what makes it a
         // prefix grant (`git status*` covers `git status --short`). Matching is
@@ -79,7 +95,16 @@
         { "action": "shell", "resource": "git show*", "effect": "allow" },
         { "action": "shell", "resource": "git stash list*", "effect": "allow" },
         { "action": "shell", "resource": "git add *", "effect": "allow" },
+        // Git Safety forbids bulk staging (`-A`, `--all`, `.`, `-u`) and
+        // amend/skip-hook commits. Keep the high-frequency allow above, then
+        // send those specific forms back to a human (last match wins).
+        { "action": "shell", "resource": "git add -A*", "effect": "ask" },
+        { "action": "shell", "resource": "git add --all*", "effect": "ask" },
+        { "action": "shell", "resource": "git add .", "effect": "ask" },
+        { "action": "shell", "resource": "git add -u*", "effect": "ask" },
         { "action": "shell", "resource": "git commit*", "effect": "allow" },
+        { "action": "shell", "resource": "git commit --amend*", "effect": "ask" },
+        { "action": "shell", "resource": "git commit --no-verify*", "effect": "ask" },
         { "action": "shell", "resource": "node scripts/*", "effect": "allow" },
         { "action": "shell", "resource": "npm run *", "effect": "allow" },
         { "action": "shell", "resource": "npm test*", "effect": "allow" },
@@ -96,8 +121,8 @@
         // v2.4.0 adds a built-in browser pane that an agent can read and drive,
         // including pages the user is signed in to. No agent here needs it, so
         // deny every agent browser call; manual use of the pane is unaffected
-        // (the release notes scope this rule to agent calls). The 45 browser
-        // tools would otherwise be injected into every agent's tool list.
+        // (the release notes scope this rule to agent calls). The browser tool
+        // set would otherwise be injected into every agent's tool list.
         { "action": "browser", "resource": "*", "effect": "deny" }
     ],
     // Pinned to an immutable tag on purpose — never track `latest`: a plugin
@@ -136,7 +161,7 @@
     // `deepseek-flash` is the merged V4.1 Flash model — the former text-only
     // and vision variants are now one natively-multimodal model, so it carries
     // the `capabilities` block (image input). Without it OpenCode treats the
-    // model as text-only and rejects read_image calls.
+    // model as text-only and rejects image reads.
     // Two distinct mechanisms, deliberately kept apart:
     //   toggle — `{"thinking":{"type":"enabled"|"disabled"}}`, a BODY field;
     //   effort — `{"reasoning_effort":"low"|"high"|"max"}`, driven from the
@@ -295,7 +320,10 @@
         },
         "plan": {
             "model": "deepseek/deepseek-flash",
-            "permissions": [{ "action": "skill", "resource": "*", "effect": "deny" }]
+            "permissions": [
+                { "action": "subagent", "resource": "*", "effect": "deny" },
+                { "action": "skill", "resource": "*", "effect": "deny" }
+            ]
         },
         "title": {
             "model": "deepseek/deepseek-flash",
@@ -307,7 +335,10 @@
         },
         "compaction": {
             "model": "deepseek/deepseek-flash",
-            "permissions": [{ "action": "skill", "resource": "*", "effect": "deny" }]
+            "permissions": [
+                { "action": "subagent", "resource": "*", "effect": "deny" },
+                { "action": "skill", "resource": "*", "effect": "deny" }
+            ]
         }
     },
     // Trim only oversized tool outputs (full text still saved to disk, preview

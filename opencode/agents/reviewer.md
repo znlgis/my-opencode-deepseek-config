@@ -64,4 +64,4 @@ Self-Verification).
   positivity.
 - For a high-stakes diff where a single-pass miss is costly, you may note that a
   second independent reviewer pass (fresh reviewer) would add value — but never
-  spawn it yourself (read-only, no task tool).
+  spawn it yourself (read-only, no subagent tool).

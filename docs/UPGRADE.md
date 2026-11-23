@@ -23,8 +23,7 @@
 
 | 项 | 当前值 | 最近核验 |
 | --- | --- | --- |
-| 运行时 CLI（桌面版） | `opencode-cli.exe` **2.3.2**（桌面版自带；`update: notify`，需手动重启更新） | 2026-11-23 |
-| 配置校验 CLI | 独立 `opencode.exe` **2.4.0**（GitHub release，`--standalone` 读取同一 `~/.config/opencode`） | 2026-11-23 |
+| 运行时 CLI | `opencode-cli.exe` **2.4.0**（桌面版自带） | 2026-11-23 |
 | PATH 上的 `opencode` | **1.18.4**（WinGet 安装，v1，不要用） | 2026-11-23 |
 | superpowers pin | `#v7.0.2`（当前最新 tag） | 2026-11-23 |
 | DeepSeek 定价（USD / 1M，off-peak） | in 0.15 / out 0.60 / cache_read 0.003 / cache_write 0.15 | 2026-11-23 |
@@ -32,7 +31,7 @@
 | 结构 | 1 模型 / 4 档 / 12 agents / 18 commands / 24 skills | 2026-11-23 |
 | 压缩窗口 | `limit.input` 131072 − `compaction.buffer` 16000 = 115,072 | 2026-11-23 |
 
-**为什么分两行**：v2.4.0（2026-11-23 发布）是当前配置的目标 schema；桌面版仍停在 2.3.2，且 `update: notify` 不会自动安装。安装桌面更新会重启 OpenCode（当前会话中断），因此由用户手动完成；在此之前用独立 2.4.0 CLI 的 `--standalone` 校验配置与 agent。桌面版更新后，把第一行的值改成 2.4.0。
+桌面版已更新到 2.4.0，与配置 schema 同版；`update: notify` 保留，避免未来静默跨版本。若桌面版再次落后于目标版本，用独立 CLI 的 `--standalone debug config` / `debug agents` 校验同一份 `~/.config/opencode`（见 3.3）。
 
 定价附注：peak 时段 = off-peak ×2（UTC 01–04 与 06–10 的周一至周五，不含中国法定节假日）；`cache_write` 无独立官方价，按 cache-miss 输入价映射。
 
@@ -89,7 +88,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 & $cli debug agents                   # 12 个自定义 Agent，模型引用全部可解析
 ```
 
-桌面版落后于目标版本时（本仓库当前就是这种状态），下载对应平台的 standalone 包，用**同一份** `~/.config/opencode` 校验目标版本：
+桌面版落后于目标版本时（例如目标版本刚发布、桌面版尚未更新），下载对应平台的 standalone 包，用**同一份** `~/.config/opencode` 校验目标版本：
 
 ```powershell
 & .\opencode.exe --version                         # 目标版本，例如 v2.4.0
@@ -97,7 +96,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 & .\opencode.exe --standalone debug agents         # 12 个 Agent + 权限展开
 ```
 
-再确认没有 v1 触发键——清单以 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel` 与 legacy 键分支为准（`scripts/validate-jsonc.js` 的 `V1_TOP_LEVEL_KEYS` 只是手工镜像，以 `normalize.ts` 为准），尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。
+再确认没有 v1 触发键——清单以 `packages/core/src/config/normalize.ts` 的 `unsupportedTopLevel` 与 legacy 键分支为准（`scripts/validate-jsonc.js` 的 `V1_TOP_LEVEL_KEYS` 只是手工镜像，以 `normalize.ts` 为准），尤其是顶层别出现 `provider` / `agent` / `command` / `plugin` / `permission` / `tools` / `attachment`。`validate-jsonc.js` 现在还会拒绝**未知顶层键**（loader 会静默丢弃），所以 `automation` / `permission` 这类拼写错误会直接变红，而不是看起来生效。
 
 ### 3.4 同步与重载
 
@@ -144,7 +143,7 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 17. **v2.3.1 起后台压缩默认开启** —— `compaction.background` 默认 `true`，会在触发压缩前预写摘要以减少停顿；未被使用的摘要仍按 token 计费。本仓库显式设为 `false`（成本优先），需要交互低延迟时才改回 `true`。
 18. **v2.3.1 起超时命令转入后台，`timeout: 0` 不再是无限等待** —— 前台命令超时后继续在后台运行并回报结果；前台 `timeout: 0` 现在套用默认 120 秒。脚本需要长任务时显式给大值，不要用 0 表达「不超时」。
 19. **v2.3.1 起目录没有 `AGENTS.md` 时会回退读取 `CLAUDE.md`** —— 全局 `AGENTS.md` 缺失时还会回退 `~/.claude/CLAUDE.md`。本仓库有 `AGENTS.md`，不受影响；但复制配置到只带 `CLAUDE.md` 的目录时，旧规则会被重新加载。
-20. **v2.4.0 的 `browser` 是权限动作，不只是 UI** —— 桌面内置浏览器可读取/操作已登录页面；全局 `{action: browser, resource: "*", effect: deny}` 会拒绝**所有 agent** 的浏览器调用，手动使用浏览器面板不受影响。没有这条 deny 时，45 个 browser 工具会进入每个 agent 的工具列表。
+20. **v2.4.0 的 `browser` 是权限动作，不只是 UI** —— 桌面内置浏览器可读取/操作已登录页面；全局 `{action: browser, resource: "*", effect: deny}` 会拒绝**所有 agent** 的浏览器调用，手动使用浏览器面板不受影响。没有这条 deny 时，browser 工具集会进入每个 agent 的工具列表。
 21. **v2.4.0 的 automations 默认开启** —— 可定时跑 prompt / shell / Code Mode；顶层 `automations: false` 才是关闭开关。`experimental.automations` 与 `experimental.schedules` 在 2.4.0 被标为 removed（只认顶层键）。
 22. **v2.4.0 图片工具改名** —— `experimental_image_generate` → `generate_image`；旧权限规则会自动映射，但用户点过的 "always allow" 不映射，会重新问一次。本仓库没有旧规则，无需改。
 23. **v2.4.0 Code Mode session 工具路径改变** —— `tools.opencode.session_rename` / `session_move` → `tools.opencode.session.rename` / `.move`；直接工具名与权限动作不变。仓库内没有硬编码这些路径。
@@ -157,11 +156,10 @@ node scripts/estimate-cost.js         # 默认参数合计约 $0.026
 
 - [ ] `node scripts/validate-jsonc.js` 退出码 0（配置 + 12 个 agent frontmatter + 24 个 skill frontmatter + 权限放宽检查均无报错）
 - [ ] `node scripts/estimate-cost.js` 退出码 0，且输出成本估算（默认参数应约 $0.026）
-- [ ] `& $cli --version` 与第 2 节“运行时 CLI（桌面版）”一致；若桌面版已更新，同时把基线改成新版本
-- [ ] standalone 目标 CLI 的 `--version` 是目标版本（当前 2.4.0），且 `--standalone debug config` / `debug agents` 无诊断
+- [ ] `& $cli --version` 是目标版本（当前 2.4.0）
 - [ ] `& $cli debug config` 输出中没有 unsupported / conflict 诊断；模型只有 `deepseek-flash` 四档（默认 / `#low` / `#high` / `#max`）
-- [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析；2.4.0 standalone 的同一命令结果一致
-- [ ] `automations: false` 出现在 2.4.0 `debug config` 的 `info` 中；权限列表含 `browser: deny`
+- [ ] `& $cli debug agents` 列出 12 个自定义 Agent，模型引用全部可解析
+- [ ] `automations: false` 出现在 `debug config` 的 `info` 中；权限列表含 `browser: deny`
 - [ ] `.\scripts\sync-config.ps1` 成功，`& $cli reload` 后 `/models` 与 Agent 列表符合预期
 - [ ] 两份 README 标题逐条对齐，`LF = CRLF`
 - [ ] 交叉引用全部可达

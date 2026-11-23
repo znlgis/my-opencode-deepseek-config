@@ -18,7 +18,9 @@
  * Config files additionally get a model-layer lint: a key under `settings` that
  * the openai-chat protocol does not implement is dropped without a diagnostic,
  * a null in `body`/`headers` shadows the base value, and a default tier that
- * leaves the thinking toggle unset pays reasoning tokens on every step.
+ * leaves the thinking toggle unset pays reasoning tokens on every step. An
+ * unknown top-level key also fails: the v2 loader would drop it silently, so a
+ * typo must not look valid.
  *
  * Output is ASCII only (OK / FAIL) so it renders in any console encoding.
  *
@@ -41,6 +43,18 @@ const V1_TOP_LEVEL_KEYS = new Set([
   'autoupdate', 'autoshare', 'disabled_providers', 'enabled_providers',
   'small_model', 'mode', 'agent', 'provider', 'permission', 'tools',
   'attachment', 'layout', 'subagent_depth',
+]);
+
+// Top-level keys v2.4.0 decodes natively (packages/schema/src/config.ts).
+// The loader drops an unknown key silently, so a typo such as `automation`
+// would look valid while doing nothing. Fail the lint instead of trusting it.
+// Re-check this list when the target CLI changes.
+const NATIVE_TOP_LEVEL_KEYS = new Set([
+  '$schema', 'shell', 'model', 'default_agent', 'update', 'share', 'enterprise',
+  'username', 'timezone', 'automations', 'permissions', 'policies', 'agents',
+  'snapshots', 'watcher', 'formatter', 'lsp', 'media', 'tool_output', 'mcp',
+  'compaction', 'skills', 'commands', 'instructions', 'references',
+  'websearch', 'plugins', 'worktree', 'warming', 'providers', 'experimental',
 ]);
 
 // Top-level keys a v2-native agent file may declare. Anything else either
@@ -419,6 +433,15 @@ function validate(filePath) {
     if (legacy.length > 0) {
       console.error(`  FAIL: invalid: ${absPath}`);
       console.error(`    v1 top-level key(s) are silently migrated or dropped by v2: ${legacy.join(', ')}`);
+      return false;
+    }
+
+    const unknown = Object.keys(parsed).filter(
+      (key) => !NATIVE_TOP_LEVEL_KEYS.has(key) && !V1_TOP_LEVEL_KEYS.has(key)
+    );
+    if (unknown.length > 0) {
+      console.error(`  FAIL: invalid: ${absPath}`);
+      console.error(`    unknown top-level key(s) are silently dropped by v2: ${unknown.join(', ')}`);
       return false;
     }
 

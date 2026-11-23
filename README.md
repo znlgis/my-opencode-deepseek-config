@@ -10,7 +10,7 @@
 - 唯一模型：`deepseek/deepseek-flash`（V4.1 Flash，原生多模态）；Agent 只按 thinking 档位区分：默认（thinking 关）/ `#low` / `#high` / `#max`
 - 代理层级：`experimental.subagent_depth: 2`（v2 原生键；v1 的顶层 `subagent_depth` 已被 v2 丢弃，本仓库不再写入。恰好覆盖实际最深链路 `orchestrator → light-orchestrator → oracle`；其余 subagent 一律禁止委派，更深层级只是白送 token 放大面）
 - 会话分享：关闭（`share: "disabled"`）
-- 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）；v2.4.0 的 `browser` 全局 `deny`（agent 不得驱动已登录浏览器），`automations: false`（不跑后台定时任务）
+- 权限基线：`read` 默认放行、`shell` 默认 `ask`（未匹配的命令一律交人工确认，不枚举危险模式）；`.env` 类敏感文件 `deny`；私钥与凭据文件（`*.pem` / `*.key` / `id_rsa*` / `.npmrc` / `.pypirc`）`deny`；外部目录 `ask`；只读 Agent 的 shell 规则（默认 deny 全部 + 仅放行只读子命令）；v2.4.0 的 `browser` 全局 `deny`（agent 不得驱动已登录浏览器），`automations: false`（不跑后台定时任务）
 - 上下文压缩：**仅用内置 compaction**（opencode.jsonc）——`limit.input` 显式声明工作窗口，触发点 = `limit.input − compaction.buffer`（`131072−16000=115,072` tokens），保留尾部 `keep.tokens: 12000`；`compaction.background: false`（2.3.1+ 新增开关，默认 `true`）避免为未使用的预写摘要付费；v1 拼写（`prune`/`tail_turns`/`reserved`/`preserve_recent_tokens`）在 v2 下不生效，已全部移除（v1 的 `reserved` 对应 v2 的 `buffer`）；无第三方压缩插件
 - 全局规则：`AGENTS.md`（核心原则、任务拒绝契约、自我验证、反模式等；上下文/Token 纪律在 `AGENTS.md`）
 - 技能：`skills/` 目录下 **24 个** `SKILL.md` 技能，通过原生 `skill` 工具按需加载；各 Agent 再用 `skill` 权限白名单裁剪名册（名册的 name+description 是**每轮常驻**成本，故按职责最小化）
@@ -21,7 +21,7 @@
 
 ### 前置条件
 
-- OpenCode v2（桌面版内置 CLI **2.3.2**，2026-11-23 核验；配置与文档已按 **2.4.0** schema 校验——2.4.0 已发布，桌面版需手动重启更新；1.18.x 及更早版本**不再支持**）
+- OpenCode v2（桌面版内置 CLI **2.4.0**，2026-11-23 核验；1.18.x 及更早版本**不再支持**）
 - **运行时提醒**：PATH 上的 `opencode`（WinGet 安装）是 **1.18.4**，不是本配置的运行时；用它会走 V1→V2 迁移路径。headless 运行请用桌面版自带 CLI（路径见「安装与启动」⚠️）
 - DeepSeek API Key：[platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) 申请
 - 后台子智能体（v2.3.0 起 `task` 委派**始终后台运行**：调用立即返回 `sessionID`，子会话空闲时向父会话上报）；无需环境变量，旧版 `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS` 已废弃
@@ -119,7 +119,7 @@ Linux / macOS：把 `export OPENCODE_CONFIG_DIR="$HOME/path/to/my-opencode-deeps
 
 启动后自检三条：`/models` 显示 `deepseek/deepseek-flash`；Agent 列表有 12 个自定义 Agent；输入任意需求，`orchestrator` 会自动分析并路由（想跳过路由就直接用 `/quick`、`/deep`、`/review`）。
 
-> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.3.2** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`；配置与文档已用独立 **v2.4.0** CLI 的 `--standalone debug config` / `debug agents` 校验。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
+> **⚠️ 必须由 OpenCode V2.x 运行**：PATH 上的 `opencode.exe` 是 WinGet 安装的 **v1.18.4**，真正在跑的是桌面版 **v2.4.0** 及其自带 CLI `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`。用 v1 启动会走 V1→V2 迁移路径，本文档描述的路由、权限、压缩、名册行为都不成立；headless 运行请用该 CLI。
 
 改完仓库文件后必须同步（`~/.config/opencode` 是独立副本，不是符号链接）：
 
