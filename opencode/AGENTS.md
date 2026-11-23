@@ -117,6 +117,11 @@ zh-CN Windows system, Chinese; en-US, English. Never force English unless asked.
   enters the payload only when the user supplied one or explicitly asked about
   one. Never attach, generate, or request images for a non-visual task; route
   genuine visual work to the `vision` agent.
+- **Browser tools are denied; automations are off.** v2.4.0 adds an
+  agent-drivable desktop browser (signed-in pages included) and scheduled
+  automations (default ON). The global ruleset denies `browser` and sets
+  `automations: false`; add a per-agent allow or re-enable scheduling only
+  when a task genuinely needs it.
 - **No new dependencies** without explicit justification from the user.
 - **Pure-config philosophy.** Prefer prompt/config changes over new tooling.
 
@@ -290,11 +295,13 @@ every other agent uses the local equivalent.
   off by not listing it (the `"*"` deny above the allowlist does the work).
 - **Frontmatter is v2-native everywhere.** Agent files carry only `model`,
   `request`, `system`, `description`, `mode`, `hidden`, `color`, `steps`,
-  `disabled`, `permissions`, `variant`. The v1 spellings (`name`, `options`,
+  `disabled`, `permissions`. The v1 spellings (`name`, `options`,
   `permission`, top-level `temperature`) are never written: any one of them
   flips that agent onto v2's V1→V2 migration path. `permissions` is an array of
   `{action, resource, effect}` in evaluation order, and the v2 action names are
-  `shell`/`subagent`/`edit` (not `bash`/`task`/`write`).
+  `shell`/`subagent`/`edit` (not `bash`/`task`/`write`). `variant` is not an
+  agent key — select a thinking tier with the model suffix
+  (`deepseek/deepseek-flash#high`).
 
 ## Self-Verification
 

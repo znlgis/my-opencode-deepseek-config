@@ -29,13 +29,13 @@
 const fs = require('fs');
 const path = require('path');
 
-// Top-level keys that only exist in the v1 dialect. v2.3.2 normalizes most of
+// Top-level keys that only exist in the v1 dialect. v2.4.0 normalizes most of
 // them (migrated per key, then merged with the native keys) and drops the
 // four in unsupportedTopLevel (logLevel, server, layout, subagent_depth) with
 // a diagnostic, so the config that runs is not the config that was written.
 // Hand-maintained mirror of unsupportedTopLevel plus the legacy branches in
 // packages/core/src/config/normalize.ts (migrate.ts holds the converters);
-// re-checked 2026-11-18.
+// re-checked 2026-11-23.
 const V1_TOP_LEVEL_KEYS = new Set([
   'logLevel', 'server', 'command', 'reference', 'snapshot', 'plugin',
   'autoupdate', 'autoshare', 'disabled_providers', 'enabled_providers',
@@ -49,8 +49,11 @@ const V1_TOP_LEVEL_KEYS = new Set([
 // the migration path or get silently dropped, so both fail the lint.
 const AGENT_FRONTMATTER_KEYS = new Set([
   'model', 'request', 'system', 'description', 'mode', 'hidden', 'color',
-  'steps', 'disabled', 'permissions', 'variant',
+  'steps', 'disabled', 'permissions',
 ]);
+// `variant` is a command field, not an agent field: the agent schema has no
+// `variant` in v2.3.2 or v2.4.0. Select a model variant with the model suffix
+// (`model: deepseek/deepseek-flash#high`); a frontmatter `variant` is dropped.
 
 const LEGACY_AGENT_KEYS = new Set([
   'name', 'options', 'permission', 'temperature', 'top_p', 'prompt', 'tools',
@@ -71,7 +74,7 @@ const REASONING_EFFORTS = new Set(['low', 'high', 'max']);
 // Permission actions whose allow rules can reach a globally denied resource.
 // skill/subagent are excluded: their allows select a roster entry rather than
 // a path or command, so they never re-open a denied resource.
-const OVERLAP_ACTIONS = new Set(['edit', 'shell', 'read', 'external_directory']);
+const OVERLAP_ACTIONS = new Set(['edit', 'shell', 'read', 'external_directory', 'browser']);
 
 // Top-level keys a skill file may declare. Anything else is either a v1
 // spelling or does not exist, so the loader drops or migrates it silently.

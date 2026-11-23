@@ -21,10 +21,10 @@ paid for.
 
 ## Hard constraints
 - Only the natively multimodal `deepseek/deepseek-flash`, with its thinking variants `#low` / `#high` / `#max`. Never another model; the one model handles both text and visual input. A **variant** (`deepseek/deepseek-flash#low`) is a thinking mode of the allowed model, not another model.
-- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, measured on **2.3.2** on 2026-11-18). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
-- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16, re-measured 2026-11-18: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.3.2** (2026-11-18). Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
+- **v2-only, native keys.** This repo targets OpenCode v2 (the desktop app's bundled `opencode-cli.exe`, desktop **2.3.2** measured on 2026-11-23; config schema and new keys also validated with the standalone **2.4.0** CLI). OpenCode 1.18.x is not supported. Write the v2-native spellings — `plugins`, `providers`, `agents`, `commands`, `permissions`, `media` — never the v1 spellings (`plugin`, `provider`, `agent`, `command`, `permission`, `attachment`, `small_model`, `autoupdate`, top-level `subagent_depth`).
+- **The `opencode` on `PATH` is the wrong binary.** Measured 2026-10-16, re-measured 2026-11-23: WinGet ships **1.18.4** there, while the runtime in use is the desktop app's **2.3.2** (2026-11-23). Always invoke `"$env:LOCALAPPDATA\Programs\@opencode-aidesktop\resources\opencode-cli.exe"`; `opencode --version` → `1.18.4` means you are about to test the wrong thing.
 
-## Target runtime: desktop v2 (CLI 2.3.2 measured)
+## Target runtime: desktop v2 (desktop CLI 2.3.2 / 2.4.0 schema)
 v2 loads `opencode.json`/`opencode.jsonc` through `packages/core/src/config/normalize.ts`: native keys decode directly, legacy keys (`command`, `agent`, `provider`, `permission`, `tools`, `plugin`, `attachment`, `reference`, `snapshot`, `autoupdate`, `autoshare`, `small_model`, `mode`, `disabled_providers`, `enabled_providers`) are migrated per key and merged with the native keys, and `logLevel`/`server`/`layout`/`subagent_depth` are dropped with a diagnostic.
 This repo standardizes on the native path: keep every v1 key out of the file, so nothing is silently migrated or dropped.
 
@@ -34,7 +34,8 @@ This repo standardizes on the native path: keep every v1 key out of the file, so
 | plugins | `plugins: [string \| {package, options}]` | string form in use |
 | providers | `providers.<id>.models.<mid>.{settings, body, capabilities, cost, limit, variants}` | `settings` = **provider options** only (`timeout`, `chunkTimeout`, `compaction`, `encoding`, and provider-specific ones like `reasoningEffort`) — it is NOT a raw request body and NOT a place for DeepSeek's `thinking`/`temperature`; use `body` for those; `capabilities` = `{tools, input[], output[]}` (image input lives here); `cost` = ARRAY of `{input, output, cache: {read, write}}`; `limit.input` drives compaction; `variants` = `[{id, settings?, headers?, body?}]` selected as `model: <provider>/<model>#<id>` |
 | agents / commands | `agents`, `commands` | inline overrides; file-based agents stay in `agents/*.md` |
-| permissions | `permissions: [{action, resource, effect}]`, ordered, last-match-wins | v2 action names: `shell` (not `bash`), `subagent` (not `task`); `write`/`patch` normalize to `edit` |
+| permissions | `permissions: [{action, resource, effect}]`, ordered, last-match-wins | v2 action names: `shell` (not `bash`), `subagent` (not `task`); `write`/`patch` normalize to `edit`. v2.4.0 adds `browser` (see Permissions below) |
+| automations | `automations: bool` | v2.4.0: scheduled prompts / shell commands / Code Mode actions. Default true; set false to remove the tools. `experimental.automations` and `experimental.schedules` are removed — only the top-level key is read |
 | media | `media.image.{auto_resize, max_width, max_height, max_base64_bytes}` | former `attachment` |
 | compaction | `{auto: bool, background: bool, keep: {tokens}, buffer: int \| "20%"}` | `background` is v2.3.1+ (default true; an unused pre-written summary still bills); `prune`/`tail_turns`/`reserved`/`preserve_recent_tokens` are v1-only — do not add |
 | subagent_depth | `experimental.subagent_depth` | top-level `subagent_depth` is dropped by v2 — never write it |
@@ -110,7 +111,7 @@ Only these keys are native. **A key outside this list is never itself a fatal st
 | `disabled` | optional: remove the agent |
 | `permissions` | optional ordered ARRAY `[{action, resource, effect}]`; read-only agents (`oracle`, `reviewer`, `explore`, `librarian`) set `{action: edit, resource: "*", effect: deny}` + a read-only `shell` allowlist. `explore` is the one exception: it additionally allows `edit` on `*.opencode/codemap.md` (the leading `*` also matches the bare `.opencode/codemap.md` at the project root) |
 | `request` | optional `{headers, body}` overlay — **no `settings`**, so no provider setting can live here |
-| `system`, `variant` | supported but not used here (the prompt body *is* the system prompt) |
+| `system` | supported but not used here (the prompt body *is* the system prompt) |
 
 - **Never write** `name`, `options`, or `permission` (the v1 spellings). `name`
   is not needed (the id comes from the filename) and all three flip the file
@@ -149,15 +150,17 @@ Only these keys are native. **A key outside this list is never itself a fatal st
 - Both the root config and agent frontmatter write the native ordered array of `{action, resource, effect}`; they resolve with last-match-wins semantics.
 - Default-ask, not default-allow: `evaluate` is last-match-wins (`findLast`), so the `"*"` `ask` catch-all MUST be the FIRST rule — every later specific rule then overrides it, and any unmatched destructive variant still falls through to a human. `shell` shares that `ask` fallback, so unmatched commands always go to manual approval. Never append a catch-all — a trailing one silently shadows every rule above it.
 - `deny` `.env*` reads (except `.env.example`); `ask` on destructive shell (`rm -rf`, `git push -f`, `git reset --hard`, PowerShell/cmd equivalents) and `external_directory`. Cover shell variants (Unix + Windows) so guards can't be bypassed.
+- v2.4.0's built-in browser tool set (read/drive signed-in pages) is denied globally with `{action: "browser", resource: "*", effect: "deny"}`. The desktop browser pane remains usable manually; add a per-agent allow only for a task that genuinely needs agent browsing, and remember the validator now treats `browser` as an overlap action.
 
 ## Verification (desktop v2)
 - `opencode-cli.exe debug config` / `debug agents` / `plugin list` are **service-bound**: they read the running desktop service, NOT the CLI process env — a temp-dir experiment won't show up there.
 - `debug config` prints an **array of entries** — `{type: "document", path, info}` per config file plus `{type: "directory", path}` markers. Read `info` of the document entry; `debug agents` prints the fully merged, permission-expanded agent list (that is the honest evidence, since unknown keys are dropped silently).
 - Capture both as UTF-8 or the multi-byte content corrupts the JSON:
   `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8` before the call, `| Set-Content -Encoding utf8 <file>` after it.
-- `reload` is present on **2.3.2** (`opencode-cli.exe --help` lists it; absent in 2.0.27, restored in 2.1.0; re-checked 2026-11-18). The config watcher also reloads on file change by itself; use `opencode-cli.exe service restart` when a forced restart is needed.
+- `reload` is present on **2.3.2/2.4.0** (`opencode-cli.exe --help` lists it; absent in 2.0.27, restored in 2.1.0; re-checked 2026-11-23). v2.4.0 reloads config only when a file that feeds it changes — editing a skill does not trigger a full config reload; run `reload` after `sync-config.ps1`, and use `service restart` when a forced restart is needed.
 - Edit loop: change files → `node scripts/validate-jsonc.js` → `.\scripts\sync-config.ps1` → re-run `debug config`/`debug agents` and compare.
-- `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only.
+- **When the desktop app lags the release**, validate the same config with the standalone CLI from the GitHub release: `opencode.exe --standalone debug config` / `--standalone debug agents`. This reads the same `~/.config/opencode` and reports the config the 2.4.0 loader sees, without touching the running desktop service (the service remains service-bound).
+- `plugin check` / `plugin update` inspect and move package plugins; the repo keeps an explicit tag pin instead, so treat those as diagnostics only. v2.4.0 auto-updates only floating refs (`@latest`, ranges, branches, `semver:`); an exact tag or commit — this repo's pin — still updates only by hand.
 - The 1.18.x line is out of scope; do not verify against it.
 
 ## Before you finish

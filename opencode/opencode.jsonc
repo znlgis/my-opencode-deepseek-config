@@ -3,7 +3,7 @@
     // is the v2 dialect (plugins / providers / agents / commands / permissions
     // / media). The v1 spellings (plugin, provider, agent, command, permission,
     // attachment, small_model, top-level subagent_depth) are never written:
-    // v2.3.2 silently migrates most of them per key (and drops the four in
+    // v2.4.0 silently migrates most of them per key (and drops the four in
     // unsupportedTopLevel) instead of rejecting the file, so the config that
     // runs would stop matching this file. See
     // README「v2 原生键名」for the key map and the verification method.
@@ -12,6 +12,13 @@
     "model": "deepseek/deepseek-flash",
     "update": "notify",
     "share": "disabled",
+    // v2.4.0 adds scheduled prompts / shell commands / Code Mode actions and
+    // turns them on by default. This config is interactive-only: background
+    // scheduled work would outlive the session and bypass the per-turn cost
+    // model. Disable them here; remove this key deliberately if recurring
+    // jobs are ever wanted. (`experimental.automations` / `schedules` are
+    // removed in v2.4.0 — only the top-level key is read.)
+    "automations": false,
     "lsp": true,
     "formatter": true,
     // Nesting cap = the deepest chain the agent graph actually uses:
@@ -85,7 +92,13 @@
         { "action": "shell", "resource": "python *video-studio*scripts*", "effect": "allow" },
         { "action": "shell", "resource": "python *video-studio*tools*", "effect": "allow" },
         { "action": "skill", "resource": "*", "effect": "allow" },
-        { "action": "external_directory", "resource": "*", "effect": "ask" }
+        { "action": "external_directory", "resource": "*", "effect": "ask" },
+        // v2.4.0 adds a built-in browser pane that an agent can read and drive,
+        // including pages the user is signed in to. No agent here needs it, so
+        // deny every agent browser call; manual use of the pane is unaffected
+        // (the release notes scope this rule to agent calls). The 45 browser
+        // tools would otherwise be injected into every agent's tool list.
+        { "action": "browser", "resource": "*", "effect": "deny" }
     ],
     // Pinned to an immutable tag on purpose — never track `latest`: a plugin
     // bump can rewrite the bootstrap injected into the prompt, which busts the
