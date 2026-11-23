@@ -160,8 +160,16 @@ def probe_file(path):
         elif s.get("codec_type") == "audio":
             aus.append({"codec": s.get("codec_name"), "sr": s.get("sample_rate"),
                         "channels": s.get("channels")})
+    is_image = p.suffix.lower() in IMAGE_EXT
+    if not vs and not aus:
+        # ffprobe 读不出任何流：多半是下载得到错误页 / 0 字节文件 / 编码不认识的容器。
+        # 以前这里静默返回 dur=0，后面 check_edl 因为 dur 为假值跳过越界判定，
+        # 到 cut 才炸成 "ffmpeg 失败"，看不出根因。物料层的坑就该在物料层报。
+        raise SystemExit("素材不可识别（ffprobe 读不出任何音视频流）：%s\n"
+                         "  常见原因：下载得到错误页 / 文件被截断 / 0 字节。"
+                         "先用 ffprobe 验真再重下" % p)
     return {"path": str(p), "dur": round(dur, 3), "video": vs, "audio": aus,
-            "has_audio": bool(aus), "is_image": p.suffix.lower() in IMAGE_EXT,
+            "has_audio": bool(aus), "is_image": is_image,
             "is_audio_only": bool(aus) and not vs,
             "size": int(fmt.get("size") or 0)}
 
@@ -233,17 +241,27 @@ def build_treatment_filter(treatment, video):
     chain = []
     crop = str(treatment.get("crop") or "").strip()
     if crop:
+        parts = crop.split(":")
+        if len(parts) != 4:
+            raise SystemExit("treatment.crop 必须是 w:h:x:y 四段（收到 %r）" % crop)
+        try:
+            [int(float(x)) for x in parts]
+        except ValueError:
+            raise SystemExit("treatment.crop 四段都必须能转成数字（收到 %r）" % crop) from None
         chain.append("crop=" + crop)
     scale = str(treatment.get("scale") or "").strip()
     if not scale:
         # 没有显式 scale 时：按宽度缩放到输出画布宽，高度由宽高比决定（不拉伸）
-        cw = int(crop.split(":")[0]) if crop else vw
-        chh = int(crop.split(":")[1]) if crop else vh
+        cw = int(float(crop.split(":")[0])) if crop else vw
+        chh = int(float(crop.split(":")[1])) if crop else vh
         if cw and chh:
             # 只按宽度等比缩，高度由 crop 的宽高比反推（不拉伸）。
             scale = "%d:%d" % (vw, max(2, int(round(vw * chh / cw))))
     if scale:
-        sw, sh = [int(x) for x in scale.split(":")[:2]]
+        try:
+            sw, sh = [int(float(x)) for x in scale.split(":")[:2]]
+        except ValueError:
+            raise SystemExit("treatment.scale 必须是 w:h 两段数字（收到 %r）" % scale) from None
         if sh > vh:      # 超高就按高度贴边，避免 pad 失败
             sw = max(2, int(round(sw * vh / float(sh))))
             sh = vh
@@ -302,6 +320,16 @@ def _http_download(url, dst, *, referer=None, user_agent=None, timeout=180):
             if not chunk:
                 break
             f.write(chunk)
+    size = tmp.stat().st_size
+    if size <= 1024:
+        # 错误页也会以 200 落盘（HTML 只有几百字节）。小于 1KB 的"视频"一定是垃圾，
+        # 直接删掉并报错，别让它混进 sources.json 变成 dur=0 的假素材。
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise SystemExit("下载产物只有 %d 字节，不可能是媒体文件（错误页/拦截页？）：%s"
+                         % (size, url[:120]))
     os.replace(tmp, dst)
     return dst
 
@@ -371,7 +399,7 @@ def download(footage, src, *, force=False, format_sel=None):
 # 素材预算：按片长反算"至少要有几个不同素材源"
 # ============================================================================
 # 为什么需要它：素材线最容易偷懒的地方是"一路指同一个源"——40 个镜头全来自
-# 2 张图，片子里每一秒都是同一张画在平移。QA 的 F1..F7 一条都拦不住它
+# 2 张图，片子里每一秒都是同一张画在平移。QA 的 F1..F8 一条都拦不住它
 # （EDL 不越界、没有字幕残留、音画等长、有出处），交付时只能靠人肉发现。
 # 实测反例：一部 6 分 25 秒的片子用了 2 个来源，门禁全绿。
 #

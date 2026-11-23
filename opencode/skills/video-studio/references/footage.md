@@ -83,7 +83,7 @@
    --stage probe 会打印建议值，直接粘进 sources[]。
 4. **license_note 与 credit.text 是交付条件**（F5），缺了直接 fail。
 
-## 2. 十个阶段（`--stage all` 实际跑 9 个：`locate` 是准备阶段，要单跑）
+## 2. 十个 stage（`--stage all` 只跑出片必需的 7 个：probe→tts→edl→cut→mix→assemble→qa；素材不在本地时加 fetch。transcribe / locate 是**定位镜头的准备阶段**，要单跑）
 
 ```bash
 python <SKILL_DIR>/scripts/footage.py --footage footage.json --work work --out out/film.mp4 --stage all
@@ -100,7 +100,7 @@ python <SKILL_DIR>/scripts/footage.py --footage footage.json --work work --out o
 | cut | 按 EDL 切镜（统一画幅 + 抽原声当环境层） | work/segs/ |
 | mix | 三总线混音（旁白 1.0 / 原声 0.12 / 配乐 0.10） | work/mix.wav |
 | assemble | 拼接 + ASS 字幕 + 两遍 loudnorm | 成片 |
-| qa | F1..F8 门禁 + 通用质检 | out/QC-REPORT-footage.md |
+| qa | F1..F9 门禁 + 通用质检 | out/QC-REPORT-footage.md |
 
 --stage all 只跑出片必需阶段；素材都在本地时自动跳过 fetch，
 transcribe / locate 是**定位镜头**用的准备阶段，单独跑。
@@ -126,7 +126,7 @@ minimum      = min(recommended, max(3, ceil(分钟数 × 2)))  # 硬下限：2 �
 
 **为什么要两条线**：只留推荐线会把正常片拦死；只留下限线，就会放过"2 张图撑 6 分钟"。
 
-**F8 三档语义**（`footageqa.f8_source_variety`，与 F1–F7 一起注册在 `GATES` 里）：
+**F8 三档语义**（`footageqa.f8_source_variety`，与 F1–F9 一起注册在 `GATES` 里）：
 
 | 判据 | 状态 | 说明 |
 |---|---|---|
@@ -247,7 +247,7 @@ treatment 一次定义、全片复用：
 > 不要写成"向设计主题看齐"的色罩：那会让素材失去自己的色彩，也让后面的 matchstyle
 > 失去可测的基准（它抽帧时会带上 treatment.color，色罩会把测量结果一起带偏）。
 
-## 5. 门禁（F1–F8）
+## 5. 门禁（F1–F9）
 
 ```bash
 python footage.py --footage footage.json --stage qa          # 出 out/QC-REPORT-footage.md
@@ -256,14 +256,15 @@ python footage.py ... --stage qa --strict-qa                 # fail 即失败（
 
 | 门禁 | 查什么 | 判据 | skipped 什么时候出现 |
 |---|---|---|---|
-| **F1** | 镜头越界 / EDL 合法性 | at+len ≤ 源时长；镜头总长与时间轴差 ≤0.6s | 没有 EDL |
-| **F2** | 原字幕残留 | burned_subs 与 crop 后可见区**几何相交** | 源没声明 burned_subs |
-| **F3** | 水印残留 | watermark 与可见区几何相交 | 源没声明 watermark |
-| **F4** | 音画等长 | 视频与音频时长差 ≤ 0.05s | 读不到流时长 |
+| **F1** | 镜头越界 / EDL 合法性 | at+len ≤ 源时长；镜头总长与时间轴差 ≤0.6s；图片源不参与越界（它的"时长"由 EDL 决定） | 没有 EDL；**或没有 sources.json / 源没探到 dur**（越界判定根本没执行 -> skipped 并写明"先跑 probe"，绝不记 pass） |
+| **F2** | 原字幕残留 | burned_subs 与 crop 后可见区**几何相交** | 源没声明 burned_subs；**声明了但解析不出合法区间（y1≤y0 / w·h≤0 / 非数字）= fail**（不是 skipped） |
+| **F3** | 水印残留 | watermark 与可见区几何相交 | 同上：没声明才 skipped，声明了但非法是 fail |
+| **F4** | 音画等长 | 视频与音频时长差 ≤ 0.05s | 读不到流时长；**成片不存在也是 fail**（不是 skipped） |
 | **F5** | 素材溯源 | 每个源有 license_note + 有 credit.text | 不会 skipped（缺就是 fail） |
-| **F6** | 旁白/原声比例 | 旁白窗口 RMS 比间隙 RMS 高 ≥12 dB | 旁白首尾相接、没有间隙窗口 |
-| **F7** | 人工签核 | 联系表存在 + 签核指纹匹配 | 未签核 / 内容已变 |
+| **F6** | 旁白/原声比例 | **本镜窗口内**旁白 RMS 比无旁白窗口（lead/hold/tail）RMS 高 ≥12 dB；无旁白窗口要 **≥0.25 s** 才计入（`tail` 调小到 0.2 s 以下时该镜不计） | 整片没有任何 ≥0.25 s 的无旁白窗口（每镜 lead/hold/tail 太小）；音轨短于 1 s |
+| **F7** | 人工签核 | 联系表存在 + 签核指纹匹配（指纹含 lines/shot/treatment/subtitle/audio/credit/pacing/licensing/sources/video/EDL——改配乐音量、`licensing.allow_sparse_sources` 或片尾出处卡同样失效） | 未签核 / 内容已变 |
 | **F8** | 素材多样性 | `distinct < 硬下限` fail；`< 推荐` pass + warning；单源连续 ≥3 镜 / 重复取景窗 >0 warning | 写了 `licensing.allow_sparse_sources`（需带 `why`）；没有时间轴 |
+| **F9** | 字幕排版 | 每条 ≤2 行、每行 ≤ 安全宽（`w - margin_l - margin_r`，与写入端同口径）、`MarginV + 行数×1.2×字号` 不越画布底 | 没有 sub.ass / sub.ass 里没有 Dialogue 行 / 剧本无字幕 / 没有 filmkit（量不了像素宽） |
 
 **F2/F3 为什么是几何判定而不是"看画面像不像有字"**：实测过图像判据（底部/中部能量比、
 亮像素占比、跨帧静止度），在真实素材上正反例区间重叠——已治理的成片 1.41、
@@ -279,8 +280,8 @@ python footage.py ... --stage qa --strict-qa                 # fail 即失败（
 {"fingerprint": "<报告里的指纹>", "verdict": "approved", "by": "user", "note": "看过"}
 ```
 
-指纹 = footage.json 的 line 文本 + shot + treatment + subtitle + EDL 的哈希。
-**改了台词或镜头，旧签核自动失效**（F7 变 skipped 并写明"内容已变"），必须重新看片。
+指纹 = footage.json 的 **title / treatment / subtitle / video（fps/分辨率）/ audio（voice·rate·pitch·三路增益·music_file·music）/ pacing / credit / licensing / sources（id·kind·license_note·burned_subs·watermark）/ lines（id·text·sub·shot·hold） + EDL shots** 的规范化哈希（dict 排序、list 保序、float 归一 6 位、`1` 与 `1.0` 同值；不把 path/url 放进去——换机器不该失效）。
+**改了台词、镜头、配乐音量或片尾出处卡，旧签核都会自动失效**（F7 变 skipped 并写明"内容已变"），必须重新看片。
 
 ## 6. 常见故障
 

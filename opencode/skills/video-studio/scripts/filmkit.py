@@ -503,6 +503,9 @@ def wrap_cn(s: str, f, max_w: float):
 
 _wrap_cache = {}
 _tw_cache = {}
+# 已经告警过的"字幕被截断"（按 文本前缀+字号+行数）：逐帧调用只喊一次，避免刷屏，
+# 但绝不静默——超出 max_lines 的字会被丢弃，用户必须知道。
+_sub_trunc_warned = set()
 
 
 def wrap_cn_cached(s: str, size: int, max_w: float, weight: str = "reg",
@@ -688,7 +691,17 @@ def draw_subtitle(img, text: str, alpha=1.0, size=46, y=None, band_w=None,
         max_lines = 2
     lines, f = fit_sub_lines(text, max_lines=max_lines, max_w=band_w, size=size,
                              family=fam, words=words)
-    lines = lines[:max_lines]
+    if len(lines) > max_lines:
+        # fit_sub_lines 已经把字号降到最小档仍装不下（>~90 字）：这里只画前 max_lines 行，
+        # 其余文字**不会出现在画面上**。旧实现静默切掉；现在至少喊一声（每句只喊一次）。
+        key = (str(text)[:40], int(max_lines), int(f.size))
+        if key not in _sub_trunc_warned:
+            _sub_trunc_warned.add(key)
+            print("   [WARN] 字幕超长：折出 %d 行，按 max_lines=%d 只画前 %d 行，"
+                  "丢弃 %d 个字（%r）：请缩短该句或调大 design.visual.subtitle.max_lines"
+                  % (len(lines), max_lines, len(lines) - max_lines,
+                     len("".join(lines[max_lines:])), str(text)[:24]), flush=True)
+        lines = lines[:max_lines]
     lh = int(f.size * 1.32)
     total_h = lh * len(lines)
     if align == "left":
@@ -756,6 +769,12 @@ def wav_write(path, samples, sr=SR, channels=None):
         inter = a
         if channels is None:
             channels = 1
+        elif int(channels) != 1:
+            # 一维数组是单声道；显式 channels>1 时旧实现会把单声道样本直接塞进
+            # 双声道 WAV，结果是"时长减半 + 两个声道各占一个采样"的静默坏文件
+            # （wav 头写 2 声道，数据长度按 1 声道给）。宁可报错也不写坏文件。
+            raise ValueError("wav_write: 一维数组是单声道，但 channels=%s；"
+                             "要立体声请传 (n, 2) 数组" % (channels,))
     peak = float(np.max(np.abs(inter))) if inter.size else 0.0
     pcm = (inter * 32767.0).astype(np.int16)
     d = os.path.dirname(os.path.abspath(path))
@@ -2235,6 +2254,11 @@ def write_ass(scenes, path, max_hold=None, font_name="Microsoft YaHei", size=52,
         fam = str(theme.get("family") or "sans")
         # 字体族 -> Windows 上的实际字体名（libass 认 name 不认路径）
         font_name = {"serif": "SimSun", "kai": "KaiTi", "round": "DengXian"}.get(fam, "Microsoft YaHei")
+    # 字幕底边距跟着 SUB_BAND 走（画布/安全区单一真源是 layoutkit）。
+    # 横屏 SUB_BAND 贴底，H-1030=50 与历史值 56 只差 6px，取 max 保持既有 ASS 产物不变；
+    # 竖屏 SUB_BAND 底边在 1616（layoutkit 特意上移，避开系统 UI 覆盖的底部 15%），
+    # 直接沿用 56 会把字幕放到 1920-56=1864px——正好在被盖住的区域里。
+    margin_v = max(56, int(H) - int(SUB_BAND[3]))
     head = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -2248,7 +2272,7 @@ def write_ass(scenes, path, max_hold=None, font_name="Microsoft YaHei", size=52,
         "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
         "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         "Style: Default,%s,%d,%s,&H000000FF,%s,%s,-1,0,0,0,100,100,0,0,"
-        "1,3,1,2,60,60,56,1" % (font_name, int(size), primary, outline, back),
+        "1,3,1,2,60,60,%d,1" % (font_name, int(size), primary, outline, back, margin_v),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -2330,7 +2354,23 @@ class FrameSink:
             frame = frame.resize((self.w, self.h), Image.LANCZOS)
         if frame.mode != "RGB":
             frame = frame.convert("RGB")
-        self.proc.stdin.write(frame.tobytes())
+        try:
+            self.proc.stdin.write(frame.tobytes())
+        except (BrokenPipeError, OSError):
+            # 编码进程先死了（非法 preset / 缺 libx264 / 参数被拒）。直接抛 BrokenPipe 会
+            # 把 ffmpeg 的真正死因（stderr）顶掉，调用方只看到一行 "Broken pipe"，排查
+            # 得从头猜。这里先排空 stderr 拿退出码，再把 ffmpeg 的报错原样转出来。
+            err = b""
+            rc = None
+            try:
+                err = self.proc.stderr.read() if self.proc.stderr is not None else b""
+                rc = self.proc.wait()
+            except Exception:                               # noqa: BLE001
+                pass
+            raise RuntimeError(
+                "ffmpeg 编码进程中途退出（帧 %d，exitcode=%s）：%s"
+                % (self.frames, rc,
+                   err.decode("utf-8", "replace")[:800] or "（没有 stderr）")) from None
         self.frames += 1
 
     def close(self):
@@ -2534,18 +2574,28 @@ def detect_silence(path, th=-45, dur=1.2):
     return len(re.findall("silence_start", p.stderr.decode("utf-8", "replace")))
 
 
-def qa_text_safe(scenes, tol=1.0, band=SUB_BAND):
-    """字幕几何校验：宽度/行数/是否触及画面底部。"""
+def qa_text_safe(scenes, tol=1.0, band=SUB_BAND, **sub_kw):
+    """字幕几何校验：宽度/行数/是否触及画面底部。
+
+    `sub_kw` 与 draw_subtitle 同参（size / max_lines / y / align / plate_alpha …）：
+    设计若把字号放大或把 max_lines 提到 3，这里必须按**同一套参数**量，否则
+    "字幕越界"判据量的还是模块默认的 46px / 2 行——门禁与实拍两套口径，越界查不出来。
+    `tol` 是历史签名的兼容位（曾打算做像素容差）；当前判据是精确比较，`tol` 不参与判定，
+    保留形参只为不破坏既有调用方。
+    """
     errs = []
+    max_lines = int(sub_kw.get("max_lines") or 2)
+    size = sub_kw.get("size")
     for s in scenes:
         body = s.get("sub") or s.get("text") or ""
         if not body:
             continue
-        lines, f = fit_sub_lines(body, max_w=band[2] - band[0])
+        lines, f = fit_sub_lines(body, max_w=band[2] - band[0],
+                                 size=size, max_lines=max_lines)
         widest = max(text_w(l, f) for l in lines)
         total_h = int(f.size * 1.32) * len(lines)
-        if len(lines) > 2:
-            errs.append("字幕超过 2 行（%d 行）: %s" % (len(lines), body[:24]))
+        if len(lines) > max_lines:
+            errs.append("字幕超过 %d 行（%d 行）: %s" % (max_lines, len(lines), body[:24]))
         if widest > band[2] - band[0]:
             errs.append("字幕过宽 %dpx: %s" % (widest, body[:24]))
         if band[3] - total_h < band[1]:

@@ -278,8 +278,21 @@ def _ffprobe() -> str:
 
 
 def _run(cmd, **kw):
-    """跑一个短命令，返回 CompletedProcess（不抛异常）。"""
-    return subprocess.run(cmd, capture_output=True, **kw)
+    """跑一个短命令，返回 CompletedProcess（不抛异常）。
+
+    默认 300 s 超时：调用点（-filters 能力探测 / ffprobe 探测 / 抽单帧）都没有自己
+    传 timeout，以前遇到坏文件或卡住的 ffmpeg 会把整道门禁一起挂死。超时按"命令
+    失败"返回（returncode=-9），各调用方已有的 fail-closed 分支会接住。
+    """
+    kw.setdefault("timeout", 300)
+    try:
+        return subprocess.run(cmd, capture_output=True, **kw)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(args=cmd, returncode=-9, stdout=b"",
+                                           stderr=b"timeout")
+    except OSError as e:
+        return subprocess.CompletedProcess(args=cmd, returncode=-1, stdout=b"",
+                                           stderr=("OSError: %s" % e).encode("utf-8", "replace"))
 
 
 def _has_filter(listing: str, name: str) -> bool:
@@ -1516,6 +1529,8 @@ def draw_frame(scene, t_local, dur, t_global, script, frame):
 
 # ---------------------------------------------------------------- CLI
 def main(argv=None) -> int:
+    # --help / 参数错误走 argparse 的打印路径：UTF-8 必须在这之前切（Windows 管道默认 GBK）。
+    _setup_stdio()
     ap = argparse.ArgumentParser(
         prog="qavmaf.py",
         description="全片 VMAF/SSIM 画质门禁：参考帧由场景函数实时渲染")
@@ -1538,7 +1553,6 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true", help="stdout 只输出报告 JSON")
     ap.add_argument("--selftest", action="store_true", help="跑内置自检（不联网）")
     a = ap.parse_args(argv)
-    _setup_stdio()
     if a.selftest:
         return selftest()
     missing = [k for k in ("film", "timeline", "scenes", "script")

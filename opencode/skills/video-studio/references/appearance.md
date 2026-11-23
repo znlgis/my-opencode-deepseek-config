@@ -48,7 +48,7 @@
 
 | 字段 | 取值 | 改它会发生什么 |
 |---|---|---|
-| `palette` | 11 个颜色角色（bg/bg2/surface/ink/muted/dim/accent/accent2/good/bad/rule），每个 `[r,g,b]` | 整片色调。它不是"从 8 套配色里挑"，而是**连续色相空间**里的一点：改 `bg` 的色相，其余角色会按对比度网格重新求解 |
+| `palette` | 11 个颜色角色（bg/bg2/surface/ink/muted/dim/accent/accent2/good/bad/rule），每个 `[r,g,b]` 或 `#rrggbb`（`#rgb` 也接受） | 整片色调。它不是"从 8 套配色里挑"，而是**连续色相空间**里的一点：改 `bg` 的色相，其余角色会按对比度网格重新求解 |
 | `family` | `sans` / `serif` / `kai` / `round` | 全片字族（标题优先，字幕默认跟随） |
 | `typography` | `tracking`（字距）/ `line_gap`（行距）/ `number`（编号写法，8 种）/ `ratio`（字号比例）/ `align` | 文字气质；`number` 决定"01 / 壹 / I / 1.0"这类编号外观 |
 | `motif` | `kind`（9 种：**plain** / brackets / hairlines / handdrawn / slabs / minimal / letterbox / signal / rays）× `density`（0–1；采样器只取 0.55/0.70/0.85/1.00，`density=0` 只对 `plain` / `minimal` 合法） | 装饰语言。**默认 `plain`：不画装饰、不叠底纹、卡片无描边——默认设计没有细线**；其余是显式选择：四角括线 / 细线页眉 / 手绘框 / 色块 / 极简 / 遮幅 / 信号条 / 放射线 |
@@ -56,9 +56,9 @@
 | `motion` | `ease`（out3/out5/inOut3/outBack）/ `enter`(dx,dy) / `push`（背景镜头缓推，默认 0）/ `breathe_hz` | 入场与背景运动。前景**不跟镜头**：慢速亚像素位移取整后就是 1px 抖动 |
 | `bias` | `x` / `y` / `inset` | 整屏重心偏移与安全区收缩 |
 | `layout` | `left-stack` / `center-stack` / `split-right` | 默认版式 |
-| `layout_cycle` | 版式数组（≥2 种不同） | 按章节轮换版式；不写则自动派生 2–3 种 |
+| `layout_cycle` | 版式数组（≥2 种不同） | 按章节轮换版式；采样器会派生 2–3 种，**手写 design 不写则不派生**（全片只用 `visual.layout`） |
 | `hud` | `chip-left` / `corner-line` / `none`（默认 `none`） | 页眉/角落装饰。默认关闭（这两种都靠细线构形） |
-| `size` / `fps` | `1920x1080` / `30` | 横屏 16:9（1920x1080，可下采样 720p/540p）与竖屏 9:16（1080x1920，experimental）都支持；竖屏要配 `--layout portrait`（render / propose / filmcheck 都认） |
+| `size` / `fps` | `1920x1080` / `30` | **保留字段，不进渲染计划**：画幅与帧率的真源是 `--layout` 与 `film.json` 的 `video` 块（横屏 16:9 / 竖屏 9:16 都支持，竖屏配 `--layout portrait`）。写在这里只是文档性记录，不会改变输出 |
 | `subtitle` | 见 §3 | 字幕字号/位置/对齐/背板/圆角/字族/颜色/行数 |
 
 > **能组合出多少种画面？** 离散维度是 9 母题 × 6 转场 × 4 缓动 × 8 编号 × 3 版式 × 3 HUD × 4 字族

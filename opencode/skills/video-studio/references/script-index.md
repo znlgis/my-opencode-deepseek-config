@@ -27,14 +27,15 @@
 | `scripts/layoutkit.py` | **画布/安全区单一真源**：横竖屏两套 profile（尺寸、正文区、字幕带、字号档）都在这里，scenes / filmkit / designkit 共用同一份定义（自检 #73 守住"只能有一个真源"） |
 | `scripts/critic.py` | **审美质检**：离线启发式 0-100 分（安全边距 / 明暗对比 / 色相分散 / 文字密度 / 重心平衡）+ `--vlm-cmd` 挂钩（prompt 走 stdin、stdout 收 JSON，本脚本不联网）。评 `proposals/rev*/<ID>/_sheet.png`；**不写 `proposal.json`**、不进 `--stage qa` 账本 |
 | `scripts/studio.py` | **薄门面**：`studio.py <子命令>` 转调 intake/propose/render/critic/check/lint/contract/explain；未知参数原样透传，退出码等于目标脚本 |
-| `scripts/selfcheck.py` | 回归自检：**97 条**针对真实缺陷的断言，不联网、约 10–25 秒出结论（可选模块缺失标 SKIP）。后半段的重点项：**59 逐 stage 可单独跑 / 60 brief 里的要求真的生效 / 61 字幕样式可定制（`visual.subtitle` 真的生效）/ 62 片内版式轮换（`layout_cycle`：换章即换骨架）/ 63 带约束的 brief 不会高概率采样失败 / 64 已移除 API 的 fail-closed（不许 NameError / 假绿 / 静默回落）/ 65 `design.audio` 的音量/音效参数真的落进 script / 66 片间去重台账（确认记账 / 提案避开 / 可关可查）/ 67 时长要求真的被接住（brief 里的「2 分钟 / 90 秒」→ duration_target：决定候选段落数 + 渲染对账，成片长度仍由实测旁白决定）/ 68 缩放取景的帧间稳定性（改回 NEAREST 直采立刻 fail）/ 69 ASR 掉分可定位（低召回必须给出 lost_top 与最差段落）/ 70 出片前问诊（固定 8 题，没答完首次提案必拦）/ 71 默认设计不画装饰细线（母题层/底纹/HUD 全关，按绘制调用断言）/ 72 前景不随镜头位移（1px 台阶回归）/ 91 hybrid 默认形态 / 92 素材预算与 F8 / 93 配色锚点与气质互斥（采样前点名）/ 94 场景代码进内容指纹 / 95 G7 字幕三态 / 96 G8 黑帧结构化 / 97 intake --check 只读** |
-| `scripts/footage.py` | **素材线一条龙**（10 个 stage）：`probe/fetch/transcribe/locate/tts/edl/cut/mix/assemble/qa`；契约是 `footage.json`（`schemas/footage.schema.json`），画面治理走 `treatment`，门禁是 F1–F8；素材预算与 F8 见 footage.md §2.1 |
+| `scripts/selfcheck.py` | 回归自检：**105 条**针对真实缺陷的断言，不联网、约 10–25 秒出结论（可选模块缺失标 SKIP）。后半段的重点项：**59 逐 stage 可单独跑 / 60 brief 里的要求真的生效 / 61 字幕样式可定制（`visual.subtitle` 真的生效）/ 62 片内版式轮换（`layout_cycle`：换章即换骨架）/ 63 带约束的 brief 不会高概率采样失败 / 64 已移除 API 的 fail-closed（不许 NameError / 假绿 / 静默回落）/ 65 `design.audio` 的音量/音效参数真的落进 script / 66 片间去重台账（确认记账 / 提案避开 / 可关可查）/ 67 时长要求真的被接住（brief 里的「2 分钟 / 90 秒」→ duration_target：决定候选段落数 + 渲染对账，成片长度仍由实测旁白决定）/ 68 缩放取景的帧间稳定性（改回 NEAREST 直采立刻 fail）/ 69 ASR 掉分可定位（低召回必须给出 lost_top 与最差段落）/ 70 出片前问诊（固定 8 题，没答完首次提案必拦）/ 71 默认设计不画装饰细线（母题层/底纹/HUD 全关，按绘制调用断言）/ 72 前景不随镜头位移（1px 台阶回归）/ 91 hybrid 默认形态 / 92 素材预算与 F8 / 93 配色锚点与气质互斥（采样前点名）/ 94 场景代码进内容指纹 / 95 G7 字幕三态 / 96 G8 黑帧结构化 / 97 intake --check 只读 / 98 G13 版式冲突纯函数 / 99 场景文字采集 / 100 章节卡与要点列表不重叠 / 101 局部 stage 保留交付账本 / 102 schema required 与校验器一致 / 103 voice mode=wav / 104 persona 已移除 / 105 横屏越出 SAFE 钳回** |
+| `scripts/footage.py` | **素材线一条龙**（10 个 stage）：`probe/fetch/transcribe/locate/tts/edl/cut/mix/assemble/qa`；契约是 `footage.json`（`schemas/footage.schema.json`），画面治理走 `treatment`，门禁是 F1–F9；素材预算与 F8 见 footage.md §2.1 |
 | `scripts/footagekit.py` | 素材线核心 I：`load_footage`（结构硬错误）/ `probe_file` / `fetch_all`（yt-dlp + 直链）/ `transcribe` / `locate` / `build_treatment_filter`（crop→scale→pad→color→fps，切镜与抽帧共用一份，避免"预览和成片不一样"） |
 | `scripts/footageedit.py` | 素材线核心 II：`build_edl` / `check_edl`（越界与总长）/ `cut_shots`（按镜切 + 抽原声）/ `mix_tracks`（旁白 + 环境层 + 配乐，采样级叠加）/ `write_ass` + `assemble`（ASS 字幕按 PlayResY=1080 排版） |
-| `scripts/footageqa.py` | 素材线门禁 F1–F8：EDL 合法性 / 烧录字幕残留 / 水印残留 / 音画等长 / 溯源与署名 / 旁白主导 / 联系表与签核指纹（几何判定，不看"像不像字"） |
+| `scripts/footageqa.py` | 素材线门禁 F1–F9：EDL 合法性 / 烧录字幕残留 / 水印残留 / 音画等长 / 溯源与署名 / 旁白主导 / 联系表与签核指纹 / 字幕排版（几何判定，不看"像不像字"） |
 | `scripts/preflight.py` | **渲染前资源闸门**：剧本结构 + 全部上屏文本逐字过字形检测（按字段选字重）+ 已有 TTS 音频可解析 + 字体可加载 + web 入口页存在。`render.py` 在 `frames` 之前调用，记门禁 `G0`；也可单独跑 `python preflight.py --script film.json [--json] [--strict]` |
 | `scripts/qavmaf.py` | **全片 VMAF/SSIM 门禁**：参考帧由场景函数**实时重渲**（不是成片抽帧），rawvideo 喂 ffmpeg 与成片逐帧比；一次调用同时算 VMAF 与 SSIM；门禁 `G11` |
 | `scripts/qaasr.py` | **ASR 回读门禁**：成片音轨转文字与剧本对账（字符级多重集召回 + 每句偏移）；引擎优先 faster-whisper，其次 ffmpeg whisper 滤镜，都不可用记 skipped；门禁 `G12` |
+| `scripts/qatext.py` | **版式文字冲突门禁（G13）**：接收场景代码登记的最终落笔矩形，判定两行字相交（≥ 较小框 18%）、越出 SAFE、压进字幕带；`scenes.py` 没有采集钩子时记 skipped 并告警 |
 | `scripts/sfxkit.py` | **物理建模音效库**：模态合成/纹理/空间/动力学/母带 + 24 个配方 + `CUE_ALIASES` |
 | `scripts/musicgen.py` | **参数化配乐编排器**：和弦进行/动机/鼓型/音色全可传参，现场生成 `music.wav`（**没有风格表**） |
 | `scripts/scorekit.py` | **配乐合成原语**：和声/律动/吸气/自动电平/混音/响度测量/24-bit 落盘。它不提供曲风，只提供可复用的底层技术 |
@@ -49,7 +50,7 @@
 | `<SKILL_DIR>/schemas/film.schema.json` | **film.json 的契约**（JSON Schema draft-07 子集）。可执行校验器见 `scripts/filmcheck.py`（schema 只描述字段，跨字段规则在脚本里） |
 | `<SKILL_DIR>/tools/estimate.py` | **开渲前预演**：帧数 / 各阶段耗时 / 磁盘峰值 / 分块建议，`--json` 可机读。基准常量集中在文件顶部，换机请重测后回填 |
 | `<SKILL_DIR>/tools/golden_frames.py` | **金帧像素回归**：渲固定帧号算 SHA-256 与基线 JSON 比对（`--write` 重录 / `--check` 校验）。同环境像素变了是 fail，换了机器（字体指纹不同）是 skipped——跨机不误报。**两组基线**：`--layout landscape\|portrait` 切整片时刻基线（`golden_frames.json` / `golden_frames_portrait.json`）；`--compose` 切构图层基线（`golden_frames_compose*.json`，按 scene_type 逐类渲一帧，覆盖夹具片没有的 `compare`/`process`/`chart`） |
-| `<SKILL_DIR>/tools/silhouette_qa.py` | **剪影可区分门禁（G13）**：不同设计渲染出的画面骨架必须两两可区分，防止「换设计只是换色」 |
+| `<SKILL_DIR>/tools/silhouette_qa.py` | **剪影可区分门禁（S13）**：不同设计渲染出的画面骨架必须两两可区分，防止「换设计只是换色」。S = silhouette 离线检查编号，**不进 render.py 的 gate matrix**（账本里的 `G13` 是版式文字冲突） |
 | `assets/web/` | **浏览器页面示例**：原生 Canvas2D 确定性时间轴、场景示范、文字质检脚本。**不是出片模板**：`--engine web` 需要你自己的页面（见 §3） |
 | `requirements.txt` | **Python 依赖清单**：必需（numpy/Pillow/edge-tts）/ 强烈建议（cv2）/ 可选（scipy、playwright）三档，带注释说明「缺了会怎样」。`pip install -r requirements.txt` 即可 |
 

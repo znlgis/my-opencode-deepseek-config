@@ -98,17 +98,23 @@ def build_audio(self, total=None, sr=SR, base_db=None, default_gain_db=0.0,
 
 ## 5. 验收阈值（改完必须重跑 `python <SKILL_DIR>/tools/audio_similarity.py`）
 
-| 指标 | 目标 | 实测 | 不这么做时 |
-|---|---|---|---|
-| A1 同参数换内容指纹 corr | **≤ 0.85**（仍要像同一部片子，但不能像同一首） | **0.645** | 0.966 |
-| A2 换编排参数 corr | ≤ 0.52（不能变得更像） | **0.514**（连跑 3 次逐位相同） | 0.534 |
-| B1 同 cue 序列跨片逐样本相同 | **False**（不同内容指纹必须不同） | False（同 fp 仍逐样本相同） | True |
-| B2 位置派生（不传 style/fp） | **必须仍为 True**（向后兼容） | True | — |
-| C1 duck 默认 | 3.5–5.5 dB | 4.0（mono 3.0 / cinema 5.5） | 2.5–4.5 dB |
-| D1 人声段旁白/背景响度差 | **≥ 12 dB** | **15.0 dB** | 约 1.5 dB（配乐 -1.5、无侧链） |
-| D2 旁白处背景额外让位 | ≥ 4 dB | 6.0 dB | 0 |
+| 编号 | 指标 | 目标 | 实测（2026-11，本机） | 不这么做时 |
+|---|---|---|---|---|
+| A0 | 配乐非静音（RMS > -60 dBFS） | **必须 True** | True（rms 0.0733） | 静音时相关系数无定义，A1/A2 会「天然通过」 |
+| A1 | 同参数换内容指纹 corr | **≤ 0.85**（仍要像同一部片子，但不能像同一首） | **0.190** | 0.966 |
+| A2 | 换编排参数 corr | ≤ 0.52（不能变得更像） | **0.334** | 0.534 |
+| A3 | 同指纹两次渲染逐样本相同 | **True** | True | 不可复现 |
+| B0 | 音效轨非静音 / 非空（5 条） | **必须 True** | True（rms 0.0101 / len 288000） | 空轨时「逐样本相等」天然成立，B1/B3 假绿 |
+| B1 | legacy（不传 style/fp）逐样本兼容 | **必须 True** | True | 老工程的音效会变 |
+| B2 | 不同内容指纹 -> 音效轨不同 | **必须 True** | True | 跨片音效同一套（同质化） |
+| B3 | 同内容指纹两次渲染相同 | **True** | True | 不可复现 |
+| C1 | duck 默认深度 | **3.5–5.5 dB**（区间；量的是 render 基线默认值，不随风格变化） | 4.0（mono 3.0 / cinema 5.5） | 2.5–4.5 dB |
+| D1 | 人声段旁白/背景响度差 | **≥ 12 dB** | **18.2 dB** | 约 1.5 dB（配乐 -1.5、无侧链） |
+| D2 | 旁白处背景额外让位 | ≥ 4 dB | 6.0 dB | 0 |
 
-> A2 的余量只有 0.006，是有意的：抬到 0.53 就离 0.534 只剩 0.004，这条门禁就没意义了。
+> 编号以 `tools/audio_similarity.py` 的输出为准（B 组有 B0 前置断言：空轨/全静音直接 FAIL，
+> 不会让「两个空数组相等」把 B1/B3 骗成 PASS）。上表「实测」列会随实现与标定漂移，
+> **改完音频代码请重跑脚本以输出为准**，别照抄本表数字。
 > D 组守的是"旁白优先"：视频以旁白为主，BGM 与音效是可选层。`mix_film` 的
 > `voice_duck_db=6` / `voice_duck_sfx_db=3` + `music.gain_db=-12` 把"人声比背景响 12 dB"
 > 从文档口号变成可执行断言（selfcheck 35/36 条 + 本脚本 D 组）。
@@ -117,7 +123,7 @@ def build_audio(self, total=None, sr=SR, base_db=None, default_gain_db=0.0,
 
 > 下面每条路径都按 `<SKILL_DIR>`（本技能所在目录）写；`<SKILL_DIR>` 见 SKILL.md §1 的定义。
 
-1. `python <SKILL_DIR>/scripts/selfcheck.py` 全 PASS（**97 条**）。
+1. `python <SKILL_DIR>/scripts/selfcheck.py` 全 PASS（**105 条**）。
 2. `python <SKILL_DIR>/scripts/musicgen.py --selftest` 全 PASS（26 项）。
 3. `python <SKILL_DIR>/scripts/sfxkit.py --selftest` 全 PASS（16 条）。
 4. 音效位置派生的逐样本可复现：`selfcheck.py` 守着这条（`sfx.content_seed=false` 时与 `seed_base + i` 同值）。

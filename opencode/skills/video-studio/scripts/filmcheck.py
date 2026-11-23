@@ -664,26 +664,17 @@ def check_cross(script, script_path, rep, ctx):
         ids.append(lid)
     idset = set(ids)
 
-    # ---- lines[].persona / lines[].tone 拼错会静默回落：枚举从 voicekit 单向读取 ----
-    personas, tones = _load_personas()
-    if personas:
-        for i, ln in enumerate(lines):
-            raw = ln.get("persona")
-            if raw in (None, ""):
-                continue
-            name = str(raw).strip()
-            # 原始 edge-tts voice id（zh-CN-YunxiNeural）也允许写在 persona 位
-            if name in personas or ("-" in name and name.endswith("Neural")):
-                continue
-            near = _suggest(name, personas)
-            rep.warn("lines[%d].persona" % i,
-                     "未知 persona %r —— voicekit 会**静默回落**到 kind 默认声线"
-                     "（成片换人，且不会有任何报错）%s。可用：%s"
-                     % (name, ("；是不是想写 %r？" % near) if near else "",
-                        " / ".join(personas[:9])), "unknown_persona")
-    # tone 不在这里查：LINE_SPEC 里已经有 enum（KINDS 与 voicekit.TONE_IDS 是同一组 6 个），
-    # 那是 ERROR 而不是 WARN。这里只补 persona —— 它没有静态枚举，拼错会静默换声线。
-    _ = tones
+    # ---- lines[].persona 已废弃（voicekit 删掉了 PERSONA_IDS，voice_plan 对它直接 ValueError） ----
+    # 本段以前从 voicekit 读枚举校验拼写；枚举删掉后辅助函数恒返回 None，整段**静默不查**——
+    # 写 persona 的 film.json 契约全绿，到 TTS 阶段才崩。现在显式说清楚：写了就报错并给正确写法。
+    for i, ln in enumerate(lines):
+        raw = ln.get("persona")
+        if raw in (None, ""):
+            continue
+        rep.err("lines[%d].persona" % i,
+                "persona 字段已废弃（voicekit 不再支持，写了会在 TTS 阶段报错）。"
+                 "单声线请写 lines[].voice（或用 design.audio.voice 统一设声线）",
+                "removed_persona")
 
     # ---- lines[].tail 当前不生效（保留字段）：写了会静默无效，必须说出来 ----
     for i, ln in enumerate(lines):
@@ -879,26 +870,6 @@ def _fail(msg, as_json, code=2):
         sys.stderr.write("  用法：python filmcheck.py <film.json> [--strict] [--json]\n")
     raise SystemExit(code)
 
-
-def _load_personas():
-    """从 voicekit 单向读取 persona 名与 tone id；拿不到返回 (None, None) 降级成不查。
-
-    为什么要查：voicekit 对写错的 persona/tone 是**静默回落**（reason 里留
-    unknown_persona:xxx，但不报错、不告警），于是"拼错一个声线名"的后果是整片
-    静默换成 kind 默认声线——听感变了，却没有任何一处提示。schema 层只校验 t=str，
-    拦不住；这里补上（规则仍然只有一份：枚举从 voicekit 读，不复制）。
-    """
-    try:
-        if str(HERE) not in sys.path:
-            sys.path.insert(0, str(HERE))
-        import voicekit                                  # noqa: F401  （只读枚举，不复制）
-        personas = list(getattr(voicekit, "PERSONA_IDS", ()) or
-                        getattr(voicekit, "VOICE_PERSONAS", {}).keys())
-        tones = list(getattr(voicekit, "TONE_IDS", ()) or
-                     getattr(voicekit, "VOICE_TONES", {}).keys())
-        return (personas or None), (tones or None)
-    except Exception:                                    # noqa: BLE001
-        return None, None
 
 
 def _classify(data):

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 
 # ============================================================================
 # 一、10 类场景（顺序 = 平手时的固定取位顺序，改顺序会让同一稿子的分镜漂移）
@@ -313,8 +314,14 @@ def choose_type(line, idx, total, dur, chapter, prev_chapter, prev_types):
 
 
 def downgrade_for(type_name, dur):
-    """段长门兜底：太短就按固定表降级。返回 (最终类型, 是否降级)。"""
+    """段长门兜底：太短就按固定表降级。返回 (最终类型, 是否降级)。
+
+    "是否降级"必须按**类型真的变了**判：statement 本身已是表底（DOWNGRADE 里
+    指向自己），回到它并没有发生降级，早先却返回 True，审计理由里写出了
+    "降级 statement -> statement" 这种假信息。
+    """
     t = type_name if type_name in SCENE_TYPES else "statement"
+    origin = t
     if float(dur) + 1e-9 >= float(MIN_DUR.get(t, 2.6)):
         return t, False
     seen = set()
@@ -326,7 +333,7 @@ def downgrade_for(type_name, dur):
         if nxt == t:
             break
         t = nxt
-    return t, True
+    return t, (t != origin)
 
 
 # ============================================================================
@@ -565,6 +572,16 @@ def describe(storyboard):
     return "%d 段 / %s" % (len(storyboard.get("scenes") or []), " ".join(parts))
 
 
+def _setup_stdio():
+    """Windows 控制台/管道默认 GBK：本脚本打印中文（×、→ 这类符号）会乱码或抛
+    UnicodeEncodeError。与仓库里其它脚本同一口径：只在命令行入口把它切成 UTF-8。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:                    # noqa: BLE001 —— 老 Python / 非 tty 直接跳过
+            pass
+
+
 def _cli(argv=None):
     """自测入口：python grammar.py [film.json] —— 只读，不渲染。
 
@@ -616,4 +633,5 @@ def _cli(argv=None):
 
 
 if __name__ == "__main__":
+    _setup_stdio()
     raise SystemExit(_cli())

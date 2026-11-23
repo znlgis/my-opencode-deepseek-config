@@ -97,11 +97,17 @@ def _load_json(path, default=None):
         raise SystemExit("[proposal] %s 不是合法 JSON：%s" % (path, e)) from e
 
 
+_TMP_SEQ = [0]
+
+
 def _atomic_write(path, text):
     d = os.path.dirname(os.path.abspath(path))
     if d:
         os.makedirs(d, exist_ok=True)
-    tmp = path + ".part"
+    # 临时名必须唯一：固定 ".part" 时两个进程同时写同一文件会互相截断，
+    # os.replace 还可能把对方写了一半的临时文件换上去（并发 --confirm 就撞这里）。
+    _TMP_SEQ[0] += 1
+    tmp = "%s.part-%d-%d" % (path, os.getpid(), _TMP_SEQ[0])
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     os.replace(tmp, path)
@@ -143,19 +149,72 @@ def ledger_path():
     return os.path.join(home, ".config", "opencode", "video-studio", "design-ledger.json")
 
 
+def _ledger_rows(path):
+    """读台账 -> (rows, corrupt)。corrupt 区分"文件不在"与"文件坏了"。"""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return [], False
+    except (OSError, json.JSONDecodeError):
+        return [], True
+    rows = data.get("designs") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return [], True
+    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("design"), dict)], False
+
+
+def _ledger_backup_corrupt(path):
+    """坏台账先留档再重建：它记着"最近交付过哪些设计"，静默清空 = 去重能力失忆。"""
+    dst = "%s.corrupt-%s" % (path, time.strftime("%Y%m%d-%H%M%S"))
+    try:
+        os.replace(path, dst)
+        return dst
+    except OSError:
+        return ""
+
+
+def _ledger_lock(path, timeout=8.0):
+    """跨进程写锁（O_EXCL 建 <ledger>.lock）。拿不到返回空串：台账不该阻塞出片。"""
+    lock = path + ".lock"
+    deadline = time.time() + max(0.0, float(timeout))
+    while True:
+        try:
+            os.close(os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return lock
+        except FileExistsError:
+            # 进程崩溃会留下残留锁：超过 30 秒没更新就当过期，别让台账永久卡死。
+            try:
+                if time.time() - os.path.getmtime(lock) > 30.0:
+                    os.unlink(lock)
+                    continue
+            except OSError:
+                pass
+            if time.time() >= deadline:
+                return ""
+            time.sleep(0.02)
+        except OSError:
+            return ""
+
+
+def _ledger_unlock(lock):
+    try:
+        os.unlink(lock)
+    except OSError:
+        pass
+
+
 def ledger_load(limit=60):
-    """读最近 limit 条设计记录（读不到/写坏都返回空表：台账不该阻塞出片）。"""
+    """读最近 limit 条设计记录（读不到返回空表：台账不该阻塞出片；但坏文件要出声）。"""
     path = ledger_path()
     if not path:
         return []
-    try:
-        data = json.load(open(path, encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    rows, corrupt = _ledger_rows(path)
+    if corrupt:
+        print("[proposal] 台账读不出（%s）：本次按空台账处理，下次 --confirm 会先备份再重建"
+              % path, file=sys.stderr)
         return []
-    rows = data.get("designs") if isinstance(data, dict) else None
-    if not isinstance(rows, list):
-        return []
-    return [r for r in rows if isinstance(r, dict) and isinstance(r.get("design"), dict)][-int(limit):]
+    return rows[-int(limit):]
 
 
 def ledger_record(design, work=None, label=""):
@@ -168,18 +227,36 @@ def ledger_record(design, work=None, label=""):
         fp = _DK.design_fingerprint(design)
     except Exception:                                       # noqa: BLE001
         return False
-    rows = ledger_load(limit=500)
-    rows = [r for r in rows if r.get("fingerprint") != fp]
-    rows.append({"fingerprint": fp, "label": str(label or design.get("label") or ""),
-                 "at": _now(), "work": os.path.abspath(str(work)) if work else "",
-                 "design": design})
-    rows = rows[-500:]
     try:
-        _atomic_write(path, json.dumps({"schema": 1, "designs": rows},
-                                       ensure_ascii=False))
-        return True
+        parent = os.path.dirname(os.path.abspath(path))
+        if parent:
+            os.makedirs(parent, exist_ok=True)
     except OSError:
         return False
+    lock = _ledger_lock(path)
+    if not lock:
+        print("[proposal] 台账写锁等不到（%s）：本次跳过记录" % path, file=sys.stderr)
+        return False
+    try:
+        rows, corrupt = _ledger_rows(path)
+        if corrupt:
+            backup = _ledger_backup_corrupt(path)
+            print("[proposal] 台账文件损坏，已备份为 %s 并重建" % (backup or "（备份失败）"),
+                  file=sys.stderr)
+        rows = [r for r in rows if r.get("fingerprint") != fp]
+        rows.append({"fingerprint": fp, "label": str(label or design.get("label") or ""),
+                     "at": _now(), "work": os.path.abspath(str(work)) if work else "",
+                     "design": design})
+        rows = rows[-500:]
+        try:
+            _atomic_write(path, json.dumps({"schema": 1, "designs": rows},
+                                           ensure_ascii=False))
+            return True
+        except OSError as e:
+            print("[proposal] 台账写不进去（%s）：%s" % (path, e), file=sys.stderr)
+            return False
+    finally:
+        _ledger_unlock(lock)
 
 
 def ledger_min_distance(designs, recent):
@@ -208,6 +285,27 @@ def proposal_path(work):
 
 def rev_dir(work, rev):
     return os.path.join(str(work), PROPOSALS_DIR, "rev%d" % int(rev))
+
+
+def _next_rev(work, prev):
+    """下一版 rev = max(proposal.json 的 rev, 已有 revN 快照) + 1。
+
+    为什么不能只看 proposal.json：它被写坏/被移走后（坏 JSON 只能移走才能继续）
+    重跑提案会算出 rev=1，而 work/proposals/rev1 里已有上一版的快照——
+    os.makedirs(exist_ok=True) 会静默把旧快照连同候选图覆盖掉，历史 rev 就没了。
+    """
+    best = int((prev or {}).get("rev") or 0)
+    base = os.path.join(str(work), PROPOSALS_DIR)
+    try:
+        names = os.listdir(base)
+    except OSError:
+        names = []
+    for name in names:
+        if not (name.startswith("rev") and name[3:].isdigit()):
+            continue
+        if os.path.isfile(os.path.join(base, name, PROPOSAL_FILE)):
+            best = max(best, int(name[3:]))
+    return best + 1
 
 
 def _designkit():
@@ -608,7 +706,7 @@ def make_proposal(brief_text, script, work, n=3, seed=None, n_frames=4, json_out
     brief = _brief_of(brief_text, script)
 
     prev = _load_json(proposal_path(work), default=None) or {}
-    rev = int(prev.get("rev") or 0) + 1
+    rev = _next_rev(work, prev)
     parent = prev.get("rev") if prev else None
     feedback = str(brief_text or "").strip() if rev > 1 else ""
 
@@ -672,7 +770,9 @@ def make_proposal(brief_text, script, work, n=3, seed=None, n_frames=4, json_out
         print("   片间去重: 已对照最近 %d 部片（最接近的一对差 %d 维，要求 >=%d；台账 %s）"
               % (len(recent), ledger_gap if ledger_gap is not None else -1,
                  LEDGER_MIN_GAP, ledger_path() or "关闭"))
-    if ledger_gap is not None and ledger_gap < LEDGER_MIN_GAP:
+    if not json_out and ledger_gap is not None and ledger_gap < LEDGER_MIN_GAP:
+        # --json 的契约是"stdout 只输出 JSON"：机读分支里这条告警会让 json.loads 直接失败。
+        # 同样的信息已经在 payload["ledger"]（min_gap / want_gap）里，机读不需要人头提示。
         print("   ! 这批候选与最近交付过的设计最接近的一对只差 %d 个维度（建议 ≥%d）："
               % (ledger_gap, LEDGER_MIN_GAP))
         print("     已有 %d 部片的台账：%s" % (len(recent), ledger_path()))
@@ -817,6 +917,15 @@ def adopt(work, script=None, script_path="", by="user", note="", json_out=False)
     prev = _load_json(proposal_path(work), default=None)
     if not prev:
         raise SystemExit("[proposal] 没有 %s——先跑一次提案" % proposal_path(work))
+    # 状态机：adopt 的语义是"把已确认的提案重新绑到这份手改过的 design.json"，不是"确认"。
+    # 草案（draft、没有 chosen）走这里会写出 status=confirmed 但没有 chosen 的 proposal：
+    # proposal_state 仍判 draft（闸不放行），adopt 却打印"闸不会再报 stale"——假绿。
+    if str(prev.get("status") or "") != "confirmed" or not prev.get("chosen"):
+        raise SystemExit(
+            "[proposal] %s 还没确认过（status=%r，chosen=%r）——--adopt 只能把"
+            "手改过的 work/design.json 重新绑到**已确认**的提案上。\n"
+            "  先确认一个候选：python propose.py --work %s --confirm --candidate A"
+            % (proposal_path(work), prev.get("status"), prev.get("chosen"), work))
     fp_new = designkit.design_fingerprint(design)
     fp_old = str(prev.get("designHash") or "")
     cands = {str(c.get("id")): c for c in (prev.get("candidates") or [])}
@@ -881,7 +990,20 @@ def confirm(work, candidate, by="user", note="", json_out=False,
                   json.dumps(design, ensure_ascii=False, indent=1))
     # 片间去重台账：**确认**（= 真的要出片了）才记，草稿候选不记。
     # 记的是设计本身（自足 JSON），不是路径；同一指纹只留最新一条。
-    ledger_record(design, work=work, label=cands[cid].get("label") or "")
+    if ledger_path() and not ledger_record(design, work=work,
+                                           label=cands[cid].get("label") or ""):
+        print("   ! 片间去重台账没写成（%s）：本次确认照样生效，但下次提案不会避开这部片"
+              % ledger_path(), file=sys.stderr)
+    if json_out:
+        # --json 的契约是 stdout 只输出 JSON：以前这里什么都不打，机读端拿到空 stdout，
+        # json.loads 直接抛错——"确认成功"反而看起来像失败。
+        print(json.dumps({"ok": True, "candidate": cid, "status": prev.get("status"),
+                          "designHash": prev.get("designHash"),
+                          "scriptHash": prev.get("scriptHash"),
+                          "path": proposal_path(work),
+                          "design": os.path.join(str(work), "design.json")},
+                         ensure_ascii=False))
+        return prev
     if not json_out:
         print("== 已确认候选 %s（%s）" % (cid, cands[cid].get("label")))
         if prev.get("scriptHash"):
@@ -993,14 +1115,26 @@ def proposal_state(work, script_path=None):
     找不到/读不出剧本就**不判**剧本这一档（见 _script_hash_of），只判设计指纹。
     """
     p = proposal_path(work)
-    data = _load_json(p, default=None)
+    try:
+        data = _load_json(p, default=None)
+    except SystemExit as e:
+        # 坏 JSON 必须判 broken（文档里就是这一档）。以前把 SystemExit 直接抛给调用方：
+        # render 会兜住，但任何直接调 proposal_state 的脚本会当场退出而不是拿到状态。
+        return "broken", str(e)
+    except OSError as e:
+        return "broken", "读不出 %s：%s" % (p, e)
     if data is None:
         return "absent", "没有 %s" % p
     if not isinstance(data, dict):
         return "broken", "%s 不是 JSON 对象" % p
     if data.get("status") != "confirmed" or not data.get("chosen"):
         return "draft", "rev%s 还没确认（chosen=%r）" % (data.get("rev"), data.get("chosen"))
-    design = _load_json(os.path.join(str(work), "design.json"), default=None)
+    try:
+        design = _load_json(os.path.join(str(work), "design.json"), default=None)
+    except SystemExit as e:
+        return "broken", str(e)
+    except OSError as e:
+        return "broken", "读不出 work/design.json：%s" % e
     if design is None:
         return "stale", "confirmed 但 design.json 不存在（重新 --confirm）"
     try:

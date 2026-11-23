@@ -132,7 +132,16 @@ def load_overlay(path):
             bad.append("layers[%d] 不是对象" % i); continue
         if not ly.get("png"):
             bad.append("layers[%d] 缺 png（叠加层的透明图路径）" % i)
-        if not (ly.get("bind") or ly.get("at")):
+        bind = ly.get("bind")
+        at_v = ly.get("at")
+        if bind is not None and not isinstance(bind, str):
+            bad.append("layers[%d].bind 必须是字符串（形如 line:<句 id>）" % i)
+        for _key, _val in (("at", at_v), ("dur", ly.get("dur"))):
+            if _val is not None and (isinstance(_val, bool)
+                                     or not isinstance(_val, (int, float))):
+                bad.append("layers[%d].%s 必须是数字（秒），收到 %r" % (i, _key, _val))
+        # at=0.0 是合法时间窗（片子第一帧就出现），不能按真假值判成"缺时间窗"。
+        if not bind and at_v is None:
             bad.append("layers[%d] 缺时间窗：给 bind（推荐）或 at" % i)
         fade = ly.get("fade")
         if fade is not None and not isinstance(fade, (int, float)):
@@ -152,7 +161,7 @@ def resolve_windows(spec, tl):
     order = [str(r["id"]) for r in (tl.get("lines") or [])]
     total = float(tl.get("total") or 0.0)
     out = []
-    for ly in spec.get("layers") or []:
+    for li, ly in enumerate(spec.get("layers") or []):
         bind = str(ly.get("bind") or "")
         if bind.startswith("line:"):
             lid = bind.split(":", 1)[1]
@@ -173,7 +182,12 @@ def resolve_windows(spec, tl):
                        if float(rows[k]["start"]) > start + 1e-6]
                 end = min(nxt) if nxt else total
         else:
-            continue
+            # 写了 bind 但不是 "line:<id>"（例如写成 shot:s02）时，这一层既不出现在
+            # --stage overlay 的窗口表里、也不进成片，而且没有任何报错——契约错误必须
+            # 显式失败（docstring：退出码 2 = overlay.json 不合法）。
+            log("  [契约错误] layers[%d] 的时间窗无法解析：bind=%r 只认 'line:<句 id>'；"
+                "改用 at（秒）也行" % (li, ly.get("bind")))
+            raise SystemExit(2)
         start = max(0.0, start + float(ly.get("pad_start") or 0.0))
         end = min(total or end, end + float(ly.get("pad_end") or 0.0))
         if end - start <= 0.05:

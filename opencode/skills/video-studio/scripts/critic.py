@@ -386,6 +386,13 @@ def main(argv=None):
         r["candidate"] = name
         rows.append(r)
 
+    if rows and not any("error" not in r for r in rows):
+        # 文档承诺"2 = 没有可评的图"：全部读图失败还退 0 就是假绿——
+        # propose.py --critic 会把这次"打分"当成功（拿不到分数也不报错）。
+        sys.stderr.write("没有任何图可评：%d 张全部读取失败（%s）\n"
+                         % (len(rows), rows[0].get("error") or ""))
+        return 2
+
     payload = {"schema": 1, "engine": "offline-heuristic", "items": rows}
     if a.vlm_cmd:
         payload["vlm"] = _run_vlm(a.vlm_cmd, [p for _, p in targets])

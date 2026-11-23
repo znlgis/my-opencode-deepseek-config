@@ -178,5 +178,5 @@ python compose.py ... --stage qa         # 帧级深检（自动传 --shots 切�
 | 合成入口（形态 3） | `scripts/compose.py` |
 | 素材线（形态 1 的素材段 / 形态 3 的底片） | `scripts/footage.py`、`footageedit.py`、`footagekit.py` |
 | 素材 -> 图文段配色 | `scripts/matchstyle.py` |
-| 素材线细节（治理、门禁 F1–F8） | `references/footage.md` |
+| 素材线细节（治理、门禁 F1–F9） | `references/footage.md` |
 | 帧级门禁判据 | `references/frame-qa.md` |

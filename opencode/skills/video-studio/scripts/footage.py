@@ -30,7 +30,7 @@ render.py 是"每一帧由代码画出来"的生产线（画面 100% 可控、�
     cut         按 EDL 切镜（统一画幅 + 抽原声）-> work/segs/
     mix         三条总线混音 -> work/mix.wav
     assemble    拼接 + 字幕 + loudnorm -> 成片
-    qa          F1..F7 专属门禁 + 通用质检 -> out/QC-REPORT-footage.md
+    qa          F1..F9 专属门禁 + 通用质检 -> out/QC-REPORT-footage.md
     all         出片所需的阶段按依赖顺序跑完（素材已在本地时自动跳过 fetch）
 
 --stage 之间是硬依赖：缺前置产物会明确说缺哪个、该先跑哪个，而不是半路炸在 ffmpeg 里。
@@ -173,6 +173,13 @@ def st_tts(foot, work, args):
                              trim=bool(audio.get("trim_silence", True)),
                              words=bool(audio.get("words", True)))
     _write_json(work / "tts.json", rows)
+    # 每句的 mp3 必须真的落地：tts_batch 只保证"合成调用返回了"，文件写失败/被清理时
+    # 它不会替我们发现。等 mix 阶段才发现缺一句，代价是整片重跑；这里先点名。
+    missing = [str(ln["id"]) for ln in foot["lines"]
+               if not (Path(work) / "tts" / (str(ln["id"]) + ".mp3")).is_file()]
+    if missing:
+        raise SystemExit("这些句子的旁白文件没生成：%s（看上面 tts 的报错；重跑 --stage tts）"
+                         % ", ".join(missing))
     log("  旁白总时长 %.2fs / %d 句" % (sum(float(r["dur"]) for r in rows), len(rows)))
     return rows
 

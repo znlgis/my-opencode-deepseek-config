@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""footageqa.py — 素材剪辑生产线的专属门禁（F1..F7）。
+"""footageqa.py — 素材剪辑生产线的专属门禁（F1..F9）。
 
 现有门禁（G0 / qa_frames / qaasr / VMAF）默认"画面是代码画出来的、同一参数重渲必然一致"。
 素材线的头号问题不是帧闪烁，而是**画面里不该出现的东西**：
@@ -98,17 +98,80 @@ def _longest_active_run(luma, spread, min_rows=40):
     return best[1], best[2]
 
 
+def _stable(value):
+    """把契约值归一成"同一份内容算同一个哈希"的形态。
+
+    为什么要递归归一：
+      * JSON 里 1 与 1.0、0.3 与 0.30000000000000004（浮点累加）都是"人眼一样"的值，
+        序列化字符串却不同；不过一手就会让没改过的工程"旧签核突然失效"。
+        浮点统一 round(…, 6) 后转字符串。
+      * dict 交给 json.dumps(sort_keys=True) 排序；list 保持顺序——lines / shots 的
+        先后本身就是内容（决定画面与时间轴），不能被排序吃掉。
+      * 只做数值归一，不做类型强转：None / "" / False 各代表不同语义，不能合并。
+    """
+    if isinstance(value, dict):
+        return {str(k): _stable(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_stable(v) for v in value]
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return repr(round(float(value), 6))
+    if value is None:
+        return None
+    return str(value)
+
+
 def _fingerprint(foot, edl):
-    """签核指纹：契约 + EDL 的内容哈希。改内容 -> 旧签核自动失效。"""
-    h = hashlib.sha1()
+    """签核指纹：契约 + EDL 的内容哈希。改内容 -> 旧签核自动失效。
+
+    覆盖范围 = 会改变成片观感的全部"声明值"，**不包括文件路径与 url**
+    （换机器、换素材目录不该让签核失效）：title / treatment / subtitle /
+    video（fps 与分辨率）/ audio（voice、rate、pitch、三路增益、music 与
+    music_file）/ pacing（lead/tail/hold/outro，直接决定镜头长短与片尾）/
+    credit（片尾出处卡）/ sources（license_note、burned_subs、watermark——它们
+    决定 F2/F3 的判定）/ lines（id、text、sub、shot、hold）/ EDL 的 shots。
+
+    反过来说，下面任何一类改动都会让 work/footage-signoff.json 里的旧签核
+    **自动失效**（F7 变 skipped 并写明"内容已变"），必须重新看片：
+      * 改台词 / 上屏字幕 / 镜头指向 / 镜头长度 / 每句 hold；
+      * 改画幅 fps 与分辨率、改字幕字号与边距；
+      * 改旁白声线/语速/音高、改环境声/配乐增益，或换配乐文件与曲风参数；
+      * 改 lead / tail / outro（镜头与片尾长度全会变）；
+      * 改片尾出处卡文字或出现时间；
+      * 改素材出处说明，或改字幕带 / 水印框声明（F2/F3 结论会变）。
+    """
+    sources = []
+    for s in foot.get("sources") or []:
+        sources.append({"id": s.get("id"),
+                        "license_note": s.get("license_note"),
+                        "burned_subs": s.get("burned_subs"),
+                        "watermark": s.get("watermark"),
+                        "kind": s.get("kind")})
+    audio = foot.get("audio") or {}
     payload = {"title": foot.get("title"),
                "treatment": foot.get("treatment"),
                "subtitle": foot.get("subtitle"),
-               "lines": [{k: v for k, v in ln.items() if k in ("id", "text", "sub", "shot")}
+               "video": foot.get("video"),
+               "audio": {"voice": audio.get("voice"), "rate": audio.get("rate"),
+                         "pitch": audio.get("pitch"),
+                         "voice_gain": audio.get("voice_gain"),
+                         "env_gain": audio.get("env_gain"),
+                         "music_gain": audio.get("music_gain"),
+                         "music_file": audio.get("music_file"),
+                         "music": audio.get("music")},
+               "pacing": foot.get("pacing"),
+               "credit": foot.get("credit"),
+               "licensing": foot.get("licensing"),
+               "sources": sources,
+               "lines": [{k: v for k, v in ln.items()
+                          if k in ("id", "text", "sub", "shot", "hold")}
                          for ln in foot.get("lines") or []],
                "shots": [[s.get("id"), s.get("source"), s.get("at"), s.get("len")]
                          for s in (edl or {}).get("shots") or []]}
-    h.update(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8"))
+    h = hashlib.sha1()
+    h.update(json.dumps(_stable(payload), ensure_ascii=False,
+                        sort_keys=True, separators=(",", ":")).encode("utf-8"))
     return h.hexdigest()[:16]
 
 
@@ -123,6 +186,25 @@ def f1_edl(foot, work, out, tl, edl, ctx):
     if problems:
         return dict(gate="F1", status="fail", detail="；".join(problems[:3]),
                     values={"problems": problems})
+    # 覆盖度：check_edl 只在"源时长已知"时才判越界。sources.json 缺失、或某个源没探到
+    # dur（探测失败 / 换过路径）时那条越界判定根本没执行，记 pass 就是"没查被当成通过"。
+    # 图片源没有"源内时间码"语义（静帧循环铺满本镜），不参与越界判定。
+    srcs = footagekit.source_map(foot)
+    unknown = []
+    for sid in sorted({str(s.get("source") or "") for s in shots}):
+        rec = srcs_info.get(sid) or {}
+        src = srcs.get(sid) or {}
+        suffix = Path(str(src.get("path") or "")).suffix.lower()
+        if rec.get("is_image") or suffix in footagekit.IMAGE_EXT:
+            continue
+        if not rec.get("dur"):
+            unknown.append(sid)
+    if unknown:
+        return dict(gate="F1", status="skipped",
+                    detail="缺源时长（work/sources.json 里没有 %s 的 dur），越界判定没执行："
+                           "先跑 --stage probe 再重跑 qa（图片源不参与越界判定）"
+                           % "、".join(unknown[:4]),
+                    values={"unknown_duration": unknown, "shots": len(shots)})
     total = sum(s["len"] for s in shots)
     return dict(gate="F1", status="pass",
                 detail="%d 镜 / %.2fs，无越界" % (len(shots), total),
@@ -213,14 +295,20 @@ def f2_subtitle_bleed(foot, work, out, tl, edl, ctx):
     """
     box = _visible_box(foot)
     srcs = footagekit.source_map(foot)
-    problems, checked = [], 0
+    problems, bad_decl, checked = [], [], 0
     for sid, s in srcs.items():
         band = _declared_band(s, "burned_subs")
         if not band:
+            if s.get("burned_subs"):
+                # 有声明但解析不出 band：不能当成"没声明"混过去，否则下面的 pass 会谎称查过
+                bad_decl.append(sid)
             continue
         checked += 1
+        if box is None:
+            continue                    # 可见区未知：交给下面的 skipped 分支
         rec = _overlaps(box, band, "burned_subs")
         if rec is None:
+            bad_decl.append(sid)        # 声明区间非法（y1<=y0 / 非数字）
             continue
         hit, rng = rec
         if hit:
@@ -252,15 +340,22 @@ def f2_subtitle_bleed(foot, work, out, tl, edl, ctx):
                     detail="没有 treatment.crop（可见区未知）；无法判定字幕带是否被裁掉。"
                            "补上 crop 后重跑",
                     values={"bright_suspicion": suspicion})
+    if bad_decl:
+        return dict(gate="F2", status="fail",
+                    detail="这些源的 burned_subs 声明无法用于几何判定：%s"
+                           "（需要 {y0,y1} 且 y1>y0，或 [y0,y1]）"
+                           % "、".join(bad_decl[:4]),
+                    values={"bad_declaration": bad_decl, "visible_box": box})
     if not checked:
         return dict(gate="F2", status="skipped",
                     detail="没有源声明 burned_subs（字幕带位置）；无法判定是否治理干净。"
                            "用 --stage probe 的建议值填进 sources[].burned_subs 后重跑",
                     values={"bright_suspicion": suspicion})
     return dict(gate="F2", status="pass",
-                detail="%d 个源的烧录字幕带都在 crop 之外（可见区 y=%.0f..%.0f）"
-                       % (checked, box[1], box[3]),
-                values={"visible_box": box, "bright_suspicion": suspicion})
+                detail="%d/%d 个源声明了烧录字幕带，且都在 crop 之外（可见区 y=%.0f..%.0f）"
+                       % (checked, len(srcs), box[1], box[3]),
+                values={"visible_box": box, "bright_suspicion": suspicion,
+                        "declared": checked, "sources": len(srcs)})
 
 
 # ---------------------------------------------------------------- F3 水印残留
@@ -274,14 +369,19 @@ def f3_watermark(foot, work, out, tl, edl, ctx):
     """
     box = _visible_box(foot)
     srcs = footagekit.source_map(foot)
-    problems, checked = [], 0
+    problems, bad_decl, checked = [], [], 0
     for sid, s in srcs.items():
         band = _declared_band(s, "watermark")
         if not band:
+            if s.get("watermark"):
+                bad_decl.append(sid)    # 有声明但解析不出来：不能当成"没声明"
             continue
         checked += 1
+        if box is None:
+            continue                    # 可见区未知：交给下面的 skipped 分支
         rec = _overlaps(box, band, "watermark")
         if rec is None:
+            bad_decl.append(sid)        # 声明区间非法（w/h<=0 / 非数字）
             continue
         hit, rng = rec
         if hit:
@@ -296,34 +396,69 @@ def f3_watermark(foot, work, out, tl, edl, ctx):
                     detail="没有 treatment.crop（可见区未知）；无法判定水印是否被裁掉。"
                            "补上 crop 后重跑",
                     values={"visible_box": None})
+    if bad_decl:
+        return dict(gate="F3", status="fail",
+                    detail="这些源的 watermark 声明无法用于几何判定：%s"
+                           "（需要 {x,y,w,h} 且 w,h>0，或 [x,y]）"
+                           % "、".join(bad_decl[:4]),
+                    values={"bad_declaration": bad_decl, "visible_box": box})
     if not checked:
         return dict(gate="F3", status="skipped",
                     detail="没有源声明 watermark（水印框）；无法判定水印是否去掉。"
                            "用 --stage probe 的建议值填进 sources[].watermark 后重跑",
                     values={"visible_box": box})
     return dict(gate="F3", status="pass",
-                detail="%d 个源的水印框都在 crop 之外（可见区 x=%.0f..%.0f y=%.0f..%.0f）"
-                       % (checked, box[0], box[2], box[1], box[3]),
-                values={"visible_box": box})
+                detail="%d/%d 个源声明了水印框，且都在 crop 之外（可见区 x=%.0f..%.0f y=%.0f..%.0f）"
+                       % (checked, len(srcs), box[0], box[2], box[1], box[3]),
+                values={"visible_box": box, "declared": checked, "sources": len(srcs)})
 
 
 # ---------------------------------------------------------------- F4
 def f4_av_equal(foot, work, out, tl, edl, ctx):
+    # "成片不存在"不是"没执行"，是**执行了但没有可交付物**：直接调 run_all
+    # （自检 / 第三方脚本 / 上一阶段失败后重跑 qa）时若记 skipped，报告会看起来
+    # "这条门禁没查"而不是"成片没有"，正是本仓库反复强调的假绿形态。
+    if not out or not Path(str(out)).is_file():
+        return dict(gate="F4", status="fail",
+                    detail="成片不存在：%s（先跑 --stage assemble；成片没产出时音画等长无从谈起）"
+                           % (out,),
+                    values={"out": str(out)})
     raw = filmkit.probe(str(out)) or {}
     streams = raw.get("streams") or []
+    if not streams:
+        return dict(gate="F4", status="fail",
+                    detail="成片探测不到任何流（ffprobe 无输出）：%s（文件损坏 / 0 字节？）" % out,
+                    values={"out": str(out), "streams": 0})
+    # 流"少了一路"和流"读不出时长"是两件事：素材线的成片必须有画面+音轨，
+    # 少一路的成片不能交付。原来用 format.duration 给缺失的那一路兜底，
+    # 于是"只有视频流"的成片被算成 video==audio==fmt_dur 直接 pass（实测）。
+    has_v = any(s.get("codec_type") == "video" for s in streams)
+    has_a = any(s.get("codec_type") == "audio" for s in streams)
+    if not has_v or not has_a:
+        lacking = "、".join([n for n, ok in (("视频流", has_v), ("音频流", has_a)) if not ok])
+        return dict(gate="F4", status="fail",
+                    detail="成片缺%s：%s（音画等长无从谈起；只有一路流的成片不能交付）"
+                           % (lacking, out),
+                    values={"out": str(out), "has_video": has_v, "has_audio": has_a})
     vdur = adur = None
     for s in streams:
         if s.get("codec_type") == "video" and s.get("duration"):
             vdur = float(s["duration"])
         elif s.get("codec_type") == "audio" and s.get("duration"):
             adur = float(s["duration"])
+    # 流都在但某一路的 duration 字段缺失时，才用容器时长兜底（既不是"缺流"，也不是"读不出"）。
     fmt_dur = float((raw.get("format") or {}).get("duration") or 0.0)
     if vdur is None:
         vdur = fmt_dur or None
     if adur is None:
         adur = fmt_dur or None
     if not vdur or not adur:
-        return dict(gate="F4", status="skipped", detail="读不到流时长", values={})
+        # 流在但时长读不出（容器缺 duration / 流被截断）：音画等长判不了，
+        # 和"没有成片"一样不可交付，记 fail 并点名缺的是哪一路。
+        lacking = "、".join([n for n, v in (("视频流", vdur), ("音频流", adur)) if not v])
+        return dict(gate="F4", status="fail",
+                    detail="成片读不到%s时长：%s（容器缺 duration 或流被截断）" % (lacking, out),
+                    values={"out": str(out), "video": vdur, "audio": adur})
     diff = abs(vdur - adur)
     ok = diff <= 0.05
     return dict(gate="F4", status="pass" if ok else "fail",
@@ -386,16 +521,24 @@ def f6_voice_dominance(foot, work, out, tl, edl, ctx):
                     detail="音轨短于 1 秒（%.2fs），量不出旁白/背景比" % (a.size / 16000.0),
                     values={"samples": int(a.size)})
     sr = 16000
+    total = a.size / float(sr)
     chans, gaps = [], []
     prev = 0.0
     for r in tl.get("lines") or []:
         s0, s1 = int(float(r["start"]) * sr), int(float(r["end"]) * sr)
         if s1 > s0:
             chans.append(a[s0:min(s1, a.size)])
-        g0, g1 = int(prev * sr), int(float(r["shot_start"]) * sr)
-        if g1 - g0 > sr // 2:
-            gaps.append(a[g0:g1])
-        prev = float(r["shot_end"])
+        # 间隙 = 本镜窗口里**没有旁白**的部分（lead / hold / tail），不是"相邻两句之间"：
+        # 时间轴按定义首尾相接（next.shot_start == prev.shot_end），那种间隙恒为 0 秒，
+        # 于是 F6 在任何正常片子上都只会 skipped——门禁等于没执行（实测全链路跑完永远 skipped）。
+        for g0, g1 in ((prev, float(r.get("shot_start") or 0.0)),
+                       (float(r.get("end") or 0.0), float(r.get("shot_end") or 0.0))):
+            a0, a1 = int(round(max(0.0, g0) * sr)), int(round(min(total, g1) * sr))
+            # 0.25s 起算：默认 lead=0.35 / tail=0.55、模板 pacing 也一样，但项目里
+            # 常把 tail 调到 0.4（自检就是这样），门槛写 0.5s 会让正常的尾巴全被丢掉。
+            if a1 - a0 > sr // 4:
+                gaps.append(a[a0:a1])
+        prev = float(r.get("shot_end") or 0.0)
     if not chans or not gaps:
         return dict(gate="F6", status="skipped",
                     detail="没有足够的旁白/间隙窗口（旁白首尾相接）", values={})
@@ -508,8 +651,121 @@ def f7_signoff(foot, work, out, tl, edl, ctx):
                 values={"fingerprint": fp})
 
 
+# ---------------------------------------------------------------- F9
+def f9_subtitle_fit(foot, work, out, tl, edl, ctx):
+    """字幕排版门禁：每行像素宽不超安全宽、总行数 <= 2、不越底边。
+
+    为什么要它：素材线的字幕走 ASS 烧录（libass），**不是** PIL 的 draw_subtitle，
+    所以 filmkit.qa_text_safe 管不到它；而 ASS 头是 WrapStyle:2（不自动折行），
+    一句长旁白会直接横穿画面。实测 DEMO 二/三 29 句里有一半超宽，撞上叠加层，
+    而当时 F1..F8 全部 pass（F9 就是为了补上这个渲染分支才加的）。
+    """
+    try:
+        ass_path = Path(work) / "sub.ass"
+    except Exception:                                          # noqa: BLE001
+        ass_path = None
+    if ass_path is None or not ass_path.exists():
+        return dict(gate="F9", status="skipped",
+                    detail="没有 work/sub.ass（字幕还没烧或不是 ASS 路线），本片没查")
+    video = foot.get("video") or {}
+    w = int(video.get("width") or 1920)
+    h = int(video.get("height") or 1080)
+    subcfg = foot.get("subtitle") or {}
+    size = int(subcfg.get("size", 46))
+    ml = int(subcfg.get("margin_l", 110))
+    mr = int(subcfg.get("margin_r", 110))
+    # 与写入端（write_ass）同一把尺子：那边 max_w = max(240, w - ml - mr)。
+    # 只写 w-ml-mr 的话，边距很大时写入端按 240 折行、门禁按更小宽度量，会把每条都判超宽。
+    max_w = max(240, w - ml - mr)
+    try:
+        import filmkit as _K
+        tw = _K.text_w
+        _fam = (subcfg.get("family") or "sans")
+        # 字号必须从 **ASS 文件里的 Style 段**读，不能从 footage.json 的 subtitle.size 读。
+        # 写端为了放下长句会**降字号**（实测 Main 从 44 降到 40），Style 里写的是降后的字号；
+        # 若门禁按 44 量，就会把每一行都判成超宽（实测连报 18 行）。
+        _styles, _margins = {}, {}
+        # 列号从 Format 行读，不写死下标：Fontname 里带逗号、或写入端调整列序时，
+        # 死下标会把 MarginV 读成别的字段（门禁按错的值判"越底边"）。
+        _cols = {"Name": 0, "Fontsize": 2, "MarginV": 21}
+        for _ln in ass_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if _ln.startswith("Format:") and "," in _ln:
+                _fmt = [x.strip() for x in _ln[len("Format:"):].split(",")]
+                _cols = {name: i for i, name in enumerate(_fmt)}
+                continue
+            if _ln.startswith("Style:") and "," in _ln:
+                _p = _ln.split(",")
+                try:
+                    _col_name, _col_size = _cols["Name"], _cols["Fontsize"]
+                    _col_mv = _cols.get("MarginV", 21)
+                    _name = _p[_col_name].split()[-1]
+                    _styles[_name] = int(_p[_col_size])
+                    _margins[_name] = int(_p[_col_mv]) if len(_p) > _col_mv else 0
+                except (IndexError, ValueError, KeyError):
+                    pass
+        if not _styles:
+            _styles = {"Main": size, "Note": int(subcfg.get("note_size", max(24, int(size * 0.62))))}
+            _mv = int(subcfg.get("margin_v", 38))
+            _margins = {"Main": _mv, "Note": _mv}
+        fonts = {k: _K.font(v, "reg", _fam) for k, v in _styles.items()}
+        max_w = max(240, int(w) - ml - mr)
+    except Exception:                                          # noqa: BLE001
+        return dict(gate="F9", status="skipped",
+                    detail="没有 filmkit（量不了像素宽），本片没查")
+    bad_w, bad_rows, bad_bottom = [], [], []
+    rows = 0
+    for line in ass_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.startswith("Dialogue:"):
+            continue
+        parts = line.split(",", 9)
+        if len(parts) < 10:
+            continue
+        txt = parts[9].replace("\\N", "\n").replace("\\n", "\n")
+        rows += 1
+        segs = [x for x in txt.split("\n") if x.strip()]
+        if len(segs) > 2:
+            bad_rows.append((parts[1], len(segs), txt[:18]))
+        _style = (parts[3] or "Main").strip()
+        _font = fonts.get(_style) or fonts["Main"]
+        for seg in segs:
+            wpx = tw(seg, _font)
+            if wpx > max_w:
+                bad_w.append((parts[1], int(wpx), max_w, seg[:18]))
+        # 竖直方向：Alignment=2（底部居中）+ MarginV，行数一多就往上长；长到画布外就是出画。
+        # Style 里没有行距字段，按 ASS 实践用 1.2*字号 估每行高度，只拦明显越界的情况。
+        _size = _styles.get(_style) or _styles.get("Main") or size
+        _mv = int(_margins.get(_style, 0))
+        if segs and _mv + len(segs) * _size * 1.2 > h:
+            bad_bottom.append((parts[1], _mv, len(segs), _size))
+    if not rows:
+        return dict(gate="F9", status="skipped", detail="sub.ass 里没有字幕行")
+    if bad_w or bad_rows or bad_bottom:
+        det = []
+        if bad_w:
+            det.append("%d 行超宽（最宽 %dpx > %dpx）：%s"
+                       % (len(bad_w), max(b[1] for b in bad_w), max_w,
+                          "；".join("%s %r" % (b[0], b[3]) for b in bad_w[:3])))
+        if bad_rows:
+            det.append("%d 条超过 2 行：%s" % (len(bad_rows),
+                                              "；".join("%s=%d行" % (b[0], b[1]) for b in bad_rows[:3])))
+        if bad_bottom:
+            det.append("%d 条越出底边（MarginV %d + %d 行 x %dpx > 画布 %dpx）：%s"
+                       % (len(bad_bottom), bad_bottom[0][1], bad_bottom[0][2],
+                          bad_bottom[0][3], h,
+                          "；".join(b[0] for b in bad_bottom[:3])))
+        return dict(gate="F9", status="fail", detail="；".join(det),
+                    values={"too_wide": len(bad_w), "too_many_rows": len(bad_rows),
+                            "too_low": len(bad_bottom), "max_w_px": max_w,
+                            "canvas_h": h})
+    return dict(gate="F9", status="pass",
+                detail="%d 条字幕：每行 <= %dpx、行数 <= 2、未越底边（写入端 write_ass 全局选字号后折行）"
+                       % (rows, max_w),
+                values={"rows": rows, "max_w_px": max_w, "canvas_h": h})
+
+
 GATES = [f1_edl, f2_subtitle_bleed, f3_watermark, f4_av_equal,
-         f5_provenance, f6_voice_dominance, f7_signoff, f8_source_variety]
+         f5_provenance, f6_voice_dominance, f7_signoff, f8_source_variety,
+         f9_subtitle_fit]
 
 
 # ---------------------------------------------------------------- 联系表（F7 证据）
@@ -611,7 +867,7 @@ def write_report(out, results, extra, ctx):
 
 
 def run_all(foot, work, out, tl, edl, strict=False):
-    """跑 F1..F7 + 通用质检，写 work/footage-gates.json 与 out/QC-REPORT-footage.md。"""
+    """跑 F1..F9 + 通用质检，写 work/footage-gates.json 与 out/QC-REPORT-footage.md。"""
     work = Path(work)
     out = Path(out)
     run_id = "f%s" % footagekit._now().replace("-", "").replace(":", "")

@@ -417,14 +417,23 @@ def _load(path):
     except FileNotFoundError:
         return None
     except json.JSONDecodeError as e:
-        raise SystemExit("[intake] %s 不是合法 JSON：%s" % (path, e)) from e
+        raise SystemExit(
+            "[intake] %s 不是合法 JSON：%s\n"
+            "  问诊单坏掉后 --set / --finalize 都会失败（不能静默覆盖旧答案）；"
+            "只读命令（--questions / --recommend）仍可用。\n"
+            "  要重来：把它移走留档，再重新问一遍。" % (path, e)) from e
+
+
+_TMP_SEQ = [0]
 
 
 def _atomic_write(path, text):
     d = os.path.dirname(os.path.abspath(path))
     if d:
         os.makedirs(d, exist_ok=True)
-    tmp = path + ".part"
+    # 临时名必须唯一：固定 ".part" 时两个进程同时写同一文件会互相截断。
+    _TMP_SEQ[0] += 1
+    tmp = "%s.part-%d-%d" % (path, os.getpid(), _TMP_SEQ[0])
     with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     os.replace(tmp, path)
@@ -613,7 +622,14 @@ def main(argv=None):
                     help="按题材推荐制作方式（自己画 / 网上素材剪辑 / 两者结合）；"
                          "不给 TEXT 就用问诊单里已写的题材")
     a = ap.parse_args(argv)
-    _saved = _load(intake_path(a.work)) or {}
+    try:
+        _saved = _load(intake_path(a.work)) or {}
+    except SystemExit:
+        # 问诊单坏了不该挡住"重新出题/出推荐"——那正是修复的第一步。
+        # 写盘命令不受影响：它们稍后仍会 _load 一次并当场报错（不能静默覆盖旧答案）。
+        _saved = {}
+        print("[intake] 问诊单读不出（坏 JSON）：只读命令按空单继续；写盘命令会报错",
+              file=sys.stderr)
     form = int(a.hybrid_form if a.hybrid_form is not None
                else (_saved.get("hybridForm") or 3))
 
@@ -674,15 +690,18 @@ def main(argv=None):
             # schema 1 的问诊单没有「制作方式」：不能静默补一个模式，否则等于替用户选了产线。
             # （--defaults 是显式调用，会补 mode=auto，再由题材落地——那是用户自己要的默认，
             #  不算静默；这里只说清"还差这一题"，不替用户决定。）
+            # --json 的契约是 stdout 只输出 JSON：提示一律走 stderr，否则机读端解析失败。
             print("[intake] 问诊单是旧版（schema %d）：本次新增「制作方式」题（mode），"
-                  "请先把它问一次（或显式 --defaults 用 auto 补齐）再 --finalize" % old_schema)
+                  "请先把它问一次（或显式 --defaults 用 auto 补齐）再 --finalize" % old_schema,
+                  file=sys.stderr if a.json else sys.stdout)
         if a.set:
             for item in a.set:
                 if ":" not in item:
                     raise SystemExit("[intake] --set 要用 ID:VALUE，收到 %r" % (item,))
                 qid, raw = item.split(":", 1)
                 _apply(data, qid.strip(), raw)
-            print("[intake] 已记录 %d 条答案" % len(a.set))
+            print("[intake] 已记录 %d 条答案" % len(a.set),
+                  file=sys.stderr if a.json else sys.stdout)
         if a.defaults:
             got = 0
             for q in QUESTIONS:
@@ -691,7 +710,8 @@ def main(argv=None):
                 if not str((data.get("answers") or {}).get(q["id"]) or "").strip():
                     _apply(data, q["id"], q["default"])
                     got += 1
-            print("[intake] 用推荐项补齐了 %d 项（--defaults）" % got)
+            print("[intake] 用推荐项补齐了 %d 项（--defaults）" % got,
+                  file=sys.stderr if a.json else sys.stdout)
         miss = _missing(data)
         data["missing"] = miss
         data["brief"] = brief_text(data)

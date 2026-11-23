@@ -26,7 +26,7 @@
 
 接口
 ----
-    synthetic_timeline(script, fake_voice_dur=2.0, fps=30) -> dict
+    synthetic_timeline(script, fake_voice_dur=3.2, fps=30, plan=None) -> dict
     render_preview_frames(plan, script, times, outdir, theme=None) -> list[str]
     contact_sheet(paths, out_png, cols=None) -> str
     preview_candidate(design, script, outdir, n_frames=4, with_audio=False) -> dict
@@ -41,8 +41,9 @@ times 的语义：**全片绝对秒**（0 <= t <= total）。也接受 ``[scene_
 1. **scene_type 必须来自 grammar.plan_scenes**。scenes.draw_frame 在 scene_type 为空时会
    按 kind 回退（_KIND_TO_TYPE），那样看到的不是真实构图（hook->hero、body->list…），
    "预览"就成了另一种片子。本模块每次都显式调一次 plan_scenes 再画。
-2. **每帧必须真的是 1920x1080**。draw_frame 与 draw_subtitle 之后各校验一次，不符直接
-   raise——静默输出一张 1280x720 的"预览"比报错更糟。
+2. **每帧必须真的是当前画布尺寸**（横屏 1920x1080 / 竖屏 1080x1920，见 CANVAS）。
+   draw_frame 与 draw_subtitle 之后各校验一次，不符直接 raise——静默输出一张尺寸不对的
+   "预览"比报错更糟。
 3. **designkit 由并行任务实现，本模块不自己实现它**。这里只依赖它的
    ``design_to_plan(design) -> plan`` 一个函数；designkit 还没就绪（import 失败或缺该函数）
    时，``design_to_plan`` 会用清晰的中文报错说明"缺什么、怎么绕过"，绝不静默回落到某一套
@@ -250,36 +251,43 @@ def _scene_at(scenes, t):
 
 
 def _require_canvas(img, scene, t, stage):
-    """尺寸硬校验：方案预览必须是 1920x1080（不缩、不裁、不拉伸）。"""
+    """尺寸硬校验：方案预览必须等于当前 layout profile 的画布（不缩、不裁、不拉伸）。"""
     if img is None:
         raise RuntimeError("%s：场景 %s 在 t=%.3fs 返回 None（必须返回 PIL.Image）"
                            % (stage, scene.get("id"), t))
     size = tuple(int(v) for v in getattr(img, "size", (0, 0)))
     if size != CANVAS:
         raise RuntimeError("%s：场景 %s 在 t=%.3fs 渲染出 %dx%d，期望 %dx%d"
-                           "（方案预览固定 1080p，尺寸不符说明绘制器/主题有问题）"
+                           "（方案预览画布跟随 layout profile，尺寸不符说明绘制器/主题有问题）"
                            % (stage, scene.get("id"), t, size[0], size[1],
                               CANVAS[0], CANVAS[1]))
 
 
 # ---------------------------------------------------------------- 合成时间轴
-def synthetic_timeline(script, fake_voice_dur=DEFAULT_FAKE_VOICE_DUR, fps=30):
+def synthetic_timeline(script, fake_voice_dur=DEFAULT_FAKE_VOICE_DUR, fps=30, plan=None):
     """用"假语音时长"排一条确定性时间轴（不联网、不读 TTS 产物）。
 
-    每句 dur 固定为 ``fake_voice_dur``，其余（lead/tail/min_dur/hold/bar）照常走
-    filmkit.build_timeline；lead/tail/min_dur 从 script 取，缺省值与
-    tools/golden_frames.py:183-216 一致（0.55 / 0.85 / 3.0）。
+    每句 dur 固定为 ``fake_voice_dur``，其余（lead/tail/min_dur/hold）照常走
+    filmkit.build_timeline。lead/tail/min_dur/hold 的取值顺序与 render.st_layout 完全一致：
+    script 里显式写了就优先，否则用**设计计划的 pacing**，最后才是缺省值
+    （0.55 / 0.85 / 3.0 / 0.0）。
+
+    为什么必须读 plan["pacing"]：设计会改节奏（lead 0.45~0.85 / tail 0.75~1.1 /
+    min_dur 2.6~3.5 / hold 0~0.4）。只按缺省值排轴，预览的段长就与成片不同——
+    段长又决定 grammar 能不能画出 chart/compare/process（它们有最短段长门槛），
+    于是预览里看到的构图可能成片里根本没有。这正是预览最不该犯的错。
 
     返回 filmkit.build_timeline 的**原样结构**：{total, scenes, fps, frames}
     （每段带 id/kind/start/end/dur/voice_start/voice_end 与剧本原字段）。
 
-    注意：这不是成片时间轴。真实旁白时长不同 -> 段时长不同 -> 同一个"段内时刻"对应的
-    画面进度略有差异（缓动/入场动画的百分比）。所以本函数只用于"看一眼构图与配色"，
-    不用它反推成片时长。
+    注意：这不是成片时间轴。真实旁白时长被替换成了 fake_voice_dur，绝对时间必然不同，
+    所以本函数只用于"看一眼构图与配色"，不用它反推成片时长。
     """
     K, _ST, _G = _modules()
     if not isinstance(script, dict):
         raise TypeError("script 必须是 dict（film.json 的内容），收到 %s" % type(script).__name__)
+    pace = plan.get("pacing") if isinstance(plan, dict) else None
+    pace = pace if isinstance(pace, dict) else {}
     try:
         fake = float(fake_voice_dur)
     except (TypeError, ValueError):
@@ -300,12 +308,12 @@ def synthetic_timeline(script, fake_voice_dur=DEFAULT_FAKE_VOICE_DUR, fps=30):
 
     return K.build_timeline(
         lines,
-        lead=float(script.get("lead", 0.55)),
-        tail=float(script.get("tail", 0.85)),
-        min_dur=float(script.get("min_dur", 3.0)),
+        lead=float(script.get("lead", pace.get("lead", 0.55))),
+        tail=float(script.get("tail", pace.get("tail", 0.85))),
+        min_dur=float(script.get("min_dur", pace.get("min_dur", 3.0))),
         tail_map=script.get("tail_map"),
         lead_map=script.get("lead_map"),
-        hold=float(script.get("hold", 0.0)),
+        hold=float(script.get("hold", pace.get("hold", 0.0))),
         max_dur=script.get("max_dur"),
         fps=int(fps),
     )
@@ -382,7 +390,13 @@ def render_preview_frames(plan, script, times, outdir, theme=None):
     outdir = os.path.abspath(str(outdir))
     os.makedirs(outdir, exist_ok=True)
 
-    tl = synthetic_timeline(script, fps=_fps_of(script, plan))
+    # plan 一并传进去：lead/tail/min_dur/hold 必须与 render.st_layout 同源，否则预览段长
+    # 与成片不同，grammar 的最短段长门槛会把 chart/compare/process 判成别的构图。
+    tl = synthetic_timeline(script, fps=_fps_of(script, plan), plan=plan)
+    # 字幕样式：render.py 的 frames/stills 与 qavmaf 参考帧都传 design 的 visual.subtitle
+    # （见 filmkit.subtitle_kwargs 与 qavmaf._sub_kw_for 的实测说明）。预览不传就永远是
+    # filmkit 模块默认值（46px / plate_alpha=150），用户看到的是"另一套字幕"。
+    sub_kw = K.subtitle_kwargs(plan)
     # 唯一 scene_type 来源。注意 scenes.draw_frame 已**没有** legacy 分支（stylekit 也不再
     # 产出 legacy 计划），所以这里补的 scene_type 一定会被真正用到。
     # 预览绝不允许 scene_type 为空：为空时 scenes 会静默落到 statement，看起来"能出图"，
@@ -410,7 +424,7 @@ def render_preview_frames(plan, script, times, outdir, theme=None):
         img = mod.draw_frame(scene, local, float(scene["dur"]), t, draw_script, frame_no)
         _require_canvas(img, scene, t, "draw_frame")
         img = K.draw_subtitle(img, K.sub_at(tl["scenes"], t, hold), theme=th,
-                              words=K.sub_words_at(tl["scenes"], t, hold))
+                              words=K.sub_words_at(tl["scenes"], t, hold), **sub_kw)
         _require_canvas(img, scene, t, "draw_subtitle")
         path = os.path.join(outdir, "%02d_%s_%05.2f.png" % (i, scene.get("id") or "s", t))
         img.save(path, compress_level=PNG_COMPRESS_LEVEL)
@@ -678,7 +692,7 @@ def preview_candidate(design, script, outdir, n_frames=DEFAULT_FRAMES, with_audi
     plan = design_to_plan(design)
 
     script = dict(script or {})
-    tl = synthetic_timeline(script, fps=_fps_of(script, plan))
+    tl = synthetic_timeline(script, fps=_fps_of(script, plan), plan=plan)
     # 显式调一次：要求"先定分镜再取样"（同时把 scene_type 写进 tl["scenes"]，
     # 下面的 render_preview_frames 会用同一条确定性规则再算一遍，代价是微秒级）。
     _G = _modules()[2]

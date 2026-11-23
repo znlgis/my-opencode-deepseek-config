@@ -7,6 +7,8 @@
  "required": [
   "schema",
   "id",
+  "label",
+  "pitch",
   "structure",
   "visual",
   "audio",
@@ -48,14 +50,15 @@
     "segments": {
      "type": "integer",
      "minimum": 1,
-     "maximum": 40
+     "maximum": 40,
+     "description": "段落数（设计期叙事结构）。**保留字段**：design_to_plan 不转 segments，渲染不按它分段；成片段落由 film.json 的 lines 与 grammar 推导。"
     },
     "beats": {
      "type": "array",
      "items": {
       "type": "string"
      },
-     "description": "每段叙事用途，如 hook/stat/compare/outro"
+     "description": "每段叙事用途，如 hook/stat/compare/outro。**保留字段**：designkit 采样会按它记录，但 design_to_plan 只转 target_sec / target_mode，渲染不读 beats。"
     },
     "hold_policy": {
      "type": "string",
@@ -63,7 +66,8 @@
       "none",
       "readable",
       "long"
-     ]
+     ],
+     "description": "停留策略。**保留字段，不进渲染计划**：designkit 采样会随机写它、它也进设计指纹的 tempo 维度；design_to_plan 不转这个键，渲染不读它。成片节奏以 pacing.lead/tail/min_dur/hold 为准（枚举仍由 designkit 校验，乱写会被拒）。"
     },
     "target_sec": {
      "type": [
@@ -92,6 +96,7 @@
    "type": "object",
    "required": [
     "palette",
+    "family",
     "typography",
     "motif",
     "transition",
@@ -104,6 +109,7 @@
    "properties": {
     "palette": {
      "type": "object",
+     "description": "11 个颜色角色。两种写法都认：[r,g,b]（0–255 整数三元素）或 \"#rrggbb\"/\"#rgb\"（与 visual.subtitle.color 同口径；designkit.validate_design 走 stylekit._color_of 现场解析，所以 hex 不会在渲染期崩）。",
      "required": [
       "bg",
       "bg2",
@@ -120,114 +126,158 @@
      "additionalProperties": false,
      "properties": {
       "bg": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "bg2": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "surface": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "ink": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "muted": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "dim": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "accent": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "accent2": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "good": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "bad": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       },
       "rule": {
-       "type": "array",
+       "type": [
+        "array",
+        "string"
+       ],
        "items": {
         "type": "integer",
         "minimum": 0,
         "maximum": 255
        },
        "minItems": 3,
-       "maxItems": 3
+       "maxItems": 3,
+       "pattern": "^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$"
       }
      }
     },
@@ -246,7 +296,8 @@
       "tracking",
       "line_gap",
       "number",
-      "ratio"
+      "ratio",
+      "align"
      ],
      "additionalProperties": false,
      "properties": {
@@ -292,7 +343,8 @@
      "type": "object",
      "required": [
       "kind",
-      "density"
+      "density",
+      "detail"
      ],
      "additionalProperties": false,
      "properties": {
@@ -350,6 +402,7 @@
      "type": "object",
      "required": [
       "ease",
+      "enter",
       "push",
       "breathe_hz"
      ],
@@ -388,7 +441,8 @@
      "type": "object",
      "required": [
       "x",
-      "y"
+      "y",
+      "inset"
      ],
      "additionalProperties": false,
      "properties": {
@@ -437,7 +491,7 @@
        "split-right"
       ]
      },
-     "description": "片内版式轮换顺序（可选）。grammar.plan_scenes 在 plan 没有显式 chapter_layout 时，按「章节首次出现的顺序」依次取 cycle[0]、cycle[1]… 循环；同一章内版式固定（观众视角一章是一段整体），换章才换版式——这正是「同一视频内部不要大面积重复」的实现。至少 2 种不同版式（只写一种等于不轮换，designkit.validate_design 报错）。不写 = design_to_plan 按设计指纹自动派生 2–3 种；没有这个键时 grammar 走 layout_default。"
+     "description": "片内版式轮换顺序（可选）。grammar.plan_scenes 在 plan 没有显式 chapter_layout 时，按「章节首次出现的顺序」依次取 cycle[0]、cycle[1]… 循环；同一章内版式固定（观众视角一章是一段整体），换章才换版式——这正是「同一视频内部不要大面积重复」的实现。至少 2 种不同版式（只写一种等于不轮换，designkit.validate_design 报错）。**手写 design 不写这个键时 design_to_plan 不会自动派生**（plan 里就是空列表，grammar 走 layout_default，全片一张版式）；自动派生那段只在 designkit.sample_designs 采样时发生（采样器会写 2–3 种）。"
     },
     "subtitle": {
      "type": "object",
@@ -530,7 +584,7 @@
       "720x1280",
       "540x960"
      ],
-     "description": "画幅。**横屏 16:9（1920x1080 / 1280x720 / 960x540）与竖屏 9:16（1080x1920 / 720x1280 / 540x960）都支持**：内部构图跟随 layoutkit 的 profile（--layout portrait 切到 1080x1920），只允许 lanczos 下采样，非当前画布比例或上采样一律拒绝。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。与 film.json 的 video 块（width/height/fps）冲突时报错（fail-closed，绝不静默取其一）。"
+     "description": "画幅标注：横屏 16:9（1920x1080 / 1280x720 / 960x540）与竖屏 9:16（1080x1920 / 720x1280 / 540x960）。**保留字段，不进渲染计划**：design_to_plan 不转 size，实际画布由 layoutkit 的 profile 决定（render.py --layout portrait 切到 1080x1920），输出尺寸只允许同比例下采样（filmkit.video_plan 校验，非当前画布比例/上采样一律报错）。本字段只做设计契约校验，与 film.json 的 video 块**不会**互相报错。竖屏是 experimental：版式骨架与 compare/process/chart 已竖屏原生，排版节奏未按竖屏复核。"
     },
     "fps": {
      "type": "integer",
@@ -541,7 +595,7 @@
       50,
       60
      ],
-     "description": "帧率。与 film.json 的 video.fps 冲突时报错（fail-closed）。缺省 30。"
+     "description": "帧率标注。**保留字段，不进渲染计划**：design_to_plan 不转 fps，实际帧率取 film.json 的 video.fps（缺省 30），两者不一致也不会报错。"
     }
    }
   },
@@ -560,7 +614,30 @@
       "string"
      ],
      "required": [
-      "mode"
+      "mode",
+      "id"
+     ],
+     "pattern": "^zh-(?:CN|TW|HK)-[A-Z][A-Za-z]*Neural$",
+     "allOf": [
+      {
+       "if": {
+        "properties": {
+         "mode": {
+          "const": "edge_id"
+         }
+        },
+        "required": [
+         "mode"
+        ]
+       },
+       "then": {
+        "required": [
+         "map",
+         "jitter",
+         "max_distinct"
+        ]
+       }
+      }
      ],
      "additionalProperties": false,
      "properties": {
@@ -569,7 +646,8 @@
        "enum": [
         "edge_id",
         "wav"
-       ]
+       ],
+       "description": "edge_id = 从命名音色池取；wav = 用现成录音。**mode=edge_id 时还必须给 map / jitter / max_distinct，id 两种模式都必填**（designkit 按缺字段 fail-closed，不猜默认值）。"
       },
       "id": {
        "type": "string",
@@ -577,11 +655,13 @@
       },
       "rate": {
        "type": "string",
-       "default": "+0%"
+       "default": "+0%",
+       "description": "保留字段：designkit 只校验是字符串；design_to_plan 不把逐声线 rate/pitch 带进计划（渲染走 voicekit 的 rate_range / pitch_range 策略），写了不生效。"
       },
       "pitch": {
        "type": "string",
-       "default": "+0Hz"
+       "default": "+0Hz",
+       "description": "保留字段：同 rate，不进入渲染计划（voicekit 的 pitch_range 策略才是真源）。"
       },
       "map": {
        "type": "object",
@@ -602,7 +682,12 @@
     "music": {
      "type": "object",
      "required": [
-      "mode"
+      "mode",
+      "scale",
+      "bpm",
+      "key",
+      "mood",
+      "seed"
      ],
      "additionalProperties": false,
      "properties": {
@@ -616,20 +701,21 @@
       },
       "arranger": {
        "type": "string",
-       "description": "参数化编排器的配置 id（P2 实现）"
+       "description": "保留字段（P2 预留）：design_to_plan 不转 arranger，musicgen.render 也没有编排器注册表；写了不生效。"
       },
       "style": {
        "type": "string",
        "description": "已废弃：配乐没有风格表，这个键不决定任何东西（保留只为老 design.json / 既有 fixture 能继续通过契约校验；designkit.validate_design 也接受它）"
       },
       "bpm": {
-       "type": [
-        "number",
-        "string"
-       ]
+       "type": "number",
+       "minimum": 40,
+       "maximum": 220,
+       "description": "BPM（designkit 按 40–220 校验）。**只接受数字**：design 是确定性参数，字符串 \"auto\" 只属于 film.json 的 legacy 兼容链。"
       },
       "key": {
-       "type": "string"
+       "type": "string",
+       "description": "调性名，必须落在与 scale 对应的调池：minor = Dm/Am/Em/Cm；major = C/G/D/F/A/Bb（stylekit.MINOR_KEYS / MAJOR_KEYS；designkit 报不匹配）。"
       },
       "scale": {
        "type": "string",
@@ -640,7 +726,17 @@
        "description": "调式（designkit 会校验；audio.music.scale 决定大调/小调）"
       },
       "mood": {
-       "type": "string"
+       "type": "string",
+       "enum": [
+        "calm",
+        "reflective",
+        "hopeful",
+        "steady",
+        "driving",
+        "tense",
+        "uplifting"
+       ],
+       "description": "情绪（designkit.MOODS 7 档）：只决定 musicgen 的 BPM 与织体门限，不指向任何现成曲风。"
       },
       "seed": {
        "type": "integer"
@@ -659,11 +755,12 @@
        "type": "array",
        "items": {
         "type": "object"
-       }
+       },
+       "description": "保留字段：design_to_plan 只转 bpm/key/scale/mood/seed 与 gain_db/duck_db/mode，sections 不进渲染计划；手工分段请写 film.json 的 music.sections。"
       },
       "file": {
        "type": "string",
-       "description": "mode=file 时的音频路径"
+       "description": "保留字段：design_to_plan 不转 file 路径。设计侧 mode=file 的语义固定为「用外部 work/music.wav」（filmkit.music_plan 只看文件在不在），写这个路径不生效。"
       }
      }
     },
@@ -692,7 +789,8 @@
        "type": "array",
        "items": {
         "type": "object"
-       }
+       },
+       "description": "保留字段：design_to_plan 只转 gain_db / enabled / density 到 audio_overrides，cues 不进渲染计划；音效提示点请写 film.json 的 sfx.cues（那里才有 sfxkit 配方与 at 锚点）。"
       }
      }
     }
@@ -704,7 +802,8 @@
     "lead",
     "tail",
     "min_dur",
-    "hold"
+    "hold",
+    "item_stagger"
    ],
    "additionalProperties": false,
    "properties": {

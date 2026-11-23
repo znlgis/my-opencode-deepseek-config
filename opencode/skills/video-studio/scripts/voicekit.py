@@ -638,6 +638,7 @@ def spec_key(spec):
     不复用旧的 tts_key（text|voice|rate|pitch）：那套键把 trim 漏在 key 外，
     同一句改 trim/trim_db 会静默复用旧音频。spec 传一行计划 + text 即可：
     spec_key(dict(plan[0], text=line["text"]))；trim/trim_db 缺省与 filmkit.tts 一致。
+    trim_db 与 filmkit.tts_key_v2 同口径（round 3 位），改任一侧都要同步。
     """
     spec = spec if isinstance(spec, dict) else {}
     try:
@@ -645,10 +646,14 @@ def spec_key(spec):
     except (TypeError, ValueError):
         trim_db = -42.0
     trim = 1 if _as_bool(spec.get("trim", True), True) else 0
-    raw = "v2|%s|%s|%s|%s|%s|%d|%.1f" % (
+    # trim_db 与 filmkit.tts_key_v2 同口径：那边是 round(float(trim_db), 3) 走 %s，
+    # 这里若用 "%.1f" 会在 0.12345 这类输入上分叉（"0.1" vs "0.123"），
+    # docstring 承诺的"可当合成缓存键"就不成立。默认 -42.0 两种写法都得到 "-42.0"，
+    # 已有默认口径的缓存不受影响。
+    raw = "v2|%s|%s|%s|%s|%s|%d|%s" % (
         str(spec.get("text") or ""), str(spec.get("voice") or ""),
         _norm_pct(spec.get("rate")), _norm_hz(spec.get("pitch")),
-        _norm_pct(spec.get("volume")), trim, trim_db)
+        _norm_pct(spec.get("volume")), trim, round(float(trim_db), 3))
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
 
@@ -748,6 +753,8 @@ def _store_calib(cache_path, text, row):
     """只缓存**成功测量**：失败也写会把一次断网固化成「测过」，之后永远读到假数据。"""
     _, voices = _load_calib(cache_path)
     voices = dict(voices)
+    if not math.isfinite(float(row["rms_db"])):   # 非有限值不落盘：写进去就是永久假数据
+        return "rms_db 非有限值（%r），未写缓存" % (row["rms_db"],)
     voices[row["voice"]] = {"rms_db": row["rms_db"], "cps": row["cps"], "dur": row["dur"]}
     # target_db 记下来只为审计（换机后一眼看出上次按多少 dBFS 补的）；
     # 读缓存时 gain 仍然用**当前** CALIB_TARGET_DB 现算，改目标不用清缓存。
@@ -804,6 +811,11 @@ def calibrate_voice(voice_id, cache_path=None, text=None):
     try:
         rms = float(hit["rms_db"]) if isinstance(hit, dict) else None
     except (KeyError, TypeError, ValueError):
+        rms = None
+    # 缓存里的 "nan"/"inf"（手改出来的、或早期版本写坏的）能过 float()，会一路变成
+    # gain_db = nan 并 measured=True —— 下游按"测过"用，整段旁音响度就成 NaN。
+    # 非有限值一律当作"没测过"，走重测/降级，别把坏数字当真。
+    if rms is not None and not math.isfinite(rms):
         rms = None
     if rms is not None:
         try:

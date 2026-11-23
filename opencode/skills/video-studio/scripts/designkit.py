@@ -85,6 +85,7 @@ import argparse
 import colorsys
 import hashlib
 import json
+import math
 import os
 import re
 import sys
@@ -436,7 +437,13 @@ def _canonical(obj):
 
 
 def _is_num(v):
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    """有限数值才算数：NaN / ±inf 会让后面的 lo/hi 比较全部为 False（静默通过）。"""
+    if not isinstance(v, (int, float)) or isinstance(v, bool):
+        return False
+    try:
+        return math.isfinite(float(v))
+    except (OverflowError, ValueError):        # 超长整数（JSON 里可以写 1e400 这种量级）
+        return False
 
 
 def _is_int(v):
@@ -869,6 +876,38 @@ def _validate_sfx(sfx, bad):
             bad.append("audio.sfx.cues 必须是对象数组")
 
 
+def _subtitle_contrast_problems(vis, sub, color):
+    """字幕自定义字色的对比度门禁：按**真实背板**（bg2 以 plate_alpha 盖在 bg 上）算。
+
+    为什么必须单独查：theme_lint 只检查主题里的 ink/muted/dim/accent，用户在
+    visual.subtitle.color 里另写一个颜色时，字色与背板的关系不在任何门禁里——
+    把 color 写成接近底色的值、plate_alpha 又设 0，全部门禁仍然全绿，成片字幕看不见。
+    """
+    pal = vis.get("palette") if isinstance(vis, dict) else None
+    if not isinstance(pal, dict):
+        return []                                   # 配色本身不合法，别重复报
+    try:
+        bg = ST._color_of(pal.get("bg"), "visual.palette.bg")
+        bg2 = ST._color_of(pal.get("bg2"), "visual.palette.bg2")
+    except Exception:                               # noqa: BLE001 —— 颜色条目已单独报错
+        return []
+    try:
+        alpha = sub.get("plate_alpha")
+        alpha = int(_SUBTITLE_DEFAULTS["plate_alpha"] if alpha is None else alpha)
+    except (TypeError, ValueError):
+        return []                                   # 取值合法性由 plate_alpha 自己的检查报
+    a = max(0, min(255, alpha)) / 255.0
+    # 背板 = bg2 以 alpha 叠在 bg 上（filmkit.draw_subtitle 的绘制口径）
+    plate = tuple(int(round(bg[i] * (1.0 - a) + bg2[i] * a)) for i in range(3))
+    got = ST.contrast(color, plate)
+    need = ST.LINT_LIMITS["muted"]
+    if got < need:
+        return ["visual.subtitle.color 对字幕背板的对比度 %.2f < %.1f（背板 = bg2 以 "
+                "plate_alpha=%d 叠在 bg 上）：字幕会看不清；把 color 换一档，或把 "
+                "plate_alpha 调高" % (got, need, alpha)]
+    return []
+
+
 def validate_design(design):
     """fail-closed 校验。返回问题列表（空 = 通过）。
 
@@ -1078,9 +1117,11 @@ def validate_design(design):
                 _enum_of(sub["family"], _FONT_FAMILIES_FOR_SUB, "visual.subtitle.family", bad)
             if "color" in sub and sub["color"] is not None:
                 try:
-                    ST._color_of(sub["color"], "visual.subtitle.color")
+                    _sub_color = ST._color_of(sub["color"], "visual.subtitle.color")
                 except Exception as e:                   # noqa: BLE001
                     bad.append("visual.subtitle.color 不是颜色（[r,g,b] 或 \"#rrggbb\"）：%s" % e)
+                else:
+                    bad.extend(_subtitle_contrast_problems(vis, sub, _sub_color))
             if "max_lines" in sub and sub["max_lines"] is not None:
                 _int_of(sub["max_lines"], "visual.subtitle.max_lines", bad, 1, 3)
 
@@ -1167,6 +1208,10 @@ def design_to_plan(design):
     au = design["audio"]
     pa = design["pacing"]
     mu = au["music"]
+    # design.audio.music.mode 必须真的被读（filmkit.music_plan 读 plan["music"]）：
+    # off = 本片不要配乐，file = 用外部 work/music.wav。params 是"按参数现场生成"的
+    # 缺省语义，写进计划反而会撞 music_plan 的 unknown-mode，所以只透传这两个值。
+    _music_mode = str(mu.get("mode") or "").strip().lower()
     lang = _language_of(design)
 
     seed = int(mu["seed"])
@@ -1180,18 +1225,21 @@ def design_to_plan(design):
         v_jitter, v_maxd, v_auto = 0.0, 1, False
     else:
         vid = str(vo["id"])
-        raw_map = vo["map"]
+        # mode="wav"（单条现成音频）时 validate_design 不要求 map/jitter/max_distinct；
+        # 这里原来无条件下标取这三个键，于是合法 design 到 design_to_plan 就 KeyError 'map'。
+        # 只有 edge_id（多声线派生）才读它们。
+        raw_map = vo.get("map") if str(vo.get("mode") or "") == "edge_id" else None
         vmap = {}
         for k in VOICE_KINDS:
-            if k in raw_map:
+            if isinstance(raw_map, dict) and k in raw_map:
                 v = raw_map[k]
                 vmap[k] = str(v["id"]) if isinstance(v, dict) else str(v)
         if not vmap:
             # 空 map 的语义 = 四个 kind 都用主声线（不是"缺字段回落"，是契约里写明的意思）
             vmap = {k: vid for k in VOICE_KINDS}
-        v_jitter = float(vo["jitter"])
-        v_maxd = int(vo["max_distinct"])
-        v_auto = True
+        v_jitter = float(vo.get("jitter") or 0.0)
+        v_maxd = int(vo.get("max_distinct") or 1)
+        v_auto = str(vo.get("mode") or "") == "edge_id"
     if "body" in vmap:
         v_default = vmap["body"]
     else:
@@ -1223,6 +1271,7 @@ def design_to_plan(design):
         "music": {
             # 没有 "style" 这个键 —— 配乐由 musicgen 现场编排，
             # 没有"曲风表"可指向。设计里残留的 style 字段被忽略。
+            **({"mode": _music_mode} if _music_mode in ("off", "file") else {}),
             "scale": mu["scale"],
             "bpm": float(mu["bpm"]),
             "bpm_source": "design",
@@ -1477,6 +1526,18 @@ _CATEGORY_WORD = {"palette": "配色", "motif": "母题", "transition": "转场"
 # 英文按"整词"认：不加边界的话 "warm-paper" 会顺带命中"纸卷/paper"、"female" 会命中"male"。
 _ASCII_WORD = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
+# 气质的"两侧"：「明亮活泼」(bright) 与「明亮 / 纸感」(light) 都是浅底，属同一侧；
+# dark 是另一侧。must 侧保留"要亮"的宽容（must bright 接受 light，见 _constraint_problems），
+# 但 avoid 侧必须对称：用户说「不要明亮」时，明亮活泼与浅色纸感都算违反——否则一半候选
+# 会是带色的浅底（实测 8 次采样 4 次违反），这条要求等于只写了一半。
+_TONE_LIGHT_SIDE = (_TONE_BRIGHT, _TONE_LIGHT)
+
+
+def _tone_side(value):
+    """气质取值 -> 同一明暗侧的全部档位（亮侧两档 / 暗侧一档）。"""
+    return _TONE_LIGHT_SIDE if value in _TONE_LIGHT_SIDE else (value,)
+
+
 
 def _alias_spans(text_low, alias):
     """alias 在 text 里的所有起点；英文别名要求前后不紧贴字母数字（整词）。"""
@@ -1652,10 +1713,25 @@ def _resolve_constraints(brief):
     if _conflict:
         raise ValueError(_conflict)
 
+    # 气质按"明暗侧"互斥：must 要深色，avoid 又说不要明亮（或反过来）——同一侧两头堵，
+    # 任何候选都满足不了。必须在采样前点名，否则只会得到 50 次重采样后的通用报错，
+    # 用户看不出是哪两个词在打架（与配色锚点/气质冲突同一处理口径）。
+    _must_tone = must.get("tone")
+    if _must_tone is not None:
+        for _aval, _aword, _asrc in avoid.get("tone", ()):
+            if _must_tone[0] in _tone_side(_aval):
+                raise ValueError(
+                    "brief 的约束互斥：must_have「%s」要求气质=%s，而 avoid「%s」排除了"
+                    "同一明暗侧的「%s」——没有任何候选能同时满足，请去掉其中一条"
+                    % (_must_tone[1], _must_tone[0], _asrc, _aword))
+
     domain = {}
     for cat, values in _CATEGORY_VALUES.items():
         want = must.get(cat)
         banned = [v for v, _w, _s in avoid.get(cat, ())]
+        if cat == "tone":
+            # avoid 侧按"明暗侧"整侧排除（见 _tone_side）：只排一个档位会漏掉同侧的另一个。
+            banned = [alt for v in banned for alt in _tone_side(v)]
         if cat == "palette":
             # 配色是**连续色相空间**，不能按"枚举过滤"处理（那会直接清空可选范围）。
             # 约束在这里被翻译成色相窗口：要"深蓝"= 采 h≈210±26° 且暗色底；
@@ -1840,8 +1916,8 @@ def _constraint_problems(design, must, avoid):
         if cat == "tone":
             got_t = _design_value(design, cat)
             for val, word, _src in rows:
-                hit = (got_t == val) or (val == _TONE_BRIGHT and got_t == _TONE_LIGHT)
-                if hit:
+                # 与必须项同一条口径：avoid「明亮」也排除了明亮活泼（浅底同一侧）。
+                if got_t in _tone_side(val):
                     bad.append("气质=%r 违反了 avoid「%s」" % (got_t, word))
             continue
         got = _design_value(design, cat)
@@ -2253,7 +2329,7 @@ def sample_designs(brief, n=3, seed=None):
             # 同批候选的**版式**不许撞车（n<=3 时）。
             #
             # 为什么单独管这一条：design_distance 在母题/转场/缓动/编号/配乐上很容易凑够
-            # 2 维，但剪影门禁（G13）量的是**构图骨架**——两个候选都用 left-stack、
+            # 2 维，但剪影门禁（S13，离线检查）量的是**构图骨架**——两个候选都用 left-stack、
             # 只有母题与配色不同时，三值化后的前景占比/重心/边带基本同形，实测被判
             # "换风格仍只是换色"。版式在 n<=3 时互斥是最省力的结构分叉（3 个候选正好
             # 对应 3 种版式）。

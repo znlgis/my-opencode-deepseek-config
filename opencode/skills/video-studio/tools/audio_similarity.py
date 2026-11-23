@@ -14,8 +14,12 @@
                 换编排参数（mood + 音色） -> 相关性（目标 <= 0.52）
     B 跨片音效：同 cue 序列，legacy（不传 style/content_fp）必须逐样本相同；
                 不同 content_fp 必须不同（否则"跨片音效都一样"没被修掉）
-    C 片内分离：duck 默认深度（目标 >= 3.5 dB）与配乐/音效的频谱质心对照
+    C 片内分离：duck 默认深度（契约目标 3.5–5.5 dB；量的是 render.py 的基线默认值，
+                不随设计风格变化）与配乐/音效的频谱质心对照
     D 旁白优先：人声段 旁白/背景 响度差（目标 >= 12 dB）+ 侧链让位 >= 4 dB
+
+A 组的阈值是按 --dur 的默认 20 s 标定的：对照时长改小会改变相关性（实测 4/6/10 s
+时 A2 分别为 0.58/0.62/0.54，都超过 0.52），短时长只适合快速诊断，不是验收口径。
 
 两种用法：不带 --strict 是诊断（打印对照数值），--strict 是验收（逐条对阈值判定，失败 exit 1）。
 """
@@ -23,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import re
 import sys
 from pathlib import Path
@@ -41,6 +46,7 @@ THRESH_A_CROSS_STYLE_MAX = 0.52     # 换编排参数的相关性上限（改造
 # 生成链是确定性的，换平台/换 numpy 若把实测值推过线，先查 musicgen 的参数有没有
 # 变成死旋钮，别第一反应去抬阈值。
 THRESH_C_DUCK_MIN = 3.5             # duck 默认深度下限（dB）
+THRESH_C_DUCK_MAX = 5.5             # duck 默认深度上限（dB）：压太狠配乐会"一抖一抖"
 THRESH_D_SNR_MIN = 12.0             # 人声段 旁白/背景 响度差下限（dB）
 
 FAILS = []
@@ -197,6 +203,14 @@ def main(argv=None):
     ap.add_argument("--dur", type=float, default=20.0, help="配乐对照时长（秒）")
     ap.add_argument("--strict", action="store_true", help="按契约 §5 阈值判定，失败 exit 1")
     args = ap.parse_args(argv)
+    # musicgen 对 duration 只做 isfinite/正数校验，0/负数/NaN/inf 会从 A 组深处抛
+    # ValueError traceback（退出码 1 与"阈值不达标"混在一起）。参数错误在这里说清楚。
+    if not (math.isfinite(args.dur) and args.dur > 0.0):
+        ap.error("--dur 必须是有限正数（秒），收到 %r" % (args.dur,))
+    if args.dur < 12.0:
+        print("[WARN] --dur %.2f s 过短：A 组相关系数随对照窗口变化，阈值按默认 20 s 标定"
+              "（实测 4/6/10 s 的 A2 = 0.58/0.62/0.54，都 > 0.52），"
+              "此时的 STRICT FAIL 不代表回归" % args.dur, file=sys.stderr)
 
     import sfxkit as SX
 
@@ -238,10 +252,20 @@ def main(argv=None):
     legacy_same = bool(np.array_equal(b_legacy1, b_legacy2))
     cross_diff = not bool(np.array_equal(b_new_a, b_new_b))
     repeat_same = bool(np.array_equal(b_new_a, b_new_a2))
+    # B 组前置条件：整条音效轨真的出了声。B1/B3 在"空轨/全静音"上天然成立（两个空
+    # 数组逐样本相等），没有这道前置，CueBus 退化成不出声时 B1/B3 仍会 PASS——
+    # 与 A0 盯配乐非静音是同一个理由。
+    b_tracks = (b_legacy1, b_legacy2, b_new_a, b_new_b, b_new_a2)
+    b_len = min(int(np.asarray(x).shape[0]) for x in b_tracks)
+    b_rms = min(_rms(x) for x in b_tracks)
+    print("  音效轨非静音 / 非空            : %s  （rms=%.4f，len=%d）"
+          % (bool(b_len > 0 and b_rms > 0.001), b_rms, b_len))
     print("  legacy（不传 style/fp）两次相同 : %s  （必须 True，逐样本兼容）" % legacy_same)
     print("  不同内容指纹 -> 音效轨不同      : %s  （必须 True）" % cross_diff)
     print("  同内容指纹两次相同              : %s  （必须 True，可复现）" % repeat_same)
     if args.strict:
+        _ok("B0 音效轨非静音", b_len > 0 and b_rms > 0.001,
+            "rms=%.4f len=%d" % (b_rms, b_len))
         _ok("B1 legacy 逐样本兼容", legacy_same, "两次渲染相同")
         _ok("B2 跨片音效可区分", cross_diff, "不同 content_fp 不再逐样本相同")
         _ok("B3 音效可复现", repeat_same, "同 content_fp 逐样本一致")
@@ -251,8 +275,8 @@ def main(argv=None):
     print("C. 片内分离：混音 duck 深度 + 频谱质心对照")
     print("=" * 72)
     duck = _duck_default()
-    print("  duck 默认深度                   : %.1f dB  （目标 >= %.1f）"
-          % (duck, THRESH_C_DUCK_MIN))
+    print("  duck 默认深度                   : %.1f dB  （契约 %.1f–%.1f；量的是默认值，"
+          "不随风格变化）" % (duck, THRESH_C_DUCK_MIN, THRESH_C_DUCK_MAX))
     for name, x in (("impact", SX.render("impact", seed=1000)),
                     ("whoosh", SX.render("whoosh", seed=1000)),
                     ("riser", SX.render("riser", seed=1000)),
@@ -260,7 +284,8 @@ def main(argv=None):
         print("  %-12s 频谱质心 ~ %6.0f Hz" % (name, _centroid_hz(x)))
     print("  提示音调性跟随：in_key 现在接受 key=（配乐调性），不再硬编码 Dm。")
     if args.strict:
-        _ok("C1 duck 加深", duck >= THRESH_C_DUCK_MIN, "duck=%.1f dB" % duck)
+        _ok("C1 duck 默认在契约区间", THRESH_C_DUCK_MIN <= duck <= THRESH_C_DUCK_MAX,
+            "duck=%.1f dB（%.1f–%.1f）" % (duck, THRESH_C_DUCK_MIN, THRESH_C_DUCK_MAX))
 
     print()
     print("=" * 72)

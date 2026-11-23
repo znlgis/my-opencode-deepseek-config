@@ -22,7 +22,7 @@ hybrid（素材段 + 图文段）最容易出问题的地方不是代码，是**
 
 用法
 ----
-    python matchstyle.py --footage footage.json --work work --report      # 只看画像，不改任何文件
+    python matchstyle.py --footage footage.json --work work --report      # 只看画像（只写 work/style_profile.json，不改 design/footage）
     python matchstyle.py --footage footage.json --work work --apply       # 写 design.json + footage.json
 
     --align-bars   连遮幅几何一起对齐（改 treatment.scale，让素材黑边高度接近自绘段）
@@ -62,6 +62,7 @@ BARS_DEFAULT = {"top": 40, "bottom": 44}
 
 SCHEMA = 1
 OUT_W, OUT_H = 160, 90          # 抽样分辨率：只用来取颜色分布，不追求清晰
+_TMP_SEQ = [0]                  # 原子写的临时文件序号（见 _write_json_atomic）
 V_FLOOR, V_CEIL = 0.05, 0.97    # 纯黑黑边与过曝高光不参与统计
 S_FLOOR = 0.06                  # 近灰像素的"色相"没有意义，权重记 0
 
@@ -83,11 +84,28 @@ def _load_json(path, default=None):
         return default
 
 
+def _load_json_status(path):
+    """-> (data, status)，status ∈ {"ok", "absent", "broken"}。
+
+    坏 JSON 不能当成"没有这个文件"：前者要修，后者补文件就行；混成一句
+    "没有 work/edl.json" 会让人去创建一份本来就存在（只是写坏了）的文件。
+    """
+    try:
+        with open(str(path), "r", encoding="utf-8") as fh:
+            return json.load(fh), "ok"
+    except FileNotFoundError:
+        return None, "absent"
+    except (OSError, ValueError):
+        return None, "broken"
+
+
 def _write_json_atomic(path, data):
     """原子写：先写同目录临时文件再替换，半截文件永远不会出现在盘上。"""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_suffix(p.suffix + ".tmp")
+    # 临时名必须唯一：固定 ".tmp" 时两个并发 --apply 会互相截断对方的临时文件。
+    _TMP_SEQ[0] += 1
+    tmp = p.with_suffix("%s.tmp-%d-%d" % (p.suffix, os.getpid(), _TMP_SEQ[0]))
     tmp.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
     os.replace(str(tmp), str(p))
 
@@ -142,6 +160,8 @@ def _times_of(footage, edl, per_source):
     与文案无关的镜头），把它们算进"整体风格"会把配色拉向一个片子里根本没有的气质。
     """
     footagekit = _modules()[2]
+    # --n-frames 0 会让下面的 len(times)/per_source 除零（CLI 的 type=int 不挡 0）。
+    per_source = max(1, int(per_source))
     srcs = footagekit.source_map(footage)
     order = [str(s["id"]) for s in footage.get("sources") or []]
     out = {sid: [] for sid in order}
@@ -319,7 +339,8 @@ def measure(footage, edl, work, per_source=9):
     prof["sources"] = used
     prof["sampling"] = {"from": "edl" if from_edl else "uniform",
                         "color_filter": color_eq,
-                        "crop": ("%d:%d:%d:%d" % crop) if crop else ""}
+                        "crop": ("%d:%d:%d:%d" % crop) if crop else "",
+                        "edl_status": "ok" if from_edl else "absent"}
     return prof, rows
 
 
@@ -590,11 +611,19 @@ def _day_night_conflict(design, family):
             % bg_luma)
 
 
-def _warnings_of(prof, bars, measured_luma=None):
+def _warnings_of(prof, bars, measured_luma=None, edl_status="absent"):
     out = []
     if prof["sampling"]["from"] == "uniform":
-        out.append("没有 work/edl.json：按全片均匀抽样（会混进没用上的段落，"
-                   "先跑 footage.py --stage edl 再测会更准）")
+        # 坏 JSON 与"没有文件"要分开说：前者去修，后者去补，混成一句会让人补错文件。
+        if edl_status == "broken":
+            out.append("work/edl.json 存在但读不出（坏 JSON）：本次按全片均匀抽样"
+                       "（会混进没用上的段落）；修好 EDL 再测更准")
+        elif edl_status == "ok":
+            out.append("work/edl.json 里没有 shots：按全片均匀抽样"
+                       "（先跑 footage.py --stage edl 再测会更准）")
+        else:
+            out.append("没有 work/edl.json：按全片均匀抽样（会混进没用上的段落，"
+                       "先跑 footage.py --stage edl 再测会更准）")
     if prof["hue_spread"] > 40.0:
         out.append("素材色相离散度 %.0f°（>40°）：素材本身色调就不统一，"
                    "先统一 treatment.color 再谈『向素材看齐』" % prof["hue_spread"])
@@ -627,19 +656,26 @@ def run(args):
         log("[matchstyle] 找不到 footage.json：%s（素材线的契约文件）" % foot_path)
         return 2
     footage = footagekit.load_footage(str(foot_path))
-    edl = _load_json(work / "edl.json", default=None)
-    design = _load_json(design_path, default=None)
-    if bool(args.apply) and not isinstance(design, dict):
+    edl, edl_status = _load_json_status(work / "edl.json")
+    design, design_status = _load_json_status(design_path)
+    if bool(args.apply) and design_status != "ok":
         # 前置条件不满足：退 2 且**零写入**。不能退 1——1 是"跑了但失败"，
         # 调用方（agent 或流水线）分不清"该去补设计"还是"素材坏了"。
-        log("[matchstyle] --apply 需要 %s（先用 propose.py --confirm 冻结设计）" % design_path)
+        why = ("（文件存在但读不出：坏 JSON，先修好或重跑 --confirm）"
+               if design_status == "broken" else "（先用 propose.py --confirm 冻结设计）")
+        log("[matchstyle] --apply 需要可读的 %s%s" % (design_path, why))
         return 2
 
     prof, _rows = measure(footage, edl, work, per_source=args.n_frames)
+    # 抽样来源是 measure 判的，但"EDL 到底是不在还是坏了"只有这里知道；写进画像以便复现。
+    prof["sampling"]["edl_status"] = edl_status
     palette, family = palette_for(prof, sat_damp=args.sat_damp)
     bars = letterbox_of(footage, design)
     near_black = _near_black(family["hue"], family["sat"])
-    prof["warnings"] = _warnings_of(prof, bars)
+    prof["warnings"] = _warnings_of(prof, bars, edl_status=edl_status)
+    if design_status == "broken":
+        prof["warnings"].append("%s 存在但读不出（坏 JSON）：本次按\"没有设计\"处理，"
+                                "遮幅对照不可用" % design_path)
     conflict = _day_night_conflict(design, family)
     if conflict:
         prof["warnings"].append(conflict)
@@ -736,7 +772,8 @@ def _print_report(p):
         log("  备份: %s / %s" % (p.get("backups", {}).get("design"),
                                  p.get("backups", {}).get("footage")))
     else:
-        log("  未改动任何文件（--report）。要落地：加 --apply（对齐画幅再加 --align-bars）")
+        log("  只写了工作目录的 style_profile.json 画像快照，没改 design/footage。"
+        "要落地：加 --apply（对齐画幅再加 --align-bars）")
     for n in p["next"]:
         log("  下一步: %s" % n)
 

@@ -113,8 +113,9 @@ python <SKILL_DIR>/scripts/render.py --script film.json --work work --out out/fi
 ### 4.3 visual.layout_cycle（可选）
 
 按**章节**轮换版式：同一章内版式固定，换章才换。元素取 `left-stack` / `center-stack` / `split-right`，
-**至少 2 种不同版式**（只写一种会被 `validate_design` 拒绝）。不写时 `design_to_plan` 按设计指纹自动派生
-**2–3 种**——默认就不会"全片一张版式"。`--stage layout` 会把每段选的版式写进 `work/storyboard.json` 的
+**至少 2 种不同版式**（只写一种会被 `validate_design` 拒绝）。
+注意派生发生在**采样器**（`sample_designs` 会按设计指纹派生 2–3 种写进候选）；手写 design 不写这个字段时
+`design_to_plan` **不派生**，全片只用 `visual.layout` 那一种。`--stage layout` 会把每段选的版式写进 `work/storyboard.json` 的
 `layout` 字段，可逐段审计。
 
 ### 4.4 配色不是随便取色

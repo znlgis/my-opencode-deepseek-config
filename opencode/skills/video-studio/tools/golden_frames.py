@@ -478,6 +478,7 @@ def write_golden(script_path, scenes_path, golden_path, frames=None, design_path
     d = os.path.dirname(golden_path)
     if d:
         os.makedirs(d, exist_ok=True)
+    note = _overwrite_note(_load_golden(golden_path)[0], data["font_fp"], data["env_fp"])
     payload = _json_bytes(data)
     with open(golden_path, "wb") as fh:
         fh.write(payload)
@@ -492,7 +493,7 @@ def write_golden(script_path, scenes_path, golden_path, frames=None, design_path
         "golden": golden_path,
         "golden_sha256": hashlib.sha256(payload).hexdigest(),
         "reason": "",
-        "notes": [],
+        "notes": [note] if note else [],
         "changed": [],
     }
 
@@ -514,6 +515,28 @@ def _load_golden(golden_path):
 
 def _fmt_fp_pair(actual, expect):
     return "%s… vs %s…" % (str(actual)[:12], str(expect)[:12])
+
+
+def _overwrite_note(old, font_fp, env_fp):
+    """--write 覆盖旧基线前，检查它是不是另一套环境录的（只提示，不阻止写盘）。
+
+    跨机 --write 是文档允许的重录流程，但它会把别的机器录的基线覆盖成当前机器的：
+    字体/环境指纹不同还静默写盘的话，原机器上的金帧回归从此永远 skipped，而且从
+    基线文件本身看不出"这份基线被另一套环境覆盖了"。所以覆盖时把差异带进 notes。
+    """
+    if not isinstance(old, dict):
+        return ""
+    diffs = []
+    old_font = str(old.get("font_fp") or "")
+    old_env = str(old.get("env_fp") or "")
+    if old_font and old_font != font_fp:
+        diffs.append("字体指纹（当前 %s… / 旧 %s…）" % (font_fp[:12], old_font[:12]))
+    if old_env and old_env != env_fp:
+        diffs.append("环境指纹（当前 %s… / 旧 %s…）" % (env_fp[:12], old_env[:12]))
+    if not diffs:
+        return ""
+    return ("--write 用当前机器覆盖了另一套环境录的基线：%s。原环境上的金帧回归会变成 "
+            "skipped（跨机不可比）——确认是有意重录再提交" % "、".join(diffs))
 
 
 def check_golden(script_path, scenes_path, golden_path, design_path=None):
@@ -680,6 +703,24 @@ def _is_portrait():
     return int(K.H) > int(K.W)
 
 
+def _effective_profile():
+    """当前生效的画布 profile 名（"landscape" / "portrait" / "" = 不认识）。
+
+    与 layoutkit 的别名表同口径（真源在 scripts/layoutkit.py），但这里**只读环境变量、
+    不 import filmkit/layoutkit**：整片基线的文件路径要在任何 scenes/filmkit 导入之前
+    定下来（scenes 用 `from filmkit import W, H`，导入期就绑死），而 import layoutkit
+    本身会按当时的变量把 profile 定死。不认识的值返回 ""，由调用方回落到默认横屏基线
+    （随后 import filmkit 会给出明确的报错）。
+    """
+    raw = (os.environ.get("VIDEO_STUDIO_LAYOUT") or "").strip().lower()
+    if not raw:
+        return "landscape"
+    return {"landscape": "landscape", "landscape-16x9": "landscape", "16x9": "landscape",
+            "horizontal": "landscape", "portrait": "portrait",
+            "portrait-9x16": "portrait", "9x16": "portrait",
+            "vertical": "portrait"}.get(raw, "")
+
+
 def compose_frames(scenes_path, golden_path=None, design_path=None, mode="check"):
     """按 scene_type 逐类渲一帧并比对/写入构图层基线。
 
@@ -731,6 +772,7 @@ def compose_frames(scenes_path, golden_path=None, design_path=None, mode="check"
     }
 
     if mode == "write":
+        note = _overwrite_note(_load_golden(golden_path)[0], font_fp, env_fp)
         d = os.path.dirname(golden_path)
         if d:
             os.makedirs(d, exist_ok=True)
@@ -740,7 +782,8 @@ def compose_frames(scenes_path, golden_path=None, design_path=None, mode="check"
         return {"status": "pass", "written": True, "golden": golden_path,
                 "frames": [dict(frame=r["name"], sha256=r["sha256"], expect=None,
                                  scene=r["name"]) for r in rows],
-                "font_fp": font_fp, "font_fp_expect": None, "reason": "", "notes": []}
+                "font_fp": font_fp, "font_fp_expect": None, "reason": "",
+                "notes": [note] if note else []}
 
     golden, why = _load_golden(golden_path)
     if golden is None:
@@ -819,7 +862,8 @@ def main(argv=None):
                     help="--write 时指定帧号（逗号分隔）；缺省取夹具片 3 个时刻")
     ap.add_argument("--layout", default="", choices=("", "landscape", "portrait"),
                     help="画布 profile：landscape（默认，基线 golden_frames.json）/"
-                         "portrait（experimental，基线 golden_frames_portrait.json）")
+                         "portrait（experimental，基线 golden_frames_portrait.json）；"
+                         "不传时按环境变量 VIDEO_STUDIO_LAYOUT 选基线（与 filmkit 同口径）")
     ap.add_argument("--compose", action="store_true",
                     help="构图层基线：按 scene_type 逐类渲一帧（覆盖夹具片没有的 compare/process/chart）")
     ap.add_argument("--json", action="store_true", help="stdout 只输出 JSON（机读）")
@@ -836,10 +880,15 @@ def main(argv=None):
     golden = a.golden
     if a.layout:
         os.environ["VIDEO_STUDIO_LAYOUT"] = a.layout
-        if golden is None:
-            golden = os.path.join(
-                ASSETS, "golden_frames.json" if a.layout == "landscape"
-                else "golden_frames_%s.json" % a.layout.replace("-", "_"))
+    # 缺省基线必须跟着**生效 profile** 走，而不是只看 --layout：render.py --layout portrait
+    # 的做法就是设 VIDEO_STUDIO_LAYOUT，用户自己 export 之后跑本工具的 --check/--write
+    # 也该落到竖屏基线。旧实现只认 --layout，于是竖屏环境下 --check 拿横屏基线比像素
+    # （假 FAIL）、--write 还会把竖屏像素静默写进横屏基线文件（原基线被覆盖）。
+    profile = a.layout or _effective_profile()
+    if golden is None and profile:
+        golden = os.path.join(
+            ASSETS, "golden_frames.json" if profile == "landscape"
+            else "golden_frames_%s.json" % profile.replace("-", "_"))
     if golden is None:
         golden = DEFAULT_GOLDEN
     try:

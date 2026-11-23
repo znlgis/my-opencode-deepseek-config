@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
-"""silhouette_qa.py — 跨设计剪影可区分门禁（G13）。
+"""silhouette_qa.py — 跨设计剪影可区分检查（S13）。
+
+注：本标识是**离线检查编号**，不进 render.py 的 gate matrix（账本里的 G13 是
+"版式文字冲突"，见 scripts/qatext.py）。本工具产出的是人工/AI 复核用的 JSON 与表格，
+不被任何 stage 记进 work/gates.json；以前它自称 G13，导致 QC 报告里的 G13 被误读。
 
 解决什么问题
 ------------
@@ -738,7 +742,8 @@ def run_gate(scenes_py, designs, scene_types, fracs, fps=FPS, scripts_dir=SCRIPT
     result = {
         "version": RESULT_VERSION,
         "generator": "silhouette_qa.py %s" % __version__,
-        "comment": "G13 跨设计剪影可区分：同一份合成剧本只换设计（designkit 现场采样），"
+        "comment": "S13 跨设计剪影可区分（离线检查，不进 render.py 的 gate matrix；"
+               "账本里的 G13 是版式文字冲突）：同一份合成剧本只换设计（designkit 现场采样），"
                    "灰度三值化后比 F/Cx/Cy/B/S/P；同一场景 3 帧须同一项指标全部达标，"
                    "任一场景达标即通过。颜色差异不参与判定。",
         "params": {
@@ -863,7 +868,7 @@ def print_human(res):
     """打印人读报告：每对的每类场景一行，失败对按接近程度排序。"""
     p = res["params"]
     th = p["thresholds"]
-    print("== silhouette_qa（G13 跨设计剪影可区分）")
+    print("== silhouette_qa（S13 跨设计剪影可区分；离线检查，不进账本）")
     print("画布量化 %d×%d（四角 %d×%d 取基准），帧时刻 %s × %.1fs，fps=%d"
           % (p["quant"]["size"][0], p["quant"]["size"][1], p["quant"]["corner"],
              p["quant"]["corner"], "/".join("%.2f" % f for f in p["frames"]),
@@ -1144,7 +1149,7 @@ def selftest(scripts_dir=SCRIPTS, scenes_py=DEFAULT_SCENES_PY):
 
 
 def print_selftest(report):
-    print("== silhouette_qa --selftest（G13 自检：造 2 组设计现场验证判据）")
+    print("== silhouette_qa --selftest（S13 自检：造 2 组设计现场验证判据）")
     for c in report["checks"]:
         print("  [%s] %s — %s" % ("PASS" if c["ok"] else "FAIL", c["name"], c["detail"]))
     print("自检 %s（用时 %.2fs）" % ("PASS" if report["ok"] else "FAIL",
@@ -1155,7 +1160,7 @@ def print_selftest(report):
 def main(argv=None):
     _setup_stdio()
     ap = argparse.ArgumentParser(
-        description="跨设计剪影可区分门禁 G13：同一内容换设计（designkit 现场采样）渲帧，"
+        description="跨设计剪影可区分检查 S13（离线检查，不进 render.py 的 gate matrix；"
                     "三值化后比结构指标。没有 --styles：技能不提供内置"
                     "风格表（stylekit.STYLE_IDS 为空），输入改为现场采样的设计。",
         epilog="例：python tools/silhouette_qa.py --designs 4 --json；"

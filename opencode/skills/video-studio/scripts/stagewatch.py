@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sys
 import time
 
 SCHEMA = 1
@@ -69,7 +70,14 @@ STAGE_IO = {
     # gates.json 不列进 qa 的产物：它由 _finish_gates 在 style/frames/mux/qa 任何一次收尾时
     # 都会写，不能当"qa 跑过"的证据（否则删掉 qa 记录后它还在，会误判 no-manifest）。
     # qa/sheet.png（联系表）只在 --stage qa 里生成，才是真凭证。
-    "qa":      dict(sources=["script", "scenes"], inputs=[],
+    # qa 读的是成片：成片由 mux 从 silent.mp4 + audio.wav 合成（mux 的产物在 --out，
+    # 不在 work/ 里，没法静态写进表）。这里把它的实际输入都记上：
+    #   * silent.mp4 / audio.wav：成片的两路来源（重跑 frames / audio 后 qa 结论就是旧的）；
+    #   * cues.json：深检的音画同步对照（改 cue 落位后旧同步结论作废）；
+    #   * timeline.json：期望时长 / 场景数（改排轴后旧 QA 数值对不上）。
+    # 以前 inputs=[] 意味着「改了画面或声音，qa 的旧结论仍然算新鲜」——正好漏掉最该查的。
+    "qa":      dict(sources=["script", "scenes"],
+                    inputs=["silent.mp4", "audio.wav", "cues.json", "timeline.json"],
                     outputs=["qa/sheet.png", "qa/deep.json"]),
     "stills":  dict(sources=["script", "scenes"], inputs=["timeline.json", "style.json"],
                     outputs=[]),
@@ -146,8 +154,10 @@ def _producer_of(art):
     return None
 
 
-# 硬类型：这些永远参与 --strict-stale 判定（产物丢了 / 源头改了 / 上游自己就过时）
-HARD_KINDS = ("source-changed", "output-missing", "no-manifest", "input-stale")
+# 硬类型：这些永远参与 --strict-stale 判定（产物丢了 / 源头改了 / 上游自己就过时 /
+# 账本坏了）
+HARD_KINDS = ("source-changed", "output-missing", "no-manifest", "input-stale",
+              "manifest-broken")
 SOFT_KINDS = ("input-pending", "source-pending")
 
 
@@ -174,6 +184,9 @@ def snapshot(work, stage, sources=None):
     if io is None:
         return None
     d = load(work)
+    # 账本坏了（load 带出 broken 标记）时，这次 snapshot 就是在**修复**它：
+    # 不能把 broken 原样写回去，否则修好之后每个 stage 都永久报 manifest-broken。
+    d.pop("broken", None)
     d.setdefault("stages", {})[str(stage)] = dict(
         at=time.time(),
         atText=time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -224,6 +237,16 @@ def check(work, stage, sources=None, self_built=False, pending=(), _seen=None):
         return []
     _seen.add(str(stage))
     d = load(work)
+    if d.get("broken"):
+        # manifest.json 存在但读不出来（JSON 损坏 / 结构不对）：**不能当作"没有记录"**。
+        # 旧版本 load() 把 broken 标志带出来、check() 却直接忽略，于是 stages 为空 ->
+        # 一句话都不报 -> 新鲜度门禁记 pass、--strict-stale 也照样过。这是"没执行被
+        # 写成通过"的最典型形态：账本坏了，检查等于没做，结论却说一切新鲜。
+        return [dict(stage=str(stage), kind="manifest-broken",
+                     reason="%s 读不出来或结构不对（%s）：无法核对本阶段输入/产物是否"
+                            "过时，新鲜度检查**没有执行**——修好账本或删掉它重跑一遍各阶段"
+                            % (os.path.basename(manifest_path(work)), d.get("broken")),
+                     rerun=RERUN_HINT.get(str(stage), ""))]
     stages = d.get("stages") or {}
     rec = stages.get(str(stage))
     planned = set(str(x) for x in (pending or ()))
@@ -239,7 +262,10 @@ def check(work, stage, sources=None, self_built=False, pending=(), _seen=None):
         present_out = [k for k in (io.get("outputs") or []) if _fp(k, work) != "missing"]
         # stills / mux 的产物不在 work/（mux 写 --out，stills 写 work/stills/），无从证明跑过，
         # 不冤枉它们；self_built（本次新建的 work/）连 manifest 都刚建，也不报。
-        if not self_built and stages and present_out:
+        # 注意**不要**再要求 stages 非空：manifest.json 存在但 stages 为空（旧版本 / 损坏后
+        # 被重建过 / 手改成 {}）时，产物在而记录没有，照样是"跑过却查不到记录"。
+        # 以前加了 stages 条件，于是这类目录一句话都不报，freshness 门禁记 pass。
+        if not self_built and present_out:
             issues.append(dict(stage=str(stage), kind="no-manifest",
                                reason="work 里已经有本阶段的产物（%s），但 manifest.json 没有本阶段的记录"
                                       "（旧版本跑过 / 手改过）" % "、".join(present_out),
@@ -404,9 +430,23 @@ def report(work, stages=None, strict=False, allow_stale=False, ledger=None, writ
     return errs, warns
 
 
+def _setup_stdio():
+    """重定向到管道/文件时切 UTF-8：Windows 默认代码页是 GBK，中文与 →/—/✓ 会乱码
+    甚至 UnicodeEncodeError。与 render.py / studio.py 同一口径。
+
+    只在 __main__ 里调用：本模块被 render.py import，模块级改 stdout 会污染调用方。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:                                   # noqa: BLE001
+            pass
+
+
 if __name__ == "__main__":
     import argparse
-    import sys
+
+    _setup_stdio()
     ap = argparse.ArgumentParser(description="阶段新鲜度检查：现在哪些产物是旧的")
     ap.add_argument("--work", default="work")
     ap.add_argument("--stage", default="", help="只看某个 stage（缺省 = 全部）")

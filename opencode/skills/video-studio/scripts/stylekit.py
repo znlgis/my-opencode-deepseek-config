@@ -528,6 +528,18 @@ def theme_lint(th):
     if not isinstance(th, dict):
         return ["主题不是 dict：%r" % (th,)]
     bad = []
+    # 结构先自检：缺颜色键时下面按 th[role] 下标会抛 KeyError，而本函数的契约是
+    # "返回问题列表（空 = 过）" —— 坏主题必须变成一条问题，不能变成崩溃。
+    for key in ("bg", "bg2", "surface", "ink", "muted", "dim",
+                "accent", "accent2", "good", "bad", "rule"):
+        val = th.get(key)
+        if not isinstance(val, (list, tuple)) or len(val) != 3:
+            bad.append("主题缺颜色 %r（或不是 RGB 三元组）：%r" % (key, val))
+        elif any(isinstance(c, bool) or not isinstance(c, (int, float))
+                 or not 0 <= float(c) <= 255 for c in val):
+            bad.append("主题颜色 %s=%r 不是 0..255 的 RGB" % (key, val))
+    if bad:
+        return bad
     for role, need in (("ink", LINT_LIMITS["ink"]), ("muted", LINT_LIMITS["muted"]),
                        ("dim", LINT_LIMITS["dim"]), ("accent", LINT_LIMITS["accent"]),
                        ("accent2", LINT_LIMITS["accent2"])):

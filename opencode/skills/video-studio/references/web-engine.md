@@ -102,6 +102,11 @@ assets/web/film.js 是 12 秒 / 3 个场景的完整模板：
           film_0-12/
             c000.mp4  c001.mp4  c002.mp4  ...
             concat.txt
+            _plan.json        # 渲染计划指纹（页面资源/帧率/区间/块长/crf/preset/画布/style）
+
+断点续跑会比对 `_plan.json`：页面 JS/HTML 改了、帧率或块长/crf/preset 变了，
+旧块**一律拒绝复用**（报错并指路「删块重渲」或 `--no-resume`）。
+这条是 v2.7.3 修的真 bug：以前只按「块文件存在」复用，改了页面画面仍把旧块静默拼进新片。
 
 ## 7. 确定性守则（逐帧渲染的命门）
 

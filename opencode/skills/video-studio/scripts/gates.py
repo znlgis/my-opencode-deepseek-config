@@ -80,12 +80,24 @@ def web_asset_fingerprint(entry):
     return _sha1_text("\n".join(rows)), names
 
 
-def content_hash(script=None, scenes_path="", script_path="", engine="pil", web_entry=""):
-    """本次渲染的"内容身份"：剧本 + 场景代码 + 引擎（web 时再加页面脚本）。
+def content_hash(script=None, scenes_path="", script_path="", engine="pil", web_entry="",
+                 work=""):
+    """本次渲染的"内容身份"：剧本 + 场景代码 + 冻结设计 + 生成设计的引擎 + 引擎（web 时再加页面脚本）。
 
     只取与"这一版画面/声音"相关的量：
       * 剧本：去掉渲染期注入的 _path/_dir/_style 等私有键后规范化 json；
       * scenes.py：文件内容（画面逻辑变了，旧签核就得失效）；
+      * design（work/design.json，存在才算）：冻结设计是"这一版长什么样"的唯一来源
+        （propose.py --confirm 写出，designkit.design_to_plan 解析）。**只改配色
+        visual.palette / 版式几何**也能让画面全变——不纳入的话旧签核继续有效，
+        正是"内容变了旧签核自动失效"这条承诺的反例。按**文件字节** sha1，不重新
+        json 规范化：规范化会把"字节不同但语义相同"的重写算成同一版，而写盘口径
+        （propose.py 的输出）本身就是权威。design 不存在时省略该键（没确认过提案的
+        legacy 项目不该被判"内容已变"）。
+      * designkit / stylekit / grammar：生成与解析设计的源码（键名分开）。同一个
+        design.json 在这三个模块改动后可能解析出不同计划，旧签核同样必须失效。
+        注意**不含** filmkit.py：那是渲染内核，把它算进去会让每次技能升级都判
+        "内容已变"，签核无故失效（与 web_assets 只算页面脚本同一条取舍）。
       * engine：pil 与 web 是两条渲染路径，产物不可互换；
       * web_entry：engine=web 时，入口页同目录的 .js/.mjs/.html 一起算。
         **pil 路线不参与**——否则老 PIL 项目每次升级都会被判"内容已变"，签核无故失效。
@@ -103,6 +115,12 @@ def content_hash(script=None, scenes_path="", script_path="", engine="pil", web_
         "scenes": _sha1_file(scenes_path) if scenes_path else "",
         "engine": eng,
     }
+    design_path = os.path.join(str(work), "design.json") if work else ""
+    if design_path and os.path.exists(design_path):
+        payload["design"] = _sha1_file(design_path)
+    here = os.path.dirname(os.path.abspath(__file__))
+    payload["design_engine"] = {name: _sha1_file(os.path.join(here, name + ".py"))
+                                for name in ("designkit", "stylekit", "grammar")}
     if eng == "web":
         assets, _names = web_asset_fingerprint(web_entry)
         payload["web_assets"] = assets
@@ -126,8 +144,10 @@ class GateLedger:
         self.engine = str(engine or "pil")
         self.web_entry = str(web_entry or "")
         self.web_assets = []
+        # work 必须一起传：冻结设计在 work/design.json 里，内容指纹要包含它。
         self.content_hash = content_hash(script, self.scenes_path, self.script_path,
-                                         self.engine, web_entry=self.web_entry)
+                                         self.engine, web_entry=self.web_entry,
+                                         work=self.work)
         if self.engine == "web":
             _fp, self.web_assets = web_asset_fingerprint(self.web_entry)
         self.bypassed = []          # --no-gate 绕过的记录（必须留痕）
@@ -204,8 +224,12 @@ class GateLedger:
             "script": _sha1_file(self.script_path) if self.script_path else "missing",
             "scenes": _sha1_file(self.scenes_path) if self.scenes_path else "missing",
             "words": _sha1_file(os.path.join(self.work, "words.json")),
-            "gates_py": _sha1_file(os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                                "filmkit.py")),
+            # 审计用：设计改了 contentHash 会变，但说不清"变的是哪一项"。这里单记一条。
+            "design": _sha1_file(os.path.join(self.work, "design.json")),
+            # 键名必须与文件一致：以前叫 gates_py 却哈希 filmkit.py，事后对账会拿着
+            # "gates.py 的指纹"去比另一个文件。这里只做审计（不进 contentHash）。
+            "filmkit": _sha1_file(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                               "filmkit.py")),
         }
 
     def write_json(self):
@@ -236,6 +260,7 @@ def archive_run(work, ledger, artifacts=None, report_path=None):
                 inputs=ledger.input_fingerprints(),
                 artifacts=[str(x) for x in (artifacts or [])])
     _atomic_json(os.path.join(d, "run.json"), info)
+    bad = []
     for src, name in ((os.path.join(str(work), "gates.json"), "gates.json"),
                       (str(report_path or ""), "QC-REPORT.md")):
         try:
@@ -244,8 +269,12 @@ def archive_run(work, ledger, artifacts=None, report_path=None):
                     data = fh.read()
                 with open(os.path.join(d, name), "wb") as fh:
                     fh.write(data)
-        except OSError:
-            pass
+        except OSError as e:
+            # 归档失败必须让调用方看见：这版账本会丢，事后就查不清"上一版结论是什么"。
+            # 以前 except OSError: pass —— 归档目录缺文件，神不知鬼不觉。
+            bad.append("%s（%s）" % (name, e))
+    if bad:
+        return d, "归档不完整：%s" % "；".join(bad)
     return d, ""
 
 
@@ -305,7 +334,22 @@ def signoff_state(work, current_hash):
         if str(rec.get("verdict")) != "approved":
             state[gid] = dict(status=FAIL, detail="签核结论是 %r" % rec.get("verdict"))
             continue
-        if str(rec.get("contentHash") or "") != str(current_hash or ""):
+        rec_hash = str(rec.get("contentHash") or "")
+        if not rec_hash:
+            # 签核本身没有内容指纹（gates.json 不存在时 --accept 写下的），无法核对
+            # 是否属于这一版内容。旧逻辑拿 "" == "" 当"内容一致"，于是没跑过任何门禁
+            # 的 work 里这条签核会在 QC 报告里显示 pass。
+            state[gid] = dict(status=SKIP,
+                              detail="签核没有绑内容指纹（签核时没有 gates.json），"
+                                     "无法核对属于哪一版内容；先跑 --stage qa 再签")
+            continue
+        if not str(current_hash or ""):
+            # 当前版本算不出内容指纹（还没有 gates.json / 刚被删）：同样不能判通过。
+            state[gid] = dict(status=SKIP,
+                              detail="当前还没有内容指纹（没跑过产出 gates.json 的阶段），"
+                                     "签核无法核对是否属于这一版；先跑 --stage qa")
+            continue
+        if str(rec.get("contentHash") or "") != str(current_hash):
             state[gid] = dict(status=SKIP,
                               detail="内容已变（签核时 %s / 现在 %s），需重新签"
                                      % (str(rec.get("contentHash"))[:8], str(current_hash)[:8]))
@@ -330,11 +374,10 @@ def append_cost(work, stage, wall_s, **extra):
         if v is not None:
             row[k] = v
     p = os.path.join(str(work), "cost.jsonl")
-    try:
-        with open(p, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
-    except OSError:
-        pass
+    # 写不进去要抛出去：render._stage_end 会接住并打 WARN。以前这里静默 pass，
+    # 于是"--cost 开了但 cost.jsonl 一直没写"没有任何痕迹。
+    with open(p, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
     return p
 
 
@@ -500,8 +543,11 @@ def render_report(work, out=None):
             why = "%s 读不出来 / 里面 0 条门禁（JSON 损坏或并发写坏）" % gj
         L.append("- **未判定**：%s。**这不等于通过**——先跑 --stage qa（或 --stage all）"
                  "产出真实门禁再交付。" % why)
-    elif counts.get(FAIL):
-        L.append("- **未通过**：fail %d 项，按上表逐条修，别宣称完成。" % counts.get(FAIL))
+    elif counts.get(FAIL) - bad_items > 0:
+        # counts[FAIL] 里含坏条目（上面按 fail 计）。真 fail 与"账本坏了"必须分开说：
+        # 只有坏条目时不能宣称"查了没过"，那会把人引去修不存在的判据问题。
+        L.append("- **未通过**：fail %d 项，按上表逐条修，别宣称完成。"
+                 % (counts.get(FAIL) - bad_items))
     elif bad_items:
         # 条目损坏 / 状态值不认识：既不能算"通过"，也不该说成"查了没过"。
         L.append("- **未判定**：账本里有 %d 条损坏的记录（不是合法 dict 或 status 不是 "
@@ -545,9 +591,25 @@ def _atomic_json(path, obj):
     return atomic_write_json(path, obj)
 
 
+def _setup_stdio():
+    """重定向到管道/文件时切 UTF-8：Windows 默认代码页是 GBK，中文与 →/—/✓ 会乱码
+    甚至 UnicodeEncodeError。与 render.py / studio.py 同一口径。
+
+    只在 __main__ 里调用：本模块被 render.py import，模块级改 stdout 会污染调用方。
+    """
+    import sys as _sys
+    for stream in (_sys.stdout, _sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:                                   # noqa: BLE001
+            pass
+
+
 if __name__ == "__main__":
     import argparse
     import sys
+
+    _setup_stdio()
     ap = argparse.ArgumentParser(description="门禁账本 / 签核 / QC 报告")
     ap.add_argument("--work", default="work")
     ap.add_argument("--out", default="")
@@ -575,6 +637,11 @@ if __name__ == "__main__":
                                 by=a.by, note=a.note,
                                 artifacts=[x.strip() for x in a.artifacts.split(",") if x.strip()])
             print("[签核] %s = %s（内容指纹 %s）" % (gid, rec["verdict"], ch or "未知"))
+            if not ch:
+                # 没有 gates.json = 没跑过任何产出账本的阶段。空指纹签核不算"这一版签过"，
+                # QC 报告里会记 skipped；这里先把话说在前面，别让人以为签完就生效了。
+                print("[WARN] 没有可用的内容指纹（work/gates.json 不存在）：这条签核"
+                      "**不会**在 QC 报告里算通过，先跑 --stage qa 再签")
         p = write_report(a.work, a.out or None)
         print("[QC 报告]", p)
         if a.json:

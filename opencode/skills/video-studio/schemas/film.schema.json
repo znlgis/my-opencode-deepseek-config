@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/znlgis/dsh-video-studio-skill/schemas/film.schema.json",
   "title": "video-studio film.json（剧本契约）",
-  "description": "video-studio 的剧本契约（**film.json 的字段说明**，不是执行器）。真正的执行者是 skills/video-studio/scripts/filmcheck.py（由 tools/ci_check.py 第 12 项调用：未知键 WARN + 拼写建议、枚举/范围 ERROR、跨字段对账），渲染前还有 render.py 的 load_script() 做最小硬校验。没有任何代码用它做校验：它供给人/AI 当字段说明、给编辑器补全（IDE 的 $schema 指向这里）；仅有两个测试读它做“枚举与真值集合一致”的回归（scripts/selfcheck.py 的 t_scene_types_single_truth 读 lines[].type，tools/ci_check.py 第 12 项只断言它是合法 JSON）。所以两边不一致时**以 filmcheck.py 的判定为准**；本文件只负责把同一套字段写清楚。\n这是 JSON Schema draft-07 的**子集**：只用到 type / enum / required / properties / additionalProperties / items / minimum / maximum / minItems / pattern。\n\n为什么不写死 additionalProperties:false：draft-07 子集里没有 patternProperties，\n表达不了“下划线开头的扩展键豁免”这条规则，硬写 false 会把 _comment 这类注释键判死。\n所以未知键**不在 schema 层判死**，而是由 filmcheck.py 报 WARN（并给出“是不是想写 X”的建议）。\n\n与 render.py 的 load_script() 的关系：load_script 是装载期的权威硬校验（title/lines 必填、lines 非空、\n每条有 text、id 不重复、bpm >0 或 auto）；契约的完整执行者是 filmcheck.py。\n本文件不执行任何校验：范围/枚举/必填只做文档，跨字段约束（cue 的 at 引用、hold 与 timeline 对账、\nvideo 宽高成对合法性）只有 filmcheck.py 能查。",
+  "description": "video-studio 的剧本契约（**film.json 的字段说明**，不是执行器）。真正的执行者是 skills/video-studio/scripts/filmcheck.py（由 tools/ci_check.py 第 12 项调用：未知键 WARN + 拼写建议、枚举/范围 ERROR、跨字段对账），渲染前还有 render.py 的 load_script() 做最小硬校验。没有任何代码用它做校验：它供给人/AI 当字段说明、给编辑器补全（IDE 的 $schema 指向这里）；仅有两个测试读它做“枚举与真值集合一致”的回归（scripts/selfcheck.py 的 t_scene_types_single_truth 读 lines[].type，tools/ci_check.py 第 12 项只断言它是合法 JSON）。所以两边不一致时**以 filmcheck.py 的判定为准**；本文件只负责把同一套字段写清楚。\n这是 JSON Schema draft-07 的**子集**：只用到 type / enum / required / properties / additionalProperties / items / minimum / maximum / exclusiveMinimum / minItems / pattern。\n\n为什么不写死 additionalProperties:false：draft-07 子集里没有 patternProperties，\n表达不了“下划线开头的扩展键豁免”这条规则，硬写 false 会把 _comment 这类注释键判死。\n所以未知键**不在 schema 层判死**，而是由 filmcheck.py 报 WARN（并给出“是不是想写 X”的建议）。\n\n与 render.py 的 load_script() 的关系：load_script 是装载期的权威硬校验（title/lines 必填、lines 非空、\n每条有 text、id 不重复、bpm >0 或 auto）；契约的完整执行者是 filmcheck.py。\n本文件不执行任何校验：范围/枚举/必填只做文档，跨字段约束（cue 的 at 引用、hold 与 timeline 对账、\nvideo 宽高成对合法性）只有 filmcheck.py 能查。",
   "type": "object",
   "required": [
     "title",
@@ -38,7 +38,7 @@
         "string",
         "object"
       ],
-      "description": "字符串 = edge-tts voice id（如 zh-CN-YunxiNeural，legacy 单声线路径）；对象 = 声线策略（map 按 kind 映射音色、auto、jitter、max_distinct、rate_range、cps_band），此时忽略 rate/pitch 的单值覆盖语义",
+      "description": "声线策略。**字符串形态已废弃**：voicekit.voice_plan 对顶层单值 voice 直接报错（声线事实来源只有 design.audio.voice 或 lines[].voice），写了到 TTS 阶段才炸；filmcheck.py 只校验类型、不告警。请写对象形态：map 按 kind 映射音色、auto、jitter、max_distinct、rate_range、cps_band（此时忽略 rate/pitch 的单值覆盖语义）。",
       "properties": {
         "map": {
           "type": "object",
@@ -60,21 +60,26 @@
         "max_distinct": {
           "type": "integer",
           "minimum": 1,
-          "description": "全片最多用几个不同 persona（默认 3；相邻句不换人是防广播剧的关键）"
+          "maximum": 8,
+          "description": "全片最多用几种不同音色（默认 3；相邻句不换人是防广播剧的关键）。上限 8 = filmcheck.py 的硬上限（voicekit 侧只要求 >=1）"
         },
         "rate_range": {
           "type": "array",
           "description": "语速夹取区间（百分数，例如 [-15, 12]）",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 2,
+          "maxItems": 2
         },
         "cps_band": {
           "type": "array",
           "description": "可接受的每秒字数区间（默认 [3.6, 5.6]）",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 2,
+          "maxItems": 2
         }
       }
     },
@@ -158,7 +163,7 @@
           },
           "sub": {
             "type": "string",
-            "description": "上屏字幕：短、一行优先（约 ≤24 个中文字）；缺省沿用 text"
+            "description": "上屏字幕：短、一行优先（横屏约 ≤24 个中文字、竖屏 ≤14，见 layoutkit 的 sub_max_chars）；缺省沿用 text"
           },
           "big": {
             "type": "string",
@@ -215,7 +220,7 @@
           },
           "persona": {
             "type": "string",
-            "description": "显式声线 persona（voicekit.PERSONA_IDS：narrator_male / narrator_female / warm_female / bright_female / authority_male / young_male / teen_male / dialect_ne_female / dialect_sx_female）"
+            "description": "**已废弃**：voicekit 自 D3 起删掉了 persona 身份表（PERSONA_IDS 不再存在），voicekit.voice_plan 对 lines[].persona 直接报错（persona 名不是 edge voice id）。声线请写 lines[].voice（裸 edge voice id，如 zh-CN-YunxiNeural）或 design.audio.voice；filmcheck 在 voicekit 没有 persona 枚举时会降级为不查，**所以写这个键在 filmcheck 里可能静默通过、到 TTS 阶段才炸**。"
           },
           "tone": {
             "type": "string",
@@ -567,7 +572,7 @@
         },
         "mood": {
           "type": "string",
-          "description": "\"auto\" 或情绪名（steady/reflective/hopeful/uplifting/calm/driving，按风格缺省）"
+          "description": "\"auto\" 或情绪名（steady/reflective/hopeful/uplifting/calm/driving/tense，按风格缺省；musicgen.MOOD_IDS 共 7 档）"
         },
         "bpm": {
           "type": [

@@ -1704,6 +1704,8 @@ def _utf8_stdout() -> None:
 
 
 def main(argv=None) -> int:
+    # --help / 参数错误走 argparse 的打印路径：UTF-8 必须在这之前切（Windows 管道默认 GBK）。
+    _utf8_stdout()
     ap = argparse.ArgumentParser(
         prog="qaasr.py",
         description="ASR 回读校验：把成片音轨转回文字，与 timeline/剧本做字符级召回与偏移检查")
@@ -1740,7 +1742,6 @@ def main(argv=None) -> int:
         return selftest()
     if not a.film or not a.timeline:
         ap.error("需要成片路径与 --timeline（或用 --selftest）")
-    _utf8_stdout()
     # 用法级错误单独判（exit 2）：路径打错和"环境缺件导致没查"不是一回事。
     # 后者由 report() 记 skipped + errors，默认 exit 0，--strict 才升级成失败，
     # 与 render.py 的 --strict-gates 语义保持同一口径。

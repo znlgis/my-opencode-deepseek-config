@@ -17,9 +17,11 @@ Agent 看不见画面、听不见声音，所以**验收必须脚本化 + 静帧
 > | G4 成片门禁（容器/时长/锐度/字幕/黑帧） | `G4` 容器 · `G5` 响度 · `G6` 锐度比 · `G7` 字幕条数 · `G8` 黑帧 | 账本把 G4 拆成 5 行 |
 > | G7 时间层门禁（闪烁/空窗/同步） | `G9` 帧级深检 | **同名不同义**：账本 G9 才是时间层 |
 > | G8 页面层门禁（web 文字重叠/出画） | web 引擎 qa_text 结果 | 只有 `--engine web` 才有 |
-> | — | `G10` 词级时间戳 · `G11` VMAF/SSIM · `G12` ASR 回读 | 详见 [delivery-gates.md](delivery-gates.md) 与 [word-timeline.md](word-timeline.md) |
+> | — | `G10` 词级时间戳 · `G11` VMAF/SSIM · `G12` ASR 回读 · `G13` 版式文字冲突 | 详见 [delivery-gates.md](delivery-gates.md)、[word-timeline.md](word-timeline.md) 与 `SKILL.md` §7 |
+> | — | `S13` 跨设计剪影可区分（**离线检查，不进账本**） | 不是账本 id：`tools/silhouette_qa.py` 渲合成剧本比设计骨架，由 CI 与 selfcheck 第 55 条守判据 |
 >
-> 一句话记法：**本页 G0–G8 是"查什么"，账本 G0 + G4–G12 是"哪一行判"**。
+> 一句话记法：**本页 G0–G8 是"查什么"，账本 G0 + G4–G13 是"哪一行判"**；`S13` 是离线检查编号，
+> 永远不进账本（早期文档把剪影写成 G13，与账本 G13 版式文字冲突撞车，v2.7.3 起统一为 S13）。
 > 账本里**没有** `G1`/`G2`/`G3`：`G0` 之后直接从 `G4` 开始（容器），人工目检走 `signoff` 的 `stills` 闸，不进 gate matrix。
 
 ## G0 内容门禁：上屏数字可溯源
@@ -246,7 +248,8 @@ python webengine.py textqa ./web/index.html --step 0.2
 自检：python selfcheck.py -> PASS <实测条数> / FAIL 0 / SKIP 0
 ```
 
-`<实测条数>` 照 selfcheck.py 的真实输出填（当前 97 条），**不要抄示例里的旧数字**：
-这里曾写死 70 条，而 selfcheck.CASES 早已不止这个数——死数字是文档漂移的源头。
-总数口径的唯一真源是 `selfcheck.CASES`；本收编版没有第二个总数要同步。
+`<实测条数>` 照 selfcheck.py 的真实输出填（当前 **105 条**），**不要抄示例里的旧数字**：
+这一行写死过两个过时值（先是 70、后来 85），而 selfcheck.CASES 早已不是那个数——
+死数字正是文档漂移的源头。总数口径的唯一真源是 `selfcheck.CASES`；本收编版没有第二个
+总数要同步（上游的 `tools/ci_check.py` 未搬入）。
 SKIP 必须写成 0 或逐项说明原因：SKIP != 通过。

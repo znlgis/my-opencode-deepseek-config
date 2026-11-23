@@ -220,12 +220,20 @@ def _probe(path) -> dict:
     info = {"fps": FPS_FALLBACK, "duration": 0.0, "width": None, "height": None,
             "has_audio": False, "sample_rate": None, "duration_source": "none"}
     fps_parsed = False      # ffprobe 已经给出合法帧率？（拿它判要不要跑 ffmpeg -i 兜底）
-    p = subprocess.run(
-        [_ffprobe(), "-v", "error",
-         "-show_entries",
-         "stream=codec_type,width,height,r_frame_rate,avg_frame_rate,sample_rate:format=duration",
-         "-of", "json", path],
-        capture_output=True)
+    try:
+        p = subprocess.run(
+            [_ffprobe(), "-v", "error",
+             "-show_entries",
+             "stream=codec_type,width,height,r_frame_rate,avg_frame_rate,sample_rate:format=duration",
+             "-of", "json", path],
+            capture_output=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        # 探测卡住 = 探测失败，不能把整道门禁一起挂死；后面还有 ffmpeg -i 兜底。
+        p = subprocess.CompletedProcess(args=[], returncode=-1, stdout=b"",
+                                        stderr=b"ffprobe timeout")
+    except OSError as e:
+        p = subprocess.CompletedProcess(args=[], returncode=-1, stdout=b"",
+                                        stderr=("ffprobe 启动失败：%s" % e).encode("utf-8"))
     data = None
     if p.returncode == 0 and p.stdout:
         try:
@@ -276,7 +284,8 @@ def _probe(path) -> dict:
     if info["width"] is None or not fps_parsed or not info["duration"]:
         txt = ""
         try:
-            q = subprocess.run([_ffmpeg(), "-hide_banner", "-i", path], capture_output=True)
+            q = subprocess.run([_ffmpeg(), "-hide_banner", "-i", path], capture_output=True,
+                               timeout=120)
             txt = (q.stderr or b"").decode("utf-8", "replace")
         except Exception:               # noqa: BLE001
             txt = ""
@@ -1116,6 +1125,13 @@ def report(film, *, cues_json=None, shots_json=None, expect_duration=None,
     means, scores, boxes, returns, drift = _scan_full(film, SAMPLE_W, SAMPLE_H,
                                                     FLICKER_BLOCK, fps)
     n = int(len(means))
+    if n <= 0:
+        # 一帧都没解出来 = 本次**没有可检画面**。以前这里继续往下走：闪烁/空窗/同步
+        # 三门全空 => errors 为空 => CLI 退出码 0、报告写"质检通过"，而实际上一帧
+        # 都没看。按"没执行不等于通过"的纪律，这里必须让调用方看到（CLI 退出非 0，
+        # render 的 G9 会退化成 skipped 而不是 pass）。
+        raise RuntimeError(
+            "成片解码出 0 帧（%s）：没有可检画面，帧级深检**没有执行**（不等于通过）" % film)
     duration = n / fps if n else float(meta.get("duration") or 0.0)
 
     luma = [{"t": round(i / fps, 3), "v": round(float(v), 5)} for i, v in enumerate(means)]
@@ -2069,6 +2085,9 @@ def selftest() -> int:
 
 # ---------------------------------------------------------------- CLI
 def main(argv=None) -> int:
+    # 管道/重定向下的 UTF-8 必须在 argparse **之前**切：--help / 参数错误走的是
+    # argparse 的打印路径，等解析完再切已经晚了（Windows 管道默认 GBK）。
+    _utf8_stdout()
     ap = argparse.ArgumentParser(
         prog="qa_frames.py",
         description="帧级 / 时间轴级深度质检：单帧闪烁、画面空窗、音画同步")
@@ -2082,7 +2101,11 @@ def main(argv=None) -> int:
     ap.add_argument("--png", default=None, help="报告 PNG 输出路径（缺省不写文件）")
     ap.add_argument("--expect-duration", type=float, default=None,
                     help="预期成片时长（秒），偏差 > 0.5 s 记 error")
-    ap.add_argument("--require-sync", action="store_true",
+    # default=None：缺省必须把"没传"和"显式关闭"分开。store_true 的缺省是 False，
+    # 直接透传会把 --help 里承诺的 QA_REQUIRE_SYNC 环境变量**覆盖掉**——CLI 路径上
+    # 环境变量形同虚设，而 render.py 走的是模块 API（不传 = None，env 生效），
+    # 同一个开关两条调用路径语义不同。None 让 report() 自己去读环境变量。
+    ap.add_argument("--require-sync", action="store_true", default=None,
                     help="音画同步门禁未能执行时记 error（默认只记 warning；"
                          "也可用环境变量 QA_REQUIRE_SYNC=1 全局开启，render.py 的深检会自动继承）")
     ap.add_argument("--selftest", action="store_true", help="跑内置自检（不联网，≤60 s）")
@@ -2091,7 +2114,6 @@ def main(argv=None) -> int:
         return selftest()
     if not a.film:
         ap.error("需要成片路径（或用 --selftest）")
-    _utf8_stdout()
     try:
         rep = report(a.film, cues_json=a.cues, shots_json=a.shots,
                      expect_duration=a.expect_duration,

@@ -33,9 +33,9 @@
    "type": "string",
    "enum": [
     "draft",
-    "confirmed",
-    "rejected"
-   ]
+    "confirmed"
+   ],
+   "description": "propose.py 只写 draft（提案时）与 confirmed（--confirm 后）；它没有 rejected 这个落盘态——不确认就是保持 draft。渲染闸只放行 confirmed（propose.proposal_state 另有 stale/broken 判定，不写这个字段）。"
   },
   "chosen": {
    "type": [
@@ -57,8 +57,66 @@
    "type": "string",
    "description": "确认时 design.json 的指纹（用于判 stale）"
   },
+  "scriptHash": {
+   "type": "string",
+   "description": "确认时传入剧本的规范化 JSON sha1 前 16 位（propose.py confirm(script=...) 才写；改剧本后 proposal_state 判 stale）"
+  },
+  "scriptPath": {
+   "type": "string",
+   "description": "确认时绑定剧本的绝对路径（与 scriptHash 同写同删；proposal_state 省略 script_path 时按它找剧本）"
+  },
+  "intake": {
+   "type": "object",
+   "description": "问诊留痕：这版方案是不是在问完用户之后出的。{path,status,bypassed,answers,mode}；status=complete / bypassed，bypassed=true 表示显式 --no-intake",
+   "properties": {
+    "path": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "status": {
+     "type": "string"
+    },
+    "bypassed": {
+     "type": "boolean"
+    },
+    "answers": {
+     "type": "object"
+    },
+    "mode": {
+     "type": "object",
+     "description": "制作方式（问诊第 2 题）的落地结果：chosen / resolved / route"
+    }
+   }
+  },
+  "ledger": {
+   "type": "object",
+   "description": "片间去重台账证据：{path,recent,min_gap,want_gap}。min_gap 为 null = 没有台账（--no-ledger 或首次出片）",
+   "properties": {
+    "path": {
+     "type": [
+      "string",
+      "null"
+     ]
+    },
+    "recent": {
+     "type": "integer"
+    },
+    "min_gap": {
+     "type": [
+      "integer",
+      "null"
+     ]
+    },
+    "want_gap": {
+     "type": "integer"
+    }
+   }
+  },
   "brief": {
-   "type": "object"
+   "type": "object",
+   "description": "propose 从 --brief / 问诊合成的解析结果：topic / duration_target / duration_mode / must_have / avoid"
   },
   "feedback": {
    "type": "string"
@@ -95,16 +153,19 @@
       "type": "string"
      },
      "preview": {
-      "type": "object"
+      "type": "object",
+      "description": "离线预览产物 {sheet, frames, secs}；--with-audio 时另有 audio / audio_engine / audio_secs / audio_dur（失败为 audio_error）；段太短被 grammar 降级时带 downgrades"
      },
      "cost": {
-      "type": "object"
+      "type": "object",
+      "description": "{preview_s: 预览耗时秒数}"
      },
      "diversity": {
       "type": [
        "object",
        "null"
-      ]
+      ],
+      "description": "与其他候选的最小设计距离：{vs:[{id,n,axes}], min_n}（propose._fill_diversity 生成；min_n < 2 = 伪多方案告警）"
      }
     }
    }

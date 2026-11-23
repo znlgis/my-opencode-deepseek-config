@@ -119,8 +119,7 @@ def _canvas():
     三条路都不抛异常：estimate 是"开渲前预演"，它自己不该因为取不到画布而崩。
     """
     try:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent
-                                   / "scripts"))
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
         import layoutkit                                # noqa: PLC0415
         return int(layoutkit.W), int(layoutkit.H)
     except Exception:                                   # noqa: BLE001
@@ -136,7 +135,7 @@ def _canvas():
 
 
 def _cost_factor(w, h):
-    """非横屏的耗时上浮系数（竖屏 1.15，见 PORTRAIT_COST_FACTOR 的注释）。"""
+    """非横屏的耗时上浮系数（竖屏按 PORTRAIT_COST_FACTOR 上浮，见该常量的注释）。"""
     return PORTRAIT_COST_FACTOR if int(h) > int(w) else 1.0
 
 
@@ -281,8 +280,7 @@ def _qavmaf_sample_step(vcfg=None):
     except (TypeError, ValueError):
         pass
     try:
-        scripts = str(Path(__file__).resolve().parent.parent /
-                      "scripts")
+        scripts = str(Path(__file__).resolve().parent.parent / "scripts")
         if scripts not in sys.path:
             sys.path.insert(0, scripts)
         import qavmaf
@@ -328,11 +326,27 @@ def read_timeline(work):
     if not isinstance(tl, dict) or "total" not in tl or "frames" not in tl:
         _warn("忽略 %s（没有 total/frames 字段，不像本项目的 timeline），退回剧本粗估" % p)
         return None, p
+    # 字段存在但值不可用（字符串/None/0/负数/NaN）同样是坏 timeline：build_report 会把
+    # 这三个数原样写进报告，坏值不会抛错，只会变成 frames=0 / duration=0.0 的"真实帧数"，
+    # 或者 fps=-30 算出负的分块与负段数——静默失败比崩溃更难查，所以在这里拦下来。
+    bad = []
+    for key in ("total", "frames") + (("fps",) if "fps" in tl else ()):
+        try:
+            v = float(tl[key])
+        except (TypeError, ValueError):
+            bad.append("%s=%r" % (key, tl[key]))
+            continue
+        if not math.isfinite(v) or v <= 0:
+            bad.append("%s=%r" % (key, tl[key]))
+    if bad:
+        _warn("忽略 %s（%s 不是有限正数，不像本项目的 timeline），退回剧本粗估"
+              % (p, "、".join(bad)))
+        return None, p
     return tl, p
 
 
 def score_seconds(total):
-    """配乐耗时：以 60 s / 389 s 两个实测点线性折算（超出范围按最近一段斜率外推）。"""
+    """配乐耗时：以 29 s / 58 s / 389 s 三个实测点线性折算（超出范围按最近一段斜率外推）。"""
     pts = [(r[0], r[1], r[2]) for r in SCORE_REFS]
     if total <= pts[0][0]:
         (x0, l0, h0), (x1, l1, h1) = pts[0], pts[1]
@@ -381,7 +395,7 @@ def frames_seconds(frames, jobs, engine, rerender):
     sp = _speedup(jobs)
     # 竖屏的绘制调用更密（像素数相同），按 PORTRAIT_COST_FACTOR 上浮；
     # 横屏系数恒为 1.0，所以既有预演数字一个都不变。
-    # 这个系数**没有实测**（见常量处注释），输出里会单独标明。
+    # 这个系数是实测比值（见常量处注释），输出里会单独标明。
     k = _cost_factor(_CANVAS[0], _CANVAS[1])
     if engine == "web":
         base = [WEB_STARTUP_SEC + frames * spf * k / sp for spf in WEB_SEC_PER_FRAME]
@@ -483,8 +497,7 @@ def build_report(script_path, script, args):
     # 预演必须跟着走，否则 720p 片会被按 1080p 估帧数与磁盘。
     try:
         import sys as _sys
-        _sys.path.insert(0, str(Path(__file__).resolve().parent.parent /
-                               "scripts"))
+        _sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
         import filmkit as _FK
         _vp = _FK.video_plan(script)
     except ImportError as e:
@@ -512,6 +525,12 @@ def build_report(script_path, script, args):
         # 24/25/50/60 fps 的片子帧数、磁盘、分块全部按 30 fps 算（24 fps 高估 25%，
         # 60 fps 低估一半），而 render.py 的 build_timeline(fps=vp["fps"]) 用的是真实值。
         fps = int(_vp["fps"])
+        # NaN/inf 会一路传到 int(round(...)) 变成 traceback（ValueError/OverflowError），
+        # 而本工具承诺坏输入只给一句话错误 + 退出码 2。min_dur 写成 NaN 时
+        # max(min_dur, ...) 会把每段时长都变成 NaN，这是唯一能绕过下面 <=0 判断的值。
+        if not math.isfinite(float(total)):
+            _die("%s 估不出有效片长（total=%r）：检查 lead/tail/min_dur/hold 里是否写了 "
+                 "NaN/inf 这类非有限数值" % (script_path, total), as_json)
         frames = int(round(total * fps))
         source = "script_estimate"
         source_note = ("粗估（等效字数 ÷ %.1f 字/秒 + lead/tail + hold；没有 %s）"
@@ -527,7 +546,16 @@ def build_report(script_path, script, args):
     if jobs_req > CORES:
         _warn("--jobs %d 超过本机 12 核：分块并行到 12 之后基本不再线性加速" % jobs_req)
 
-    rerender = max(0.1, float(args.rerender))
+    # 返工系数只接受有限正数：inf 会把 total_seconds 写成 JSON 里的 Infinity
+    # （严格 JSON 消费方解析失败），NaN/负数会被 max() 悄悄夹成 0.1——用户拿到的是
+    # "只渲 10% 时间"的排期，却没有任何提示。
+    rerender = float(args.rerender)
+    if not math.isfinite(rerender) or rerender <= 0:
+        _warn("--rerender %r 无效（要有限正数，1.0 = 一遍过），按 1.0 算"
+              % (args.rerender,))
+        rerender = 1.0
+    else:
+        rerender = max(0.1, rerender)
     n = len(lines)
     sfx_cfg = script.get("sfx") or {}
     mus = script.get("music") or {}
@@ -543,7 +571,15 @@ def build_report(script_path, script, args):
     has_bpm = "bpm" in mus or "bpm" in script
     music_on = bool(mus.get("enabled", True)) and mode not in ("off", "none")
     score_on = music_on and (mode == "score" or (not mode and has_bpm))
-    crf = script.get("crf", 17)
+    # crf 统一成整数再进报告：--json 的消费方按 int 解析，而剧本里写成字符串
+    # （"17"）或脏值（"abc"）时旧实现会把原值透出成字符串，磁盘估算却按 17 算——
+    # 同一份报告里 video.crf 与 disk 的口径对不上。
+    try:
+        crf = int(script.get("crf", 17))
+    except (TypeError, ValueError):
+        _warn("film.json 的 crf=%r 不是整数（render.py 会拒绝），磁盘按 17 估"
+              % (script.get("crf"),))
+        crf = 17
     preset = script.get("preset", "medium")
 
     # ---- 各阶段 ----
@@ -627,7 +663,11 @@ def build_report(script_path, script, args):
              note="%d 条 sfx.cues 落位 + 排序（经验模型，给 ±%d%% 区间）"
                   % (n_cues, int(UNMEASURED_BAND * 100))),
         dict(stage="score", lo=score_lo, hi=score_hi, measured=bool(score_on),
-             note=("以实测点 29 s≈3.6–6.3 s / 58 s≈4.5–5.0 s 为锚（--stage all 里与其它阶段争 CPU 会更慢；389 s 只是外推锚点）"
+             note=("以实测点 %g s≈%.2g–%.2g s / %g s≈%.2g–%.2g s 为锚"
+                   "（musicgen ≈31× 实时；--stage all 里与其它阶段争 CPU 会更慢；%g s 只是外推锚点）"
+                   % (SCORE_REFS[0][0], SCORE_REFS[0][1], SCORE_REFS[0][2],
+                      SCORE_REFS[1][0], SCORE_REFS[1][1], SCORE_REFS[1][2],
+                      SCORE_REFS[2][0])
                    if score_on else
                    ("mode=%s：不跑配乐引擎（%s）"
                     % (mode or "-", "外部配乐/和弦床/关掉配乐")))),

@@ -253,6 +253,52 @@ _LEGACY_DRAWERS = {
 
 _PLAN_CACHE = {}
 _THEME_WARNED = set()
+
+# ---- 文字框审计（G13 版式冲突门禁的采集端）----
+# 为什么要采集而不是让门禁自己"猜"位置：位置由 align/tracking/视差/入场偏移共同决定，
+# 门禁端重算一遍必然算错（这正是 filmkit.qa_text_safe 只能量字幕、量不了版式的原因）。
+# 采集点放在 _draw_text —— 那是**所有文字的唯一出口**，装饰线/色块不经过它，天然不误报。
+_TEXT_QA_ON = False        # 由 text_qa_start() 打开；正常出片时恒 False（零开销）
+_TEXT_QA_BOXES = []        # [(text, x0, y0, x1, y1, size, role)]
+_TEXT_QA_ROLE = "body"
+
+
+def text_qa_start():
+    """打开文字框采集（门禁用）。返回前清空缓存，避免上一段的框串到下一段。"""
+    global _TEXT_QA_ON
+    _TEXT_QA_BOXES.clear()
+    _TEXT_QA_ON = True
+    return True
+
+
+def text_qa_take():
+    """取走并关闭采集。返回 [(text, x0, y0, x1, y1, size, role)]。"""
+    global _TEXT_QA_ON
+    _TEXT_QA_ON = False
+    out = list(_TEXT_QA_BOXES)
+    _TEXT_QA_BOXES.clear()
+    return out
+
+
+def text_qa_role(role):
+    """上下文管理器式的角色标注：with text_qa_role("hud"): ... 期间画的字记成 hud。
+
+    为什么需要角色：HUD 的品牌名与正文在版式上**允许**重叠（设计如此），
+    门禁必须能区分"设计允许"和"版式失控"，否则又会变成靠人解释的噪声。
+    """
+    class _Role(object):
+        def __enter__(self):
+            global _TEXT_QA_ROLE
+            self.prev = _TEXT_QA_ROLE
+            _TEXT_QA_ROLE = str(role)
+            return self
+
+        def __exit__(self, *exc):
+            global _TEXT_QA_ROLE
+            _TEXT_QA_ROLE = self.prev
+            return False
+
+    return _Role()
 # 默认不推镜。慢速推镜在整数光栅上必然抖：4% 的推镜摊到 8 秒 = 0.03px/帧，
 # 取整后变成「每 5 帧跳 1px」，观众看到的是抖而不是推（见 _view 的注释）。
 _DEFAULT_PUSH = 0.0
@@ -393,7 +439,7 @@ _TYPE_SCALE = float(getattr(K, "TYPE_SCALE", 1.0))
 
 # 每次"文字被钳进安全区"都记一笔（文本片段/字号/宽度）。竖屏下它是**诊断表**：
 # 条目多说明该段版式在小画布上挤不下，该改的是版式，不是把字号再调小。
-# 横屏永远不写这个列表（`_fit_px` 在 W==1920 时直接返回），所以它对既有行为零影响。
+# 只有在文字真的越出 SAFE 时才写（v2.7.3 起横屏也不再豁免：越界才钳，SAFE 内一个像素不动）。
 _CLAMPED = []
 
 # 正文可用的**下边界**：字幕带顶再留 16px 间隙。
@@ -708,6 +754,25 @@ def _bg_plate(th, s):
 
 # ---------------- 版式几何（全部从 ST.LAYOUTS 取） ----------------
 
+def _text_flow_kicker_y(lay, bdy, title_y, title_size, kicker_size):
+    """kicker 的纵向位置：由标题字号反推，**不允许**直接用布局表里的固定 kicker_y。
+
+    为什么必须统一：布局表 left-stack 给的是 title_y=300 / kicker_y=250，只差 50px，
+    而标题字号 84–96px —— 字形往上顶穿 kicker，数学上必然重叠（实测章节卡与要点列表
+    全片压字）。旧版只有 hero 一处做了这件事，另外两个 drawer 各写各的，于是改一处漏两处。
+    """
+    want = float(title_y) - float(title_size) * 1.05 - float(kicker_size) * 0.35
+    return min(float(lay["kicker_y"]) + float(bdy), want)
+
+
+def _norm_text(x):
+    """比较两行字是否"同一句"：忽略空白与全半角差异（"模式 一" vs "模式一"）。"""
+    try:
+        import unicodedata
+        return unicodedata.normalize("NFKC", str(x)).replace(" ", "").strip()
+    except Exception:                                      # noqa: BLE001
+        return str(x).replace(" ", "").strip()
+
 def _title_anchor(lay):
     """标题锚点 + 对齐方式：left-stack 左对齐 / split-right 右对齐 / center-stack 居中。
 
@@ -794,17 +859,19 @@ def _panel_boxes(lay, th, n, y_floor, v):
 # ---------------- 文字绘制（位置过视差，字号不重采样） ----------------
 
 def _fit_px(px, w, text_snippet="", size=0):
-    """把一段文字的左边界钳进安全区（只在非横屏生效），并记下每次钳位。
+    """把一段文字的左边界钳进安全区（**越界才钳**），并记下每次钳位。
 
-    为什么把这个兜底放在 `_draw_text` 而不是各构图的锚点函数里：竖屏下每个构图都会用自己的
-    常量算 ax（`150+bdx+bins`、`W-150`、`W*0.5`…），逐个去改等于把"不出画"的责任散到 10 处，
-    漏一处就是一段文字被切掉——实测 split-right 的标题与 kicker 都是从 930 起向右排、被右边缘
-    切掉半个字。放在唯一的绘制入口，是**保证**而不是**猜测**。
+    为什么把这个兜底放在 `_draw_text` 而不是各构图的锚点函数里：每个构图都会用自己的常量算
+    ax（`150+bdx+bins`、`W-150`、`W*0.5`…），逐个去改等于把"不出画"的责任散到 10 处，漏一处
+    就是一段文字被切掉——实测 split-right 的标题与 kicker 都是从 930 起向右排、被右边缘切掉
+    半个字。放在唯一的绘制入口，是**保证**而不是**猜测**。
 
-    横屏（W==1920）直接原样返回：这条路径必须逐字节不变（golden_frames 守）。
+    为什么横屏也要钳（v2.7.3 收紧）：采样器的 `visual.bias.x` 允许到 -150，hero 的左缘
+    `150 + bias.x` 可以算到 0 甚至负数——G13 版式门禁会判「文字越出安全区」而失败（实测
+    seed=7 的候选 B：bias.x=-90 → kicker 左缘 60px < SAFE 左界 64px，24 处冲突）。
+    钳位是**幂等**的：本来就在 SAFE 内的文字一个像素都不动，所以四套金帧基线不受影响；
+    只有真正越界的落笔才被推回边界，并在 `_CLAMPED` 里留一笔供诊断。
     """
-    if W == 1920:
-        return px
     x0, x1 = float(SAFE[0]), float(SAFE[2])
     if w >= (x1 - x0):
         _CLAMPED.append((text_snippet, size, float(w)))
@@ -825,6 +892,9 @@ def _draw_text(img, th, v, text, x, y, size, weight, color, align="left",
     py = v.y(y)
     font = _font(th, size, weight)
     fill = _rgba(color, 255.0 * clamp(alpha))
+    # G13 采集：只记**真的画上去了**的字（alpha 过半），记的是最终落笔矩形，
+    # 不是调用方给的锚点——align / tracking / 视差都已经算进去了。
+    _rec = _TEXT_QA_ON and clamp(alpha) > 0.5
     d = ImageDraw.Draw(img, "RGBA")
     tr = float(tracking or 0.0)
     if tr > 0.3 and len(text) > 1:
@@ -834,6 +904,10 @@ def _draw_text(img, th, v, text, x, y, size, weight, color, align="left",
         elif align == "right":
             px -= int(total)
         px = _fit_px(px, total, text[:16], size)
+        if _rec:
+            _TEXT_QA_BOXES.append((text, float(px), float(py),
+                                   float(px + total), float(py + size * 1.22),
+                                   size, _TEXT_QA_ROLE))
         for ch in text:
             d.text((px, py), ch, font=font, fill=fill)
             px += _text_w(ch, size, weight, th) + tr
@@ -844,6 +918,10 @@ def _draw_text(img, th, v, text, x, y, size, weight, color, align="left",
     elif align == "right":
         px -= int(w)
     px = _fit_px(px, w, text[:16], size)
+    if _rec:
+        _TEXT_QA_BOXES.append((text, float(px), float(py),
+                               float(px + w), float(py + size * 1.22),
+                               size, _TEXT_QA_ROLE))
     d.text((px, py), text, font=font, fill=fill)
 
 
@@ -865,6 +943,11 @@ def _entrance_y(th, p):
 # ============================================================================
 
 def _hud(img, th, chapter, progress, title, lang=None):
+    with text_qa_role("hud"):
+        return _hud_impl(img, th, chapter, progress, title, lang)
+
+
+def _hud_impl(img, th, chapter, progress, title, lang=None):
     style = str(th.get("hud") or "none")
     if style == "none":
         return img
@@ -1348,6 +1431,11 @@ _NUM_WEIGHT = "mono"
 
 
 def _draw_num(img, th, v, text, x, y, size, color, align="center", alpha=1.0):
+    with text_qa_role("number"):
+        return _draw_num_impl(img, th, v, text, x, y, size, color, align, alpha)
+
+
+def _draw_num_impl(img, th, v, text, x, y, size, color, align="center", alpha=1.0):
     """数字用等宽字体：滚动/跳变时字宽不抖（consola 只有 ASCII，中文标签另用 reg）。"""
     _draw_text(img, th, v, text, x, y, size, _NUM_WEIGHT, color, align, alpha)
 
@@ -1441,7 +1529,7 @@ def _draw_hero(scene, t, dur, tg, script, frame, plan, th):
     # 而 hero 的标题字号是 96px（display 档），字形往上顶穿 kicker —— 实测封面上
     # "00 · 开场"直接压在"价值与代价来自同一个选择"中间。
     # 按字号算间距后，换字体/换字号档（visual 语言包会改 ratio）都不会再压。
-    _ky = min(float(lay["kicker_y"]), y - size * 1.05 - ksize * 0.35)
+    _ky = _text_flow_kicker_y(lay, bdy, y, size, ksize)
     # 竖屏：标题块整体下移到正文区垂直中线附近。
     # 横屏 hero 的 title_y=300 在 1080 高里是 28%，竖屏沿用同一数字会变成 15%（贴顶），
     # 下面留 1200px 空白——实测出图就是这样。这里按块高（kicker + 标题行 + 副标题）重算。
@@ -1605,15 +1693,22 @@ def _draw_list(scene, t, dur, tg, script, frame, plan, th):
         panel_x, panel_w = _panel_x(lay) + bdx, float(lay["panel_w"])
         panel_y = max(float(lay["panel_y"]) + bdy, 210.0)
 
+    # 标题：**不再**回退到正文前 18 字。实测那样会把半句旁白画成大标题，与 kicker
+    # 抢同一块纵向位置（本次"全片文字压盖"的第二个来源）。没有 big 就只画 kicker。
+    big = str(scene.get("big") or "").strip()
     kicker = scene.get("kicker") or ""
+    if kicker and big and _norm_text(kicker) == _norm_text(big):
+        kicker = ""                     # 同文不画第二遍
+    if kicker and not big:
+        big, kicker = kicker, ""        # 没有标题时，小字标签升格成标题（同块位置只画一次）
+    bsize = int(th["scale"]["heading"][0])
     p0 = ease(rng(t, 0.0, 0.75))
     if kicker:
+        ksize = int(th["scale"]["kicker"][0])
         _draw_text(img, th, v, kicker, ax + _entrance_x(th, p0, align),
-                   float(lay["kicker_y"]) + _entrance_y(th, p0),
-                   int(th["scale"]["kicker"][0]), "bold", th["accent"], align, p0, trk * 0.5)
-
-    big = scene.get("big") or (scene.get("text") or "")[:18]
-    bsize = int(th["scale"]["heading"][0])
+                   _text_flow_kicker_y(lay, bdy, float(lay["title_y"]) + bdy, bsize, ksize)
+                   + _entrance_y(th, p0),
+                   ksize, "bold", th["accent"], align, p0, trk * 0.5)
     lines = _wrap(big, bsize, title_w, "bold", th)
     while len(lines) > 3 and bsize > 40:
         bsize = int(bsize * 0.9)
@@ -2254,15 +2349,21 @@ def _draw_chapter(scene, t, dur, tg, script, frame, plan, th):
                   (int(cut), int(ny - 10)))
 
     name = str(scene.get("big") or "").strip() or chapter
+    name_lines = _wrap(name, 68, 1300, "bold", th)[:2]
     pn = ease(rng(t, 0.25, 1.0))
-    for j, ln in enumerate(_wrap(name, 68, 1300, "bold", th)[:2]):
+    for j, ln in enumerate(name_lines):
         _draw_text(img, th, v, ln, 150.0, 470.0 + j * 86 + _entrance_y(th, pn),
                    68, "bold", th["ink"], "left", pn, trk)
 
     kicker = str(scene.get("kicker") or "")
+    if kicker and _norm_text(kicker) == _norm_text(name):
+        kicker = ""                     # 章节名与 kicker 同文：只画一次
     if kicker:
         pk = ease(rng(t, 0.15, 0.8))
-        _draw_text(img, th, v, kicker, 150.0, 410.0, int(th["scale"]["kicker"][0]),
+        ksize = int(th["scale"]["kicker"][0])
+        # chapter 的标题字号是 68（固定），kicker 顶到它上面
+        ky = min(410.0, 470.0 - 68 * 1.05 - ksize * 0.35)
+        _draw_text(img, th, v, kicker, 150.0, ky, ksize,
                    "bold", th["accent"], "left", pk, trk * 0.5)
 
     # 横线由中点向两侧生长 + 持续动态（端点微呼吸）

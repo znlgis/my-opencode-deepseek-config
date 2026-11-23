@@ -40,7 +40,17 @@ def build_script():
             "_design": design, "lines": [{"id": "s01", "text": "x"}]}
 
 
+def _setup_stdio():
+    """Windows 管道默认 gbk：中文/箭头会乱码或 UnicodeEncodeError（同 studio.py）。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def main():
+    _setup_stdio()
     fails = []
 
     def check(name, ok, detail=""):

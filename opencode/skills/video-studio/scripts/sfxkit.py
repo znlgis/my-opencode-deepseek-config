@@ -1751,13 +1751,16 @@ def save(path, x, subtype: str = "PCM_24") -> Path:
     if subtype not in widths:
         raise ValueError("不支持的 WAV 子类型: %r（可用 PCM_16/PCM_24/PCM_32）" % (subtype,))
     sw = widths[subtype]
+    # 三种位深统一四舍五入：astype 是向零截断，会同时造成 -0.5 LSB 的直流偏置
+    # （PCM_16 实测 0.5 -> 0.49997，PCM_24 走 round 却是 0.4999999）和负样本的半 LSB 偏差；
+    # 24-bit 一直是 rint，16/32-bit 漏了，同一函数三种位深两套口径。
     if sw == 2:
-        raw = (inter * 32767.0).astype("<i2").tobytes()
+        raw = np.rint(inter * 32767.0).astype("<i2").tobytes()
     elif sw == 3:
-        q = np.round(inter * 8388607.0).astype("<i4")
+        q = np.rint(inter * 8388607.0).astype("<i4")
         raw = q.view(np.uint8).reshape(-1, 4)[:, :3].tobytes()
     else:
-        raw = (inter * 2147483647.0).astype("<i4").tobytes()
+        raw = np.rint(inter * 2147483647.0).astype("<i4").tobytes()
     p.parent.mkdir(parents=True, exist_ok=True)
     with wave.open(str(p), "wb") as w:
         w.setnchannels(n_ch)
@@ -1986,7 +1989,10 @@ def analyze(x) -> dict:
     f, P = _ltas(mono)
     m["频谱重心_Hz"] = round(_centroid(f, P))
     cum = np.cumsum(P) / (np.sum(P) + 1e-30)
-    m["85%能量以下_Hz"] = round(float(f[np.searchsorted(cum, 0.85)]))
+    # 极短信号（几十个采样）经 _ltas 补零到 256 点后，cum 在最后一格里可能仍 < 0.85：
+    # np.searchsorted 会返回 len(cum)，直接索引越界（analyze(np.ones(1)) 实测 IndexError）。
+    i85 = min(int(np.searchsorted(cum, 0.85)), len(f) - 1)
+    m["85%能量以下_Hz"] = round(float(f[i85]))
     band = (f >= 50) & (f <= 16000)
     m["频谱平坦度"] = round(float(np.exp(np.mean(np.log(P[band] + 1e-30)))
                                 / (np.mean(P[band]) + 1e-30)), 4)
@@ -2225,8 +2231,13 @@ def _tile(seg, n: int, xfade: float = 1.8, sr: int = SR) -> np.ndarray:
     xf = int(min(n_samples(xfade, sr), max(16, m // 2)))
     if xf < 16:
         return pad_to(seg, n)
+    # 段比交叉淡化窗口还短（m <= xf，含 m <= 16 的极短段）时 hop 会成为 0 或负数：
+    # while pos < n 里 pos += hop 永远不前进 -> 死循环（m==16 实测挂死），m<16 时
+    # pos 变负 -> 切片为空 -> 广播报错。这里把窗口缩到段长的 1/3，保证 hop >= 1。
+    if m - xf <= 0:
+        xf = max(1, m // 3)
     w = 0.5 - 0.5 * np.cos(np.linspace(0.0, np.pi, xf))
-    hop = m - xf
+    hop = max(1, m - xf)
     out = np.zeros((n, 2))
     pos, first = 0, True
     while pos < n:

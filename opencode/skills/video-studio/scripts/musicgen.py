@@ -39,6 +39,10 @@ SR = 48000
 PEAK_DBFS = -6.0
 TARGET_PEAK = 10.0 ** (PEAK_DBFS / 20.0)
 
+# bpm 合法区间（与 scorekit 同口径）：区间外不是"慢/快"，而是小节数/拍数按 1/bar_s 爆炸
+# —— 1e-9 会让 nbars 到 10^15（MemoryError: allocate 8.39 PiB），1e9 会让编排循环卡死。
+BPM_MIN, BPM_MAX = 10.0, 1000.0
+
 VOICE_IDS = ("saw", "sine", "square", "triangle", "bell", "pluck")
 VOICE_SLOTS = ("pad", "bass", "arp", "lead")
 MOOD_IDS = ("steady", "calm", "reflective", "hopeful", "uplifting", "driving", "tense")
@@ -960,6 +964,12 @@ def _build_plan(duration, bpm, key, scale, mood, seed, sections, progressions,
     except (TypeError, ValueError):
         raise ValueError("bpm 必须是数字，收到 %r" % (bpm,)) from None
     _require(math.isfinite(bpm_f) and bpm_f > 0.0, "bpm 必须是有限正数，收到 %r" % (bpm,))
+    # 有限正数还是不够：bpm=1e-9 时 nbars 会按 1/bar_s 算成 10^15 量级，直接 MemoryError
+    # （实测 "Unable to allocate 8.39 PiB"）；bpm=1e9 时小节数 4e6、拍到 1.6e7，编排卡死
+    # 在单线程循环里出不来。这两类输入都不会是配乐，明确报错比让它 OOM/挂死好。
+    _require(BPM_MIN <= bpm_f <= BPM_MAX,
+             "bpm 必须在 %.0f~%.0f 之间，收到 %r（区间外会算出天文数量的小节/拍导致 OOM 或卡死）"
+             % (BPM_MIN, BPM_MAX, bpm))
     try:
         seed_i = 0 if seed is None else abs(int(seed))
     except (TypeError, ValueError):

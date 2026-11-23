@@ -33,9 +33,9 @@
   "platform": "Windows 11"
  },
  "inputs": {
-  "scenes_sha1": "ee849333c8132df3fd41c8a79dd47900f6ca7a1c",
-  "filmkit_sha1": "4217e16a0c69c5dfb16e4e80c76a227a5195d142",
-  "stylekit_sha1": "6b35df52efec7d695417556eee9bdb45160c44ab",
+  "scenes_sha1": "27c446638aef1c66c0dde32ffd85a9908eaff8b3",
+  "filmkit_sha1": "7e82135bd81ae1a7a57277ac206dd7a77f55ad21",
+  "stylekit_sha1": "daf7d5af499287fdcf2b8ab969f399494d095100",
   "design_sha1": "38af167000934ff80b0ea10d82b135050ac91a33"
  },
  "frames": [
@@ -97,7 +97,7 @@
   },
   {
    "name": "chapter",
-   "sha256": "1a9eab96423b8c056be4e1047ff5dca0e7c2e0ba15f0fc9d4b4456c2f7194431",
+   "sha256": "baf1b518c2f2613d8ad8bb2973613d97b82dfafd93126258a88f2157acd7001d",
    "size": [
     1920,
     1080

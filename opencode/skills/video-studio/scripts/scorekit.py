@@ -53,6 +53,9 @@ __version__ = "1.1.0"
 
 SR = 48000                             # 采样率（与 filmkit / sfxkit 一致）
 BEATS_PER_BAR = 4                      # 4/4
+# bpm 合法区间（与 musicgen 同口径）：区间外会让小节/拍数按 1/bar_s 爆炸，
+# 1e-9 直接 MemoryError、1e9 卡死在编排循环里。10 BPM 的极小慢板仍在区间内。
+BPM_MIN, BPM_MAX = 10.0, 1000.0
 BASE_LUFS = -16.0                      # 报告里 target_lufs 的基准（参考片混音 -16 LUFS）
 TARGET_PEAK_DB = -1.5                  # 输出峰值（留 0.5 dB 给编码）
 FADE_OUT_S = 2.0                       # 片尾淡出
@@ -761,6 +764,11 @@ class Score:
         _require(isinstance(bpm, (int, float)) and math.isfinite(float(bpm))
                  and float(bpm) > 0.0,
                  f"bpm 必须是有限正数，收到 {bpm!r}")
+        # 与 musicgen 同一口径：区间外的 bpm 会让小节/拍数爆炸（1e-9 -> MemoryError，
+        # 1e9 -> 编排循环卡死），明确报错。10 BPM 的极小慢板仍可用。
+        _require(BPM_MIN <= float(bpm) <= BPM_MAX,
+                 f"bpm 必须在 {BPM_MIN:.0f}~{BPM_MAX:.0f} 之间，收到 {bpm!r}"
+                 f"（区间外会算出天文数量的小节/拍导致 OOM 或卡死）")
         _require(key in KEYS_ALL, f"未知调性 {key!r}；可选：{'/'.join(KEYS_ALL)}")
         self.duration = float(duration)
         self.bpm = float(bpm)

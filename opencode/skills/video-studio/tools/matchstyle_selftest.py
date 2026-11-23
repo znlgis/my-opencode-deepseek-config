@@ -96,8 +96,7 @@ def write_footage(tmp, src):
 def write_design(work, motif=None):
     work = Path(work)
     work.mkdir(parents=True, exist_ok=True)
-    d = json.loads((ROOT / "assets"
-                    / "design_fixture.json").read_text(encoding="utf-8"))
+    d = json.loads((ROOT / "assets" / "design_fixture.json").read_text(encoding="utf-8"))
     if motif:
         d["visual"]["motif"] = {"kind": motif, "density": 0.3,
                                 "detail": {"top": 40, "bottom": 44}}
@@ -254,5 +253,17 @@ def main():
     return 0
 
 
+def _setup_stdio():
+    """重定向到管道/文件时切 UTF-8：Windows 默认代码页是 GBK，本文件输出里有
+    em dash（—）与中文，Agent 用 subprocess 抓输出时既会乱码，也可能
+    UnicodeEncodeError 直接崩。与 selfcheck.py / render.py 同一口径。"""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:                                   # noqa: BLE001
+            pass
+
+
 if __name__ == "__main__":
+    _setup_stdio()
     sys.exit(main())

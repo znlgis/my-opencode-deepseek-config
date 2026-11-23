@@ -725,6 +725,12 @@ def snap(html_path, times, out_dir, tag="", deterministic=None, *, style=None,
     tlist = [float(t) for t in times]
     if not tlist:
         raise ValueError("snap 至少需要 1 个时刻（times 为空）")
+    # 负数 / NaN / inf 以前会一路走到 int(round(t*fps))：负数被页面当成第 0 帧截下来
+    # （文件名还写着 t=-2.00），NaN 则炸成一句 "cannot convert float NaN to integer"。
+    # 这是用法错误，进门就报错，别出图。
+    bad_times = [t for t in tlist if not math.isfinite(t) or t < 0]
+    if bad_times:
+        raise ValueError("snap 的时刻必须是非负有限秒数，收到 %r" % (bad_times[:4],))
     out = Path(out_dir).expanduser()
     if not out.is_absolute():
         out = (Path.cwd() / out).resolve()
@@ -781,9 +787,12 @@ def _finite_t(value, kind: str, label) -> float:
 
 def _norm_cue_list(raw, src: str) -> list:
     out = []
-    for item in raw or []:
+    for idx, item in enumerate(raw or []):
+        # 非对象条目以前是 continue 静默跳过：页面返回 [null, {...}] 时少一条 cue，
+        # cues.json 就少一个声音提示点，配乐/音效照跑但整片少响一下——查不出来。
         if not isinstance(item, dict):
-            continue
+            raise ValueError("cue 必须是对象（第 %d 条是 %s）：%r"
+                             % (idx + 1, type(item).__name__, item))
         cue = dict(item)
         if "t" not in cue:
             raise ValueError("cue 缺 t 字段: %r" % (item,))
@@ -805,12 +814,15 @@ def _norm_events(raw) -> list:
     否则会拿 29s PIL 时间轴上的 ui_blip 去配 12s 页面上的 ui_blip，报出假 FAIL。
     """
     out = []
-    for item in raw or []:
+    for idx, item in enumerate(raw or []):
+        # 以前非对象条目 / 缺 t 的条目都是 continue 静默丢弃：视觉事件悄悄消失，
+        # qa_frames 的音画同步对照会跟着少一条，门禁看着全绿其实没在查。
         if not isinstance(item, dict):
-            continue
+            raise ValueError("event 必须是对象（第 %d 条是 %s）：%r"
+                             % (idx + 1, type(item).__name__, item))
         ev = dict(item)
         if "t" not in ev:
-            continue
+            raise ValueError("event 缺 t 字段（视觉事件必须有时间）：%r" % (item,))
         ev["t"] = _finite_t(ev["t"], "event", ev.get("kind"))
         ev.setdefault("kind", "misc")
         ev.setdefault("src", "web")
@@ -899,6 +911,7 @@ def _chunk_dir(out_mp4, from_s: float, to_s: float, token: str = "") -> Path:
 
     token 只在"画布尺寸不是 1920x1080 或注入了 style"时非空——不同画风/尺寸的块不能混用，
     否则断点续跑会把旧画风的块拼进新片（花片）。token 为空时目录名保持不变，续跑才能命中。
+    目录里除分块外还有 _plan.json（续跑计划指纹，只用于判断能否复用旧块，不参与拼接）。
     """
     out = Path(out_mp4)
     name = "%s_%g-%g" % (out.stem, float(from_s), float(to_s))
@@ -915,6 +928,66 @@ def _style_token(payload, width: int, height: int) -> str:
     if payload is not None:
         parts.append("s" + style_sha256(payload)[:12])
     return "_".join(parts)
+
+
+# ---------------------------------------------------------------- 断点续跑计划指纹
+# 为什么必须有：块复用只按「文件存在」判断。改了页面画面（film.js / index.html）、
+# 帧率或编码参数后，旧块会被原样拼进成片——出片成功、时长也对，但画面是上一版
+# （实测：30fps 的旧块被当成 60fps 片的块直接复用，exit 0）。PIL 路线在 render.py
+# 里用 _frames_plan_stamp 挡这一类；web 路线以前只有 _style_token（只认画风/尺寸）。
+_PAGE_REF_RE = re.compile(r"""(?:src|href)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+_PLAN_FILE = "_plan.json"
+
+
+def _page_fingerprint(html_path) -> str:
+    """页面内容指纹：入口 HTML + 它 src/href 引用的本地文件的内容哈希。
+
+    覆盖「改 index.html / 改 film.js」这两类最常见的改画面方式。URL 页面或读不到的
+    引用返回空串（仍是合法指纹，只是退化成只按参数指纹判断）。
+    """
+    p = Path(str(html_path)).expanduser()
+    if not p.is_absolute():
+        p = Path.cwd() / p
+    try:
+        p = p.resolve()
+        if not p.is_file():
+            return ""
+        blobs = ["entry:" + hashlib.sha256(p.read_bytes()).hexdigest()]
+        text = p.read_text(encoding="utf-8", errors="replace")
+        for ref in sorted(set(_PAGE_REF_RE.findall(text))):
+            ref = ref.split("?")[0].split("#")[0].strip()
+            if not ref or _SCHEME_RE.match(ref) or ref.startswith("//"):
+                continue
+            try:
+                target = (p.parent / ref).resolve()
+                if not target.is_file():
+                    continue
+                blobs.append("%s:%s" % (ref, hashlib.sha256(target.read_bytes()).hexdigest()))
+            except OSError:
+                continue
+        return hashlib.sha256("\n".join(blobs).encode("utf-8")).hexdigest()
+    except OSError:
+        return ""
+
+
+def _resume_plan(html_path, url, *, fps, from_s, to_s, duration, chunk_s,
+                 crf, preset, width, height, style_token) -> dict:
+    """断点续跑的计划指纹（纯数据；同输入同输出，可 JSON 序列化）。"""
+    return {
+        "version": 1,
+        "url": url,
+        "page": _page_fingerprint(html_path),
+        "fps": round(float(fps), 6),
+        "from_s": round(float(from_s), 6),
+        "to_s": round(float(to_s), 6),
+        "duration": round(float(duration), 6),
+        "chunk_s": round(float(chunk_s), 6),
+        "crf": int(crf),
+        "preset": str(preset),
+        "width": int(width),
+        "height": int(height),
+        "style": style_token,
+    }
 
 
 def _plan_chunks(chunk_dir, f0: int, f1: int, step: int) -> list:
@@ -1117,7 +1190,11 @@ def render_full(html_path, out_mp4, duration, *, workers=2, chunk_s=30.0,
     style 非 None 时整片跟随风格包（每个 worker 都在页面加载前注入同一份
     __STYLE__），块目录名会带尺寸 + style 指纹后缀，**换风格不会复用旧块**；
     width/height 只收 16:9 横屏 / 9:16 竖屏的偶数尺寸（_validate_canvas），fps 非 None
-    时要求页面帧率一致。
+    时要求页面帧率一致（style=None 时也查：那种情况下 fps 注入不进页面，只能靠页面声明对齐）。
+
+    resume=True 时会先比对块目录里的 _plan.json 指纹（页面内容 / 帧率 / 渲染区间 /
+    chunk_s / crf / preset / 画布 / style）：只要变了就 raise，拒绝把旧块拼进新片；
+    确认要重渲请加 resume=False 或删掉块目录。
     """
     _setup_stdout()
     return asyncio.run(_render_full_async(
@@ -1149,6 +1226,21 @@ async def _render_full_async(html_path, out_mp4, duration, *, workers=2, chunk_s
     # 先问页面要长度与帧率：这是块切分与成片校验的唯一真值来源
     page_dur, fps_page = await _page_meta_async(url, deterministic=deterministic,
                                                 style=style, width=width, height=height, fps=fps)
+    if fps is not None:
+        # 调用方声明了帧率就必须和页面一致。style=None 时 fps 没有 payload 可写，
+        # open_page 不会替我们查——以前 --fps 60 对 30fps 的页面是「静默按 30 渲」，
+        # 与 render_full 的公开承诺（fps 非 None 时要求页面帧率一致）相反。
+        try:
+            want_fps = float(fps)
+        except (TypeError, ValueError):
+            raise ValueError("fps 必须是数字，收到 %r" % (fps,)) from None
+        if not math.isfinite(want_fps) or want_fps <= 0:
+            raise ValueError("fps 必须是正数，收到 %r" % (fps,))
+        if abs(fps_page - want_fps) > 1e-6:
+            raise ValueError(
+                "页面 window.FPS=%g 与传入 fps=%g 不一致：帧号就是 f/FPS，两边必须同帧率"
+                "（没有注入 style 时 fps 不会写进页面，只能靠页面自己的声明对齐）。"
+                % (fps_page, want_fps))
     if duration is None:
         duration = page_dur
     duration = float(duration)
@@ -1173,9 +1265,33 @@ async def _render_full_async(html_path, out_mp4, duration, *, workers=2, chunk_s
     f0 = int(round(from_s * fps))
     f1 = int(round(to_s * fps))
     step = max(1, int(round(chunk_s * fps)))
-    chunk_dir = _chunk_dir(out, from_s, to_s, _style_token(payload, width, height))
+    style_token = _style_token(payload, width, height)
+    chunk_dir = _chunk_dir(out, from_s, to_s, style_token)
     chunk_dir.mkdir(parents=True, exist_ok=True)
     chunks = _plan_chunks(chunk_dir, f0, f1, step)
+
+    # 断点续跑的计划校验：页面内容 / 帧率 / 区间 / 编码参数只要变一样，旧块就不能复用。
+    plan = _resume_plan(html_path, url, fps=fps, from_s=from_s, to_s=to_s,
+                        duration=duration, chunk_s=chunk_s, crf=crf, preset=preset,
+                        width=width, height=height, style_token=style_token)
+    plan_path = chunk_dir / _PLAN_FILE
+    if resume and plan_path.is_file():
+        try:
+            old_plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise ValueError(
+                "分块计划文件 %s 读不出来（%s）：无法确认旧块是否对应当前页面，拒绝复用。"
+                "确认要重渲就删掉块目录 %s，或加 --no-resume。"
+                % (plan_path, exc, chunk_dir)) from exc
+        if not isinstance(old_plan, dict) or old_plan != plan:
+            old = old_plan if isinstance(old_plan, dict) else {}
+            changed = sorted(k for k in (set(old) | set(plan)) if old.get(k) != plan.get(k))
+            raise ValueError(
+                "分块计划已变化（%s），旧块是按上一版页面/参数渲的，拒绝拼进成片。\n"
+                "  确认要重渲：加 --no-resume（或删掉块目录 %s）。"
+                % ("、".join(str(k) for k in changed[:8]), chunk_dir))
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, sort_keys=True, indent=1) + "\n",
+                         encoding="utf-8")
     if not resume:
         for _a, _b, path in chunks:
             for victim in (path, path.with_name(path.name[: -len(".mp4")] + PART_SUFFIX)):
@@ -1328,11 +1444,33 @@ async def _qa_text_async(html_path, t0, t1, step, deterministic=None, *,
         browser, page, _cdp = await open_page(pw, url, width, height, deterministic=deterministic,
                                               style=style, fps=fps)
         try:
+            # 页面没导出 qaText 时，page.evaluate 抛的是 Playwright 的裸 Error（不是
+            # RuntimeError）：CLI 的 except RuntimeError 接不住，文本质检会变成一条
+            # traceback + exit 1（和「检出文字缺陷」同码）。契约缺失要报成可读的
+            # RuntimeError，CLI 才能给 exit 2 并指出是页面/环境问题。
+            contract = await _page_contract(page)
+            if contract.get("qaText") != "function":
+                raise RuntimeError(
+                    "页面 %s 没有导出 window.qaText(t0, t1, step)（文字质检的页面契约见 "
+                    "references/web-engine.md §9；assets/web/qa_text.js 自带它）。"
+                    "自定义页面请引入 qa_text.js，或补上 window.qaText。契约快照：%s"
+                    % (url, _format_contract(contract)))
             if t1 is None:
                 t1 = await page_number(page, "DURATION")
-            result = await page.evaluate(
-                "([a, b, c]) => window.qaText(a, b, c)", [float(t0), float(t1), float(step)]
-            )
+                if float(t1) <= float(t0):
+                    raise RuntimeError(
+                        "文字质检区间为空：--from %.3f 已经 >= 页面 DURATION %.3f s。"
+                        "空扫描不是「没有缺陷」，不能当通过（改小 --from 或显式给 --to）。"
+                        % (float(t0), float(t1)))
+            try:
+                result = await page.evaluate(
+                    "([a, b, c]) => window.qaText(a, b, c)", [float(t0), float(t1), float(step)]
+                )
+            except Exception as exc:        # noqa: BLE001
+                raise RuntimeError(
+                    "页面 qaText(%g, %g, %g) 执行失败（%s: %s）。这是页面侧的问题，"
+                    "不是「检出文字缺陷」。" % (float(t0), float(t1), float(step),
+                                            type(exc).__name__, str(exc)[:300])) from exc
         finally:
             try:
                 await browser.close()
@@ -2352,9 +2490,12 @@ def main(argv=None) -> int:
             print("[错误] --times 里有不是数字的项：%r（要逗号分隔的秒数，如 3,9.5,13）"
                   % (args.times,), flush=True)
             return 2
-        if args.every is not None and float(args.every) <= 0:
+        if args.every is not None and (not math.isfinite(float(args.every))
+                                       or float(args.every) <= 0):
             # --every 0 会被当成"没写"、--every -1 则是死循环：先 page_meta 开一次浏览器，
             # 之后 while k <= end 永远成立，times 一路追加到内存爆掉（实测 40 s 都出不来）。
+            # --every nan/inf 更隐蔽：k += nan 之后 while 条件恒假，只截一张图就 exit 0——
+            # 用户以为拿到了等间隔采样，其实全片只看了第 0 秒。
             print("[错误] --every 必须是正数秒（当前 %r）；不想等间隔采样就别传 --every" % (args.every,),
                   flush=True)
             return 2

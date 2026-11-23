@@ -18,7 +18,9 @@
  "properties": {
   "title": {
    "type": "string",
-   "minLength": 1
+   "minLength": 1,
+   "pattern": "\\S",
+   "description": "片名（load_footage 会 strip 后判空，纯空白等于缺 title）"
   },
   "sources": {
    "type": "array",
@@ -27,6 +29,28 @@
     "type": "object",
     "required": [
      "id"
+    ],
+    "anyOf": [
+     {
+      "required": [
+       "path"
+      ],
+      "properties": {
+       "path": {
+        "minLength": 1
+       }
+      }
+     },
+     {
+      "required": [
+       "url"
+      ],
+      "properties": {
+       "url": {
+        "minLength": 1
+       }
+      }
+     }
     ],
     "additionalProperties": false,
     "patternProperties": {
@@ -129,7 +153,7 @@
   "treatment": {
    "type": "object",
    "additionalProperties": false,
-   "description": "画面治理：一次定义、全片复用（去烧录字幕、去水印、统一画幅与调色）",
+   "description": "画面治理：一次定义、全片复用（去烧录字幕、去水印、统一画幅与调色）。footagekit.build_treatment_filter 只认这四个键：crop -> scale -> pad(letterbox_color) -> color；**没有 treatment.letterbox / treatment.fps**（遮幅尺寸按 scale 与输出画布自动算，帧率取 video.fps）。",
    "properties": {
     "crop": {
      "type": "string",
@@ -211,7 +235,8 @@
      "type": "string"
     },
     "music": {
-     "type": "object"
+     "type": "object",
+     "description": "musicgen 参数透传块（footageedit.mix 里 musicgen.render(**spec)）；键名取 musicgen.render 的形参：bpm/key/scale/mood/seed/sections/progressions/motif/drums/voices。只在这里写会在没有 music_file 时生效"
     },
     "trim_silence": {
      "type": "boolean",
@@ -222,6 +247,7 @@
   "subtitle": {
    "type": "object",
    "additionalProperties": false,
+   "description": "ASS 字幕样式（footageedit.write_ass 消费）：font/size/margin_*/outline/shadow/note_size/halfwidth_commas/family/spacing；不写就用各函数默认值（字族缺省 sans、字间距 1.2、主字幕 46px）。",
    "properties": {
     "font": {
      "type": "string"
@@ -258,7 +284,22 @@
      "maximum": 72
     },
     "halfwidth_commas": {
-     "type": "boolean"
+     "type": "boolean",
+     "description": "半角逗号是否转全角（默认 true：write_ass 会把 \",\" 换成 \"，\"，避免 ASS 里半角标点变窄）"
+    },
+    "family": {
+     "type": "string",
+     "enum": [
+      "sans",
+      "serif",
+      "kai",
+      "round"
+     ],
+     "description": "字体族（透传 filmkit.font；filmkit.FONT_FAMILIES 的四族）。写错族名 filmkit 会**静默退到 sans**，所以这里用 enum 收紧"
+    },
+    "spacing": {
+     "type": "number",
+     "description": "ASS Style 的 Spacing 列（像素，默认 1.2）：字间距。write_ass 直接写进 Style"
     }
    }
   },
@@ -306,6 +347,21 @@
     }
    }
   },
+  "licensing": {
+   "type": "object",
+   "additionalProperties": false,
+   "description": "F8 素材多样性门禁的显式逃生口（footageqa.f8_source_variety 消费）。不写 = 门禁 fail-closed：独立来源数 < 硬下限直接 fail。只有豁免路径会读它。",
+   "properties": {
+    "allow_sparse_sources": {
+     "type": "boolean",
+     "description": "true = 允许少量素材反复复用；F8 记 skipped（不是 pass），detail 里写出 why"
+    },
+    "why": {
+     "type": "string",
+     "description": "豁免理由（F8 的 detail 会打出来；不写会显示「未写 reason」）"
+    }
+   }
+  },
   "crf": {
    "type": "integer",
    "minimum": 12,
@@ -345,7 +401,8 @@
      "text": {
       "type": "string",
       "minLength": 1,
-      "description": "朗读文本"
+      "pattern": "\\S",
+      "description": "朗读文本（load_footage 会 strip 后判空，纯空白等于缺 text）"
      },
      "sub": {
       "type": "string",
